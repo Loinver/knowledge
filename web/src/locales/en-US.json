@@ -1,5 +1,66 @@
 {
   "app": {
-    "title": "Knowledge Platform"
+    "title": "Knowledge Platform",
+    "subtitle": "Ontology → Data Source → Mapping → Extraction → Graph & Evidence"
+  },
+  "menu": {
+    "dashboard": "Dashboard",
+    "ontology": "Ontology",
+    "datasources": "Data Sources",
+    "extraction": "Extraction",
+    "graph": "Graph",
+    "governance": "Governance"
+  },
+  "page": {
+    "dashboard": "Dashboard",
+    "entityTypes": "Entity Types",
+    "entityDetail": "Entity Type Detail",
+    "relationTypes": "Relation Types",
+    "domains": "Business Domains",
+    "designer": "Ontology Designer",
+    "dataSources": "Data Sources",
+    "dataCatalog": "Data Catalog",
+    "samplePreview": "Sample Preview",
+    "mappingWizard": "Mapping Wizard",
+    "extractionRuns": "Extraction Runs",
+    "graphBrowse": "Graph Browse",
+    "graphEntities": "Graph Entities",
+    "graphEntityDetail": "Entity Detail",
+    "graphEvidence": "Source Evidence",
+    "graphReports": "Validation Reports",
+    "governanceRules": "Rules",
+    "notFound": "Page Not Found"
+  },
+  "validation": {
+    "PASS": "Pass",
+    "VIOLATION": "Violation",
+    "NA": "N/A",
+    "NOT_RUN": "Not Run"
+  },
+  "resourceStatus": {
+    "DRAFT": "Draft",
+    "PUBLISHED": "Published",
+    "ARCHIVED": "Archived"
+  },
+  "errors": {
+    "KG": {
+      "REVISION_CONFLICT": "Revision conflict: resource {resource} expected revision {expected}, got {actual}",
+      "RESOURCE_NOT_FOUND": "Resource not found: {id}",
+      "INVALID_NAME": "Invalid machine name: {name}",
+      "INVALID_NAMESPACE": "Invalid namespace: {namespace}",
+      "ALREADY_PUBLISHED": "Resource already published",
+      "PROTECTED_NAMESPACE": "Protected namespace cannot be deleted: {prefix}"
+    }
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "loading": "Loading…",
+    "empty": "No data"
   }
 }

@@ -1,5 +1,66 @@
 {
   "app": {
-    "title": "知识中台"
+    "title": "知识中台",
+    "subtitle": "本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯"
+  },
+  "menu": {
+    "dashboard": "工作台",
+    "ontology": "本体",
+    "datasources": "数据源",
+    "extraction": "抽取",
+    "graph": "图谱",
+    "governance": "治理"
+  },
+  "page": {
+    "dashboard": "工作台",
+    "entityTypes": "实体类型库",
+    "entityDetail": "实体类型详情",
+    "relationTypes": "关系类型库",
+    "domains": "业务域",
+    "designer": "本体设计器",
+    "dataSources": "数据源",
+    "dataCatalog": "数据目录",
+    "samplePreview": "样例预览",
+    "mappingWizard": "映射向导",
+    "extractionRuns": "抽取运行",
+    "graphBrowse": "图谱浏览",
+    "graphEntities": "实体实例",
+    "graphEntityDetail": "实体详情",
+    "graphEvidence": "来源证据",
+    "graphReports": "校验报告",
+    "governanceRules": "规则库",
+    "notFound": "页面不存在"
+  },
+  "validation": {
+    "PASS": "通过",
+    "VIOLATION": "违反",
+    "NA": "不适用",
+    "NOT_RUN": "未执行"
+  },
+  "resourceStatus": {
+    "DRAFT": "草稿",
+    "PUBLISHED": "已发布",
+    "ARCHIVED": "已归档"
+  },
+  "errors": {
+    "KG": {
+      "REVISION_CONFLICT": "版本冲突：资源 {resource} 期望修订号 {expected}，实际为 {actual}",
+      "RESOURCE_NOT_FOUND": "资源不存在：{id}",
+      "INVALID_NAME": "机读名不合法：{name}",
+      "INVALID_NAMESPACE": "命名空间不合法：{namespace}",
+      "ALREADY_PUBLISHED": "资源已发布，不可重复发布",
+      "PROTECTED_NAMESPACE": "受保护命名空间不可删除：{prefix}"
+    }
+  },
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "search": "搜索",
+    "loading": "加载中…",
+    "empty": "暂无数据"
   }
 }
