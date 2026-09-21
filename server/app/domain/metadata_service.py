@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from sqlalchemy import inspect, select
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -50,7 +50,7 @@ def _collect_catalog(engine: Engine, kind: str) -> dict:
     }
 
 
-def _collect_columns(insp, table_name: str, schema_name: str) -> list[dict]:
+def _collect_columns(insp: Inspector, table_name: str, schema_name: str) -> list[dict]:
     cols: list[dict] = []
     pk_cols = set(
         insp.get_pk_constraint(table_name, schema=schema_name).get(
@@ -73,8 +73,10 @@ def _collect_columns(insp, table_name: str, schema_name: str) -> list[dict]:
     return cols
 
 
-def _collect_foreign_keys(insp, table_name: str, schema_name: str) -> dict[str, str]:
-    result: dict[str, str] = {}
+def _collect_foreign_keys(
+    insp: Inspector, table_name: str, schema_name: str
+) -> dict[str, str | None]:
+    result: dict[str, str | None] = {}
     for fk in insp.get_foreign_keys(table_name, schema=schema_name) or []:
         cols = fk.get("constrained_columns") or []
         ref_table = fk.get("referred_table", "")

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ColumnInfo(BaseModel):
@@ -26,7 +26,7 @@ class TableInfo(BaseModel):
 
 
 class SchemaInfo(BaseModel):
-    schema: str
+    db_schema: str = Field(alias="schema")
     tables: list[TableInfo]
 
 
@@ -41,13 +41,13 @@ class Catalog(BaseModel):
 class DiffEntry(BaseModel):
     name: str
     type: str  # added / removed / modified
-    schema: str
+    db_schema: str = Field(alias="schema")
     details: str | None = None
 
 
 class DiffColumnEntry(BaseModel):
     table: str
-    schema: str
+    db_schema: str = Field(alias="schema")
     column: str
     type: str  # added / removed / modified
     details: str | None = None
