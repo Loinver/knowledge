@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class PreviewRequest(BaseModel):
     datasource_id: int
     table: str
-    schema: str = "main"
+    db_schema: str = Field(alias="schema", default="main")
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 
@@ -26,7 +26,7 @@ class PreviewResponse(BaseModel):
 
     datasource_id: int
     table: str
-    schema: str
+    db_schema: str = Field(alias="schema")
     columns: list[PreviewColumnMeta]
     rows: list[dict]
     total_returned: int

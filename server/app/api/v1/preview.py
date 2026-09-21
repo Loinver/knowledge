@@ -21,14 +21,14 @@ def preview(
         session,
         payload.datasource_id,
         payload.table,
-        payload.schema,
+        payload.db_schema,
         payload.limit,
         payload.offset,
     )
     return PreviewResponse(
         datasource_id=result["datasource_id"],
         table=result["table"],
-        schema=result["schema"],
+        db_schema=result["schema"],
         columns=[PreviewColumnMeta(**c) for c in result["columns"]],
         rows=result["rows"],
         total_returned=result["total_returned"],

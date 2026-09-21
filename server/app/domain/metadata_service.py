@@ -52,12 +52,13 @@ def _collect_catalog(engine: Engine, kind: str) -> dict:
 
 def _collect_columns(insp: Inspector, table_name: str, schema_name: str) -> list[dict]:
     cols: list[dict] = []
-    pk_cols = set(
+    pk_names: list[str] = (
         insp.get_pk_constraint(table_name, schema=schema_name).get(
             "constraint_column_names", []
         )
         or []
     )
+    pk_cols = set(pk_names)
     fks = _collect_foreign_keys(insp, table_name, schema_name)
     for col in insp.get_columns(table_name, schema=schema_name) or []:
         fk_str = fks.get(col["name"])
