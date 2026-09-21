@@ -18,7 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.core.db import Base
@@ -39,6 +39,12 @@ class ValidationReport(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    results: Mapped[list[ValidationResult]] = relationship(
+        back_populates="report",
+        cascade="all, delete-orphan",
+        order_by="ValidationResult.check_code",
+    )
+
 
 class ValidationResult(Base):
     """逐项校验结果：四态 + 焦点节点 + 规则来源。"""
@@ -52,6 +58,7 @@ class ValidationResult(Base):
     report_id: Mapped[int] = mapped_column(
         ForeignKey("validation_report.id"), nullable=False
     )
+    report: Mapped[ValidationReport | None] = relationship(back_populates="results")
     check_code: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[ValidationState] = mapped_column(nullable=False)
     focus_node: Mapped[str | None] = mapped_column(String(640), default=None)
