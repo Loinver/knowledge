@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.api.v1.domains import router as domains_router
 from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.relations import router as relations_router
 from app.api.v1.types import router as types_router
@@ -38,6 +39,7 @@ def _create_tables() -> None:
 
 
 app.include_router(namespaces_router, prefix=API_PREFIX)
+app.include_router(domains_router, prefix=API_PREFIX)
 app.include_router(types_router, prefix=API_PREFIX)
 app.include_router(relations_router, prefix=API_PREFIX)
 

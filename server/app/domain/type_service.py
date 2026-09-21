@@ -159,7 +159,12 @@ def get_data_props(session: Session, resource: ModelResource) -> list[ModelResou
         .scalars()
         .all()
     )
-    return [session.get(ModelResource, r.target_id) for r in refs]
+    result: list[ModelResource] = []
+    for r in refs:
+        prop = session.get(ModelResource, r.target_id)
+        if prop is not None:
+            result.append(prop)
+    return result
 
 
 def get_parent_ids(session: Session, resource: ModelResource) -> list[int]:
