@@ -18,6 +18,7 @@ from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.ontologies import router as ontologies_router
 from app.api.v1.relations import router as relations_router
 from app.api.v1.types import router as types_router
+from app.api.v1.validation import router as validation_router
 from app.core.db import Base, get_engine
 from app.core.errors import install_error_handler
 
@@ -44,6 +45,7 @@ app.include_router(ontologies_router, prefix=API_PREFIX)
 app.include_router(domains_router, prefix=API_PREFIX)
 app.include_router(types_router, prefix=API_PREFIX)
 app.include_router(relations_router, prefix=API_PREFIX)
+app.include_router(validation_router, prefix=API_PREFIX)
 
 
 class IriRequest(BaseModel):
