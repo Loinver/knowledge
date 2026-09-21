@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from app.api.v1.datasources import router as datasources_router
 from app.api.v1.domains import router as domains_router
 from app.api.v1.metadata import router as metadata_router
+from app.api.v1.preview import router as preview_router
 from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.ontologies import router as ontologies_router
 from app.api.v1.relations import router as relations_router
@@ -47,6 +48,7 @@ app.include_router(ontologies_router, prefix=API_PREFIX)
 app.include_router(datasources_router, prefix=API_PREFIX)
 app.include_router(domains_router, prefix=API_PREFIX)
 app.include_router(metadata_router, prefix=API_PREFIX)
+app.include_router(preview_router, prefix=API_PREFIX)
 app.include_router(types_router, prefix=API_PREFIX)
 app.include_router(relations_router, prefix=API_PREFIX)
 app.include_router(validation_router, prefix=API_PREFIX)
