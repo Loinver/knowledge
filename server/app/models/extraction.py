@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -60,6 +61,16 @@ class GraphRevision(Base):
 
     __tablename__ = "graph_revision"
     __table_args__ = (Index("ix_graph_current", "is_current"),)
+    __table_args__ = (
+        # 部分唯一索引：同一时刻只有一个 is_current=True（数据库层兜底）
+        Index(
+            "uq_graph_current",
+            "is_current",
+            unique=True,
+            sqlite_where=text("is_current = 1"),
+            postgresql_where=text("is_current"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("extraction_run.id"), nullable=False)

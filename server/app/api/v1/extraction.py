@@ -13,6 +13,7 @@ from app.domain.extraction_service import (
     get_evidence,
     get_run,
     list_entity_identities,
+    list_graph_revisions,
     list_quarantine,
     list_runs,
     list_triples,
@@ -87,6 +88,16 @@ def get_current(
 ) -> GraphRevisionOut | None:
     gr = get_current_graph(session)
     return GraphRevisionOut.model_validate(gr) if gr else None
+
+
+@router.get("/graph/revisions", response_model=list[GraphRevisionOut])
+def list_revisions(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[GraphRevisionOut]:
+    items, _total = list_graph_revisions(session, page, page_size)
+    return [GraphRevisionOut.model_validate(i) for i in items]
 
 
 @router.post("/graph/{graph_revision_id}/switch", response_model=GraphRevisionOut)

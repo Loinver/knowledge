@@ -669,6 +669,7 @@ def _publish_graph_revision(
     )
     for o in old_current:
         o.is_current = False
+    session.flush()  # 先落旧 current=False，避免部分唯一索引冲突
     gr.is_current = True
     session.flush()
     return gr
@@ -700,6 +701,18 @@ def get_current_graph(session: Session) -> GraphRevision | None:
     )
 
 
+def list_graph_revisions(
+    session: Session, page: int = 1, page_size: int = 50
+) -> tuple[list[GraphRevision], int]:
+    """列出所有图谱版本（含历史），按发布时间倒序。"""
+    stmt = select(GraphRevision).order_by(GraphRevision.published_at.desc())
+    total = len(list(session.execute(stmt).scalars()))
+    items = list(
+        session.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars()
+    )
+    return items, total
+
+
 def switch_current(session: Session, graph_revision_id: int) -> GraphRevision:
     """结果集切换：任一历史成功运行可设为当前。"""
     gr = session.get(GraphRevision, graph_revision_id)
@@ -723,6 +736,7 @@ def switch_current(session: Session, graph_revision_id: int) -> GraphRevision:
     )
     for o in old_current:
         o.is_current = False
+    session.flush()  # 先落旧 current=False，避免部分唯一索引冲突
     gr.is_current = True
     session.flush()
     return gr
