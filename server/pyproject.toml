@@ -1,0 +1,95 @@
+[project]
+name = "knowledge-server"
+version = "0.0.0"
+description = "知识中台后端：本体建模、数据接入、映射配置、抽取执行、图谱与证据追溯"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.34",
+  "sqlalchemy>=2.0",
+  "alembic>=1.14",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.7",
+  # cryptography 在 M2「数据源凭据后端加密」时再引入（需 wheel 可用环境）
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6.0", "httpx>=0.28"]
+semantic = ["rdflib>=7.1", "pyshacl>=0.30", "owlrl>=7.1"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ---------------------------------------------------------------------------
+# Ruff：替代 black + isort + flake8，统一后端语法与风格校验
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["app", "tests"]
+extend-exclude = [".venv", "migrations/versions"]
+
+[tool.ruff.lint]
+select = [
+  "E",     # pycodestyle 错误
+  "W",     # pycodestyle 警告
+  "F",     # pyflakes：未使用导入/变量
+  "I",     # isort：导入排序
+  "N",     # pep8-naming
+  "UP",    # pyupgrade：现代语法
+  "B",     # flake8-bugbear：常见缺陷
+  "A",     # flake8-builtins：遮蔽内建名
+  "C4",    # 推导式
+  "SIM",   # 可简化写法
+  "RUF",   # Ruff 专属规则
+  "ASYNC", # async 陷阱
+]
+ignore = [
+  "B008",   # FastAPI 依赖注入常用函数调用默认值
+  "RUF001", # 字符串含全角标点：中文项目常态，不是歧义字符
+  "RUF002", # 文档字符串含全角标点：同上
+  "RUF003", # 注释含全角标点：同上
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N802", "A002", "SIM117"]
+"app/semantics/*" = ["N802", "N803", "N806"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# ---------------------------------------------------------------------------
+# Mypy：后端类型校验（渐进式，先对新代码严格）
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+pretty = true
+exclude = ["^tests/"]
+
+[[tool.mypy.overrides]]
+module = ["sqlalchemy.*", "alembic.*", "rdflib.*", "pyshacl.*", "owlrl.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+pythonpath = ["."]

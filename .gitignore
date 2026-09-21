@@ -1,0 +1,35 @@
+# 依赖
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.tsbuildinfo
+
+# 本地 demo 与原始素材：不入库（版权/体积/非源码）
+demo/
+.workbuddy/
+.workbuddy-ai/
+.DS_Store
+
+# 环境变量与本地配置
+.env
+.env.*
+!.env.example
+
+# 编辑器与系统
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# 日志与临时产物
+*.log
+coverage/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

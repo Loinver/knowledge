@@ -1,0 +1,63 @@
+{
+  "name": "knowledge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "知识中台：本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯",
+  "license": "MIT",
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "commit": "git-cz",
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "cd server && .venv/bin/uvicorn app.main:app --reload --port 8000",
+    "dev:web": "npm run dev --workspace=web",
+    "start": "npm run build && cd server && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "build": "npm run build --workspace=web",
+    "lint": "npm run lint:web && npm run lint:server",
+    "lint:web": "eslint web",
+    "lint:server": "cd server && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy app",
+    "fix:server": "cd server && .venv/bin/ruff check . --fix && .venv/bin/ruff format .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "config": {
+    "commitizen": {
+      "path": "node_modules/cz-git"
+    }
+  },
+  "lint-staged": {
+    "web/**/*.{ts,tsx,vue,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,html}": [
+      "prettier --write"
+    ],
+    "server/**/*.py": [
+      "server/.venv/bin/ruff check --fix",
+      "server/.venv/bin/ruff format"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@eslint/js": "^9.18.0",
+    "@intlify/eslint-plugin-vue-i18n": "^4.0.1",
+    "commitizen": "^4.3.1",
+    "concurrently": "^9.1.2",
+    "cz-git": "^1.11.0",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-vue": "^10.0.0",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.1",
+    "prettier": "^3.4.2",
+    "typescript-eslint": "^8.20.0",
+    "vue-eslint-parser": "^10.0.0"
+  }
+}

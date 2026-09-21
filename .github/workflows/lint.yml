@@ -1,0 +1,45 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint:web
+      - name: Prettier
+        run: npm run format:check
+      - name: Type check
+        run: npm run typecheck --workspace=web
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install
+        run: |
+          cd server
+          python -m venv .venv
+          .venv/bin/pip install -e ".[dev]"
+      - name: Ruff check
+        run: cd server && .venv/bin/ruff check --output-format=github .
+      - name: Ruff format
+        run: cd server && .venv/bin/ruff format --check .
+      - name: Mypy
+        run: cd server && .venv/bin/mypy app
+      - name: Pytest
+        run: cd server && .venv/bin/pytest
