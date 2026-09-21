@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Knowledge Platform",
-    "subtitle": "Ontology → Data Source → Mapping → Extraction → Graph & Evidence"
+    "subtitle": "Ontology → Data → Mapping → Extraction → Graph & Evidence"
   },
   "menu": {
     "dashboard": "Dashboard",
@@ -23,8 +23,8 @@
     "samplePreview": "Sample Preview",
     "mappingWizard": "Mapping Wizard",
     "extractionRuns": "Extraction Runs",
-    "graphBrowse": "Graph Browse",
-    "graphEntities": "Graph Entities",
+    "graphBrowse": "Graph Browser",
+    "graphEntities": "Entity Instances",
     "graphEntityDetail": "Entity Detail",
     "graphEvidence": "Source Evidence",
     "graphReports": "Validation Reports",
@@ -61,6 +61,66 @@
     "create": "Create",
     "search": "Search",
     "loading": "Loading…",
-    "empty": "No data"
+    "empty": "No data",
+    "publish": "Publish",
+    "actions": "Actions",
+    "name": "Name",
+    "iri": "IRI",
+    "status": "Status",
+    "revision": "Revision",
+    "label": "Label",
+    "definition": "Definition",
+    "labelZh": "Chinese Label",
+    "labelEn": "English Label",
+    "namespace": "Namespace",
+    "datatype": "Datatype",
+    "nullable": "Nullable",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "entityType": {
+    "list": "Entity Type List",
+    "create": "New Entity Type",
+    "edit": "Edit Entity Type",
+    "dataProps": "Data Properties",
+    "parentTypes": "Parent Types",
+    "addProp": "Add Property",
+    "removeProp": "Remove",
+    "basic": "Basic Info",
+    "hierarchy": "Type Hierarchy",
+    "relations": "Relations",
+    "rules": "Rules",
+    "references": "References & Versions"
+  },
+  "relation": {
+    "list": "Relation Type List",
+    "create": "New Relation Type",
+    "domain": "Domain",
+    "range": "Range",
+    "cardinality": "Cardinality",
+    "minCard": "Min",
+    "maxCard": "Max",
+    "owl": "OWL Features",
+    "functional": "Functional",
+    "symmetric": "Symmetric",
+    "transitive": "Transitive",
+    "inverseFunctional": "Inverse Functional",
+    "enableAttributes": "Enable attributes (generate association)",
+    "inverseOf": "Inverse Of"
+  },
+  "domain": {
+    "list": "Business Domain List",
+    "create": "New Business Domain",
+    "members": "Members",
+    "addMember": "Add Member",
+    "asRef": "Cross-domain Reference",
+    "publishCheck": "Publish Check",
+    "checkPassed": "Check passed, ready to publish",
+    "checkFailed": "Check failed",
+    "memberExists": "Members Exist",
+    "versionsAvailable": "Versions Available",
+    "dependenciesComplete": "Dependencies Complete",
+    "noCircularRef": "No Circular Reference",
+    "memberNo": "Member #{n}"
   }
 }
