@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
+import app.models  # noqa: F401  确保所有模型被注册
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
 from app.core.config import get_settings
 from app.core.db import Base
-import app.models  # noqa: F401  确保所有模型被注册
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 
@@ -50,4 +49,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-
