@@ -60,6 +60,11 @@ scope：`web` `server` `ontology` `mapping` `extraction` `graph` `evidence` `sem
 - Python 3.13 装 `cryptography` 会 sdist 构建失败，M2 再引入。
 - 本机有代理：`curl` 访问 127.0.0.1 需 `--noproxy '*'`。
 
+## Git 远端
+
+- **HTTP2 会被网络层阻断**：所有远端操作加 `-c http.version=HTTP/1.1`（fetch / pull / push 都要）。
+- **本机没有 GitHub 凭据**：push 会返回 401 Basic realm="GitHub" 并卡住等待输入，无法代劳，需用户本人认证或改用 SSH remote。
+
 ## 完工自检
 
 `make lint` 全绿 → `make test` 通过 → 双语 key 一致 → 无 demo/.venv/node_modules/dist 入暂存区 → 提交信息合规。
