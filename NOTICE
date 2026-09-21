@@ -1,0 +1,43 @@
+Knowledge Platform
+Copyright (c) 2026 Linyer
+
+This product is licensed under the MIT License (see ./LICENSE).
+
+== Third-party notices ==
+
+This product includes software developed by the following projects.
+Each dependency retains its own license; see the respective project for full terms.
+
+Frontend (web/):
+- Vue.js (MIT)         https://vuejs.org
+- Vite (MIT)           https://vitejs.dev
+- Naive UI (MIT)       https://www.naiveui.com
+- Pinia (MIT)          https://pinia.vuejs.org
+- Vue Router (MIT)     https://router.vuejs.org
+- vue-i18n (MIT)       https://vue-i18n.intlify.dev
+- Axios (MIT)          https://axios-http.com
+- openapi-typescript (MIT) https://openapi-ts.pages.dev
+- TypeScript (Apache-2.0) https://www.typescriptlang.org
+- ESLint (MIT)         https://eslint.org
+- Prettier (MIT)       https://prettier.io
+
+Backend (server/):
+- FastAPI (MIT)        https://fastapi.tiangolo.com
+- Uvicorn (BSD-3-Clause) https://www.uvicorn.org
+- SQLAlchemy (MIT)     https://www.sqlalchemy.org
+- Alembic (MIT)        https://alembic.sqlalchemy.org
+- Pydantic (MIT)       https://docs.pydantic.dev
+- rdflib (BSD-3-Clause) https://github.com/RDFLib/rdflib
+- pySHACL (Apache-2.0) https://github.com/RDFLib/pySHACL
+- owlrl (BSD-3-Clause) https://github.com/RDFLib/owl-rl
+
+Tooling:
+- Ruff (MIT)           https://docs.astral.sh/ruff
+- Mypy (MIT)           https://mypy-lang.org
+- pytest (MIT)         https://docs.pytest.org
+- pip-licenses (MIT)  https://github.com/raimon49/pip-licenses
+- license-checker (BSD-2-Clause) https://github.com/davglass/license-checker
+- Commitizen (MIT)     https://commitizen-tools.github.io/commitizen
+
+Per AGENTS.md convention, this project only allows MIT / BSD / Apache-2.0 / ISC / PSF
+licensed dependencies. GPL, AGPL, LGPL and SSPL are forbidden.

@@ -21,6 +21,12 @@ jobs:
         run: npm run format:check
       - name: Type check
         run: npm run typecheck --workspace=web
+      - name: Build
+        run: npm run build
+      - name: i18n keys
+        run: node scripts/check-i18n-keys.mjs
+      - name: License check
+        run: npx license-checker --production --summary --failOn "GPL;GPL-2.0;GPL-3.0;LGPL;LGPL-2.0;LGPL-2.1;LGPL-3.0;AGPL-3.0;SSPL;Unlicensed"
 
   server:
     runs-on: ubuntu-latest
@@ -43,3 +49,8 @@ jobs:
         run: cd server && .venv/bin/mypy app
       - name: Pytest
         run: cd server && .venv/bin/pytest
+      - name: License check
+        run: |
+          cd server
+          .venv/bin/pip install pip-licenses
+          .venv/bin/pip-licenses --fail-on="GPL;LGPL;AGPL;SSPL" --allow-only="MIT;BSD;Apache-2.0;ISC;PSF;Python-2.0;MPL-2.0;CC0-1.0;Unlicense"
