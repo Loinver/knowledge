@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from app.api.v1.domains import router as domains_router
 from app.api.v1.namespaces import router as namespaces_router
+from app.api.v1.ontologies import router as ontologies_router
 from app.api.v1.relations import router as relations_router
 from app.api.v1.types import router as types_router
 from app.core.db import Base, get_engine
@@ -39,6 +40,7 @@ def _create_tables() -> None:
 
 
 app.include_router(namespaces_router, prefix=API_PREFIX)
+app.include_router(ontologies_router, prefix=API_PREFIX)
 app.include_router(domains_router, prefix=API_PREFIX)
 app.include_router(types_router, prefix=API_PREFIX)
 app.include_router(relations_router, prefix=API_PREFIX)
