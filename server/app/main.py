@@ -13,7 +13,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.iri import build_iri, is_valid_name, is_valid_namespace
+from app.api.v1.namespaces import router as namespaces_router
+from app.core.db import Base, get_engine
+from app.core.errors import install_error_handler
 
 API_PREFIX = "/api/v1"
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -23,6 +25,17 @@ app = FastAPI(
     description="知识中台：本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯",
     version="0.0.0",
 )
+
+install_error_handler(app)
+
+
+@app.on_event("startup")
+def _create_tables() -> None:
+    """开发态自动建表（生产用 Alembic 迁移）。"""
+    Base.metadata.create_all(get_engine())
+
+
+app.include_router(namespaces_router, prefix=API_PREFIX)
 
 
 class IriRequest(BaseModel):
@@ -42,21 +55,6 @@ class HealthResponse(BaseModel):
 @app.get(f"{API_PREFIX}/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok", version=app.version)
-
-
-@app.post(f"{API_PREFIX}/iri/build", response_model=IriResponse)
-def build_resource_iri(payload: IriRequest) -> IriResponse:
-    return IriResponse(
-        iri=build_iri(payload.namespace, payload.name),
-    )
-
-
-@app.get(f"{API_PREFIX}/iri/validate")
-def validate_resource_name(name: str, namespace: str = "") -> dict[str, bool]:
-    return {
-        "name": is_valid_name(name),
-        "namespace": is_valid_namespace(namespace),
-    }
 
 
 def mount_spa(application: FastAPI) -> None:
