@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Knowledge Platform",
-    "subtitle": "Ontology → Data → Mapping → Extraction → Graph & Evidence"
+    "subtitle": "Ontology → Data → Mapping → Extraction → Graph & Evidence",
+    "shortName": "KG"
   },
   "menu": {
     "dashboard": "Dashboard",
@@ -9,7 +10,8 @@
     "datasources": "Data Sources",
     "extraction": "Extraction",
     "graph": "Graph",
-    "governance": "Governance"
+    "governance": "Governance",
+    "system": "System"
   },
   "page": {
     "dashboard": "Dashboard",
@@ -29,7 +31,13 @@
     "graphEvidence": "Source Evidence",
     "graphReports": "Validation Reports",
     "governanceRules": "Rules",
-    "notFound": "Page Not Found"
+    "notFound": "Page Not Found",
+    "systemUsers": "Users",
+    "systemRoles": "Roles",
+    "systemAuditLogs": "Audit logs",
+    "forbiddenTitle": "Access denied",
+    "forbiddenHint": "Your account has no permission for this page. Contact an administrator.",
+    "backToDashboard": "Back to dashboard"
   },
   "validation": {
     "PASS": "Pass",
@@ -56,6 +64,20 @@
       "VALIDATION_VIOLATION": "Semantic validation failed. Review the validation details.",
       "SOURCE_UNREACHABLE": "The data source is unavailable",
       "REASONER_UNAVAILABLE": "The reasoning or validation engine is unavailable. Please retry later."
+    },
+    "network": "Network error, please retry later",
+    "unknown": "Unknown error: {code}",
+    "AUTH": {
+      "INVALID_CREDENTIALS": "Incorrect account or password",
+      "EMAIL_TAKEN": "This email is already registered",
+      "USERNAME_TAKEN": "This username is taken",
+      "TOKEN_EXPIRED": "Session expired, please sign in again",
+      "FORBIDDEN": "Your account is not allowed to perform this action",
+      "USER_DISABLED": "This account is disabled, contact an administrator",
+      "WEAK_PASSWORD": "Password is too weak, at least {min_length} characters",
+      "OLD_PASSWORD_INVALID": "Current password is incorrect",
+      "RESET_TOKEN_INVALID": "This reset link is invalid or expired, request a new one",
+      "REGISTRATION_CLOSED": "Self-service registration is closed on this platform, contact an administrator"
     }
   },
   "common": {
@@ -381,5 +403,131 @@
     "failed": "Operation failed. Check the inputs and resource revisions. Reason: {reason}",
     "confirmDelete": "Delete template {name}?",
     "createdOntology": "Draft ontology {name} was created from template {template}."
+  },
+  "layout": {
+    "collapseSider": "Collapse sidebar",
+    "expandSider": "Expand sidebar",
+    "switchLocale": "Switch language",
+    "toDark": "Switch to dark theme",
+    "toLight": "Switch to light theme",
+    "authFooter": "Open-source knowledge platform · ontology modelling and evidence tracing"
+  },
+  "auth": {
+    "login": "Sign in",
+    "register": "Sign up",
+    "loginTitle": "Sign in",
+    "registerTitle": "Create account",
+    "forgotTitle": "Forgot password",
+    "resetTitle": "Reset password",
+    "account": "Account or email",
+    "accountPlaceholder": "Username or email",
+    "username": "Username",
+    "email": "Email",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password",
+    "forgot": "Forgot password?",
+    "toRegister": "No account yet? Sign up",
+    "toLogin": "Back to sign in",
+    "sendResetLink": "Send reset link",
+    "forgotHint": "Enter your registered email and we will send a reset link.",
+    "forgotSent": "If the email is registered, a reset message has been sent.",
+    "resetHint": "Set a new password for your account.",
+    "resetTokenMissing": "The link has no reset credential, open it from the email.",
+    "resetSubmit": "Reset password",
+    "registrationClosed": "Self-service registration is closed. Accounts are created by an administrator under System → Users.",
+    "rules": {
+      "accountRequired": "Account or email is required",
+      "passwordRequired": "Password is required",
+      "passwordMin": "Password must be at least 8 characters",
+      "passwordMismatch": "The two passwords do not match",
+      "usernameRequired": "Username is required",
+      "usernamePattern": "Use 3 to 32 letters, digits or underscores",
+      "emailRequired": "Email is required",
+      "emailPattern": "Invalid email format"
+    }
+  },
+  "account": {
+    "profile": "Profile",
+    "profileHint": "Review your account and maintain display name and avatar.",
+    "editProfile": "Edit profile",
+    "displayName": "Display name",
+    "avatarUrl": "Avatar URL",
+    "saved": "Profile saved",
+    "security": "Account security",
+    "securityHint": "Change your password and review the current session.",
+    "currentSession": "Current session",
+    "tokenStorage": "Credentials",
+    "tokenStorageHint": "Stored in this browser and removed on sign out",
+    "changePassword": "Change password",
+    "oldPassword": "Current password",
+    "passwordChanged": "Password updated. Other devices have been signed out.",
+    "logout": "Sign out",
+    "logoutConfirmTitle": "Sign out?",
+    "logoutConfirmBody": "You will need to enter your credentials again.",
+    "loggedOut": "Signed out",
+    "menu": "User menu",
+    "anonymous": "Not signed in",
+    "role": "Role",
+    "roleCode": "Role code",
+    "status": "Status",
+    "lastLogin": "Last sign-in",
+    "never": "Never",
+    "roles": {
+      "ADMIN": "Administrator",
+      "EDITOR": "Editor",
+      "VIEWER": "Viewer"
+    },
+    "statuses": {
+      "ACTIVE": "Active",
+      "DISABLED": "Disabled"
+    },
+    "roleDescriptions": {
+      "ADMIN": "All features, including user and role management",
+      "EDITOR": "Can maintain ontology, datasources, mappings and rules",
+      "VIEWER": "Read-only, cannot write"
+    },
+    "rules": {
+      "displayNameMax": "Display name is limited to 32 characters",
+      "avatarUrl": "Enter a valid image URL",
+      "oldPasswordRequired": "Current password is required"
+    }
+  },
+  "system": {
+    "usersHint": "Manage account roles and activation status. Self-service registration is off, so new accounts are created here.",
+    "searchUsers": "Search by username or email",
+    "createUser": "New user",
+    "userCreated": "User created",
+    "usernamePlaceholder": "3-32 letters, digits or underscores",
+    "cannotEditSelf": "You cannot change your own role or status",
+    "editUser": "Edit user",
+    "userUpdated": "User updated",
+    "rolesHint": "Built-in roles and their permission scope.",
+    "description": "Description",
+    "memberCount": "Members",
+    "auditHint": "Sign-ins, password and permission changes are recorded.",
+    "searchAuditLogs": "Search by actor or target",
+    "actor": "Actor",
+    "action": "Action",
+    "target": "Target",
+    "result": "Result",
+    "ip": "Source IP",
+    "time": "Time",
+    "actions": {
+      "LOGIN": "Sign in",
+      "LOGOUT": "Sign out",
+      "REGISTER": "Account created",
+      "PASSWORD_CHANGED": "Password changed",
+      "RESET_REQUESTED": "Reset requested",
+      "PASSWORD_RESET": "Password reset",
+      "PROFILE_UPDATED": "Profile updated",
+      "ROLE_CHANGED": "Role changed",
+      "STATUS_CHANGED": "Status changed"
+    },
+    "results": {
+      "OK": "Succeeded",
+      "FAILED": "Failed"
+    }
   }
 }

@@ -28,8 +28,16 @@ export const i18n = createI18n({
   },
 })
 
+/** 同步 `<html lang>`：读屏与浏览器翻译依赖它，切语言时必须跟着走。 */
+function syncDocumentLang(locale: AppLocale): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = locale
+}
+
+syncDocumentLang(detectLocale())
+
 export function setLocale(locale: AppLocale): void {
   i18n.global.locale.value = locale
+  syncDocumentLang(locale)
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(STORAGE_KEY, locale)
   }

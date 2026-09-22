@@ -1,5 +1,8 @@
-import type { AxiosInstance } from 'axios'
+import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import axios from 'axios'
+
+import type { TokenPair } from '@/api/tokens'
+import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from '@/api/tokens'
 
 export const http: AxiosInstance = axios.create({
   baseURL: '/api/v1',
@@ -7,10 +10,33 @@ export const http: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+/** 后端统一响应外壳：成功 { code: 'KG.OK', message, data } */
+export interface ApiEnvelope<T = unknown> {
+  code: string
+  message: string
+  data: T
+  params?: Record<string, unknown>
+}
+
+export const OK_CODE = 'KG.OK'
+
+/** 失败响应与成功同构，额外带 params 供 i18n 占位替换，data 固定为 null */
 export interface ApiError {
   code: string
-  params: Record<string, unknown>
   message: string
+  params: Record<string, unknown>
+  data?: null
+  status?: number
+}
+
+function isEnvelope(body: unknown): body is ApiEnvelope {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'code' in body &&
+    'data' in body &&
+    typeof (body as { code: unknown }).code === 'string'
+  )
 }
 
 export interface HealthResponse {
@@ -158,14 +184,79 @@ export interface PublishCheckResult {
   issues: string[]
 }
 
+/** 单次重放标记：避免 refresh 失败后无限重试 */
+interface RetriableConfig extends InternalAxiosRequestConfig {
+  _retried?: boolean
+}
+
+http.interceptors.request.use((config) => {
+  const token = getAccessToken()
+  if (token) config.headers.set('Authorization', `Bearer ${token}`)
+  return config
+})
+
+let refreshing: Promise<TokenPair> | null = null
+
+/**
+ * 认证失效回调：由应用启动处（`main.ts`）注册，避免 client 直接依赖路由/页面。
+ * 未注册时（如单测、SSR）只清本地凭据，不做跳转。
+ */
+let unauthorizedHandler: (() => void) | null = null
+
+export function registerUnauthorizedHandler(handler: () => void): void {
+  unauthorizedHandler = handler
+}
+
+function handleUnauthorized(): void {
+  clearTokens()
+  unauthorizedHandler?.()
+}
+
+/** 401 时用 refresh token 换新 access token；并发请求共用同一次刷新。 */
+async function refreshTokens(): Promise<TokenPair> {
+  refreshing ??= axios
+    .post<TokenPair>('/api/v1/auth/refresh', { refresh_token: getRefreshToken() })
+    .then((response) => {
+      const tokens = response.data
+      storeTokens(tokens)
+      return tokens
+    })
+    .finally(() => {
+      refreshing = null
+    })
+  return refreshing
+}
+
 http.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err?.response?.data) {
-      const body = err.response.data as ApiError
-      if (body.code) {
-        return Promise.reject({ ...body, status: err.response.status })
+  (res) => {
+    // 解包统一响应外壳：业务侧继续用 res.data 拿 payload；
+    // 文件下载等 blob 响应不是 JSON 外壳，原样透传。
+    if (isEnvelope(res.data)) {
+      res.data = res.data.data
+    }
+    return res
+  },
+  async (err: AxiosError) => {
+    const config = err.config as RetriableConfig | undefined
+    const status = err.response?.status
+    const isAuthCall = config?.url?.startsWith('/auth/') ?? false
+
+    if (status === 401 && config && !config._retried && !isAuthCall && getRefreshToken()) {
+      config._retried = true
+      try {
+        const tokens = await refreshTokens()
+        config.headers.set('Authorization', `Bearer ${tokens.access_token}`)
+        return await http.request(config)
+      } catch {
+        handleUnauthorized()
       }
+    } else if (status === 401 && !isAuthCall) {
+      handleUnauthorized()
+    }
+
+    const data = err.response?.data as ApiError | undefined
+    if (data?.code) {
+      return Promise.reject({ ...data, status })
     }
     return Promise.reject(err)
   },

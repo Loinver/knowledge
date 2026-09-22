@@ -26,7 +26,7 @@ const revisions = useAsyncData((_signal) => validationApi.revisions())
 const revisionOptions = computed(() =>
   (revisions.data.value ?? []).map((r) => ({
     value: r.id,
-    label: `#${  r.id  }${r.is_current ? ` (${  t('graph.currentResult')  })` : ''}`,
+    label: `#${r.id}${r.is_current ? ` (${t('graph.currentResult')})` : ''}`,
   })),
 )
 
@@ -48,8 +48,7 @@ async function loadResults() {
   try {
     results.value = await validationApi.getResults(reportId.value)
   } catch (err: unknown) {
-    resultsError.value =
-      typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
+    resultsError.value = typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
   } finally {
     loadingResults.value = false
   }
@@ -64,8 +63,7 @@ async function runValidation() {
     report.reload()
     await loadResults()
   } catch (err: unknown) {
-    resultsError.value =
-      typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
+    resultsError.value = typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
   }
 }
 
@@ -111,13 +109,19 @@ const stateTagType = (state: string) => {
             <NStatistic :label="t('report.states.PASS')" :value="report.data.value.summary.pass" />
           </NCard>
           <NCard size="small" class="stat-card">
-            <NStatistic :label="t('report.states.VIOLATION')" :value="report.data.value.summary.violation" />
+            <NStatistic
+              :label="t('report.states.VIOLATION')"
+              :value="report.data.value.summary.violation"
+            />
           </NCard>
           <NCard size="small" class="stat-card">
             <NStatistic :label="t('report.states.NA')" :value="report.data.value.summary.na" />
           </NCard>
           <NCard size="small" class="stat-card">
-            <NStatistic :label="t('report.states.NOT_RUN')" :value="report.data.value.summary.not_run" />
+            <NStatistic
+              :label="t('report.states.NOT_RUN')"
+              :value="report.data.value.summary.not_run"
+            />
           </NCard>
         </div>
       </div>
@@ -148,7 +152,10 @@ const stateTagType = (state: string) => {
         </NTable>
       </div>
 
-      <NEmpty v-else-if="!loadingResults && reportId !== null" :description="t('report.noReport')" />
+      <NEmpty
+        v-else-if="!loadingResults && reportId !== null"
+        :description="t('report.noReport')"
+      />
       <NEmpty v-else :description="t('report.chooseGraph')" />
     </NSpin>
   </section>

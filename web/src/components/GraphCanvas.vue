@@ -13,7 +13,6 @@ const zoom = ref(1)
 const shortName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
 const layout = computed(() => layoutGraph(props.graph.nodes, props.neighborhood))
 const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
-
 </script>
 
 <template>
@@ -87,7 +86,15 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
             edge.kind === 'DERIVED' ? 'url(#graph-derived-arrow)' : 'url(#graph-direct-arrow)'
           "
         >
-          <title>{{ t('graph.factDescription', { subject: edge.subject, predicate: edge.predicate, object: edge.object_ }) }}</title>
+          <title>
+            {{
+              t('graph.factDescription', {
+                subject: edge.subject,
+                predicate: edge.predicate,
+                object: edge.object_,
+              })
+            }}
+          </title>
         </path>
         <g
           v-for="node in layout.nodes"

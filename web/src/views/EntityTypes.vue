@@ -16,12 +16,14 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import type { EntityTypeBrief } from '@/api/client'
 import { api, type Namespace } from '@/api/client'
 
 const { t } = useI18n()
 const message = useMessage()
+const router = useRouter()
 
 const loading = ref(false)
 const items = ref<EntityTypeBrief[]>([])
@@ -68,7 +70,7 @@ const formData = ref({
 const nsOptions = computed(() => namespaces.value.map((ns) => ({ label: ns.prefix, value: ns.id })))
 
 function goToDetail(id: number) {
-  window.location.hash = `#/ontology/entity-types/${id}`
+  void router.push({ name: 'entity-detail', params: { id } })
 }
 
 async function loadList() {
@@ -175,7 +177,7 @@ onMounted(async () => {
 
 <style scoped>
 .page-container {
-  padding: 24px;
+  /* 内容区留白由 AdminLayout 统一提供，页面不再自带 padding */
 }
 .page-header {
   margin-bottom: 16px;

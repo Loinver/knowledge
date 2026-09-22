@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "知识中台",
-    "subtitle": "本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯"
+    "subtitle": "本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯",
+    "shortName": "知"
   },
   "menu": {
     "dashboard": "工作台",
@@ -9,7 +10,8 @@
     "datasources": "数据源",
     "extraction": "抽取",
     "graph": "图谱",
-    "governance": "治理"
+    "governance": "治理",
+    "system": "系统管理"
   },
   "page": {
     "dashboard": "工作台",
@@ -29,7 +31,13 @@
     "graphEvidence": "来源证据",
     "graphReports": "校验报告",
     "governanceRules": "规则库",
-    "notFound": "页面不存在"
+    "notFound": "页面不存在",
+    "systemUsers": "用户管理",
+    "systemRoles": "角色管理",
+    "systemAuditLogs": "操作日志",
+    "forbiddenTitle": "无权访问",
+    "forbiddenHint": "当前账号没有访问该页面的权限，请联系管理员。",
+    "backToDashboard": "返回工作台"
   },
   "validation": {
     "PASS": "通过",
@@ -56,6 +64,20 @@
       "VALIDATION_VIOLATION": "语义校验未通过，请检查校验明细",
       "SOURCE_UNREACHABLE": "数据源暂不可用",
       "REASONER_UNAVAILABLE": "推理或校验执行器暂不可用，请稍后重试"
+    },
+    "network": "网络异常，请稍后重试",
+    "unknown": "未知错误：{code}",
+    "AUTH": {
+      "INVALID_CREDENTIALS": "账号或密码不正确",
+      "EMAIL_TAKEN": "该邮箱已被注册",
+      "USERNAME_TAKEN": "该用户名已被占用",
+      "TOKEN_EXPIRED": "登录已过期，请重新登录",
+      "FORBIDDEN": "当前账号无权执行该操作",
+      "USER_DISABLED": "账号已被禁用，请联系管理员",
+      "WEAK_PASSWORD": "密码强度不足，至少 {min_length} 位",
+      "OLD_PASSWORD_INVALID": "当前密码不正确",
+      "RESET_TOKEN_INVALID": "重置链接无效或已过期，请重新申请",
+      "REGISTRATION_CLOSED": "本平台不开放自助注册，请联系管理员开通账号"
     }
   },
   "common": {
@@ -381,5 +403,131 @@
     "failed": "操作失败，请检查输入与资源版本。原因：{reason}",
     "confirmDelete": "确定删除模板 {name}？",
     "createdOntology": "已按模板 {template} 创建草稿本体 {name}。"
+  },
+  "layout": {
+    "collapseSider": "折叠侧栏",
+    "expandSider": "展开侧栏",
+    "switchLocale": "切换语言",
+    "toDark": "切换到暗色模式",
+    "toLight": "切换到浅色模式",
+    "authFooter": "开源知识中台 · 本体建模与证据追溯"
+  },
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "loginTitle": "登录",
+    "registerTitle": "注册账号",
+    "forgotTitle": "找回密码",
+    "resetTitle": "重置密码",
+    "account": "账号或邮箱",
+    "accountPlaceholder": "用户名或邮箱",
+    "username": "用户名",
+    "email": "邮箱",
+    "password": "密码",
+    "passwordPlaceholder": "请输入密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认密码",
+    "forgot": "忘记密码",
+    "toRegister": "还没有账号？去注册",
+    "toLogin": "返回登录",
+    "sendResetLink": "发送重置链接",
+    "forgotHint": "填写注册邮箱，我们会发送一封重置密码邮件。",
+    "forgotSent": "如果该邮箱已注册，重置邮件已发出，请查收。",
+    "resetHint": "请设置新的登录密码。",
+    "resetTokenMissing": "链接缺少重置凭据，请从邮件中的链接进入。",
+    "resetSubmit": "确认重置",
+    "registrationClosed": "本平台不开放自助注册，账号由管理员在「系统管理 → 用户管理」中创建。",
+    "rules": {
+      "accountRequired": "请输入账号或邮箱",
+      "passwordRequired": "请输入密码",
+      "passwordMin": "密码至少 8 位",
+      "passwordMismatch": "两次输入的密码不一致",
+      "usernameRequired": "请输入用户名",
+      "usernamePattern": "用户名需为 3 到 32 位字母、数字或下划线",
+      "emailRequired": "请输入邮箱",
+      "emailPattern": "邮箱格式不正确"
+    }
+  },
+  "account": {
+    "profile": "个人中心",
+    "profileHint": "查看账号信息并维护展示名称与头像。",
+    "editProfile": "编辑资料",
+    "displayName": "展示名称",
+    "avatarUrl": "头像地址",
+    "saved": "资料已保存",
+    "security": "账号安全",
+    "securityHint": "修改登录密码并查看当前会话。",
+    "currentSession": "当前会话",
+    "tokenStorage": "登录凭据",
+    "tokenStorageHint": "凭据保存在本机浏览器，退出登录后清除",
+    "changePassword": "修改密码",
+    "oldPassword": "当前密码",
+    "passwordChanged": "密码已更新，其他设备上的登录已失效",
+    "logout": "退出登录",
+    "logoutConfirmTitle": "确认退出登录？",
+    "logoutConfirmBody": "退出后需要重新输入账号密码。",
+    "loggedOut": "已退出登录",
+    "menu": "用户菜单",
+    "anonymous": "未登录",
+    "role": "角色",
+    "roleCode": "角色码",
+    "status": "状态",
+    "lastLogin": "上次登录",
+    "never": "从未登录",
+    "roles": {
+      "ADMIN": "管理员",
+      "EDITOR": "编辑者",
+      "VIEWER": "只读"
+    },
+    "statuses": {
+      "ACTIVE": "正常",
+      "DISABLED": "已禁用"
+    },
+    "roleDescriptions": {
+      "ADMIN": "全部功能，含用户与角色管理",
+      "EDITOR": "可维护本体、数据源、映射与治理规则",
+      "VIEWER": "仅查看，不可写入"
+    },
+    "rules": {
+      "displayNameMax": "展示名称最长 32 个字符",
+      "avatarUrl": "请填写合法的图片地址",
+      "oldPasswordRequired": "请输入当前密码"
+    }
+  },
+  "system": {
+    "usersHint": "管理账号的角色与启用状态。平台不开放自助注册，新账号在这里创建。",
+    "searchUsers": "按用户名或邮箱搜索",
+    "createUser": "新建用户",
+    "userCreated": "用户已创建",
+    "usernamePlaceholder": "3 到 32 位字母、数字或下划线",
+    "cannotEditSelf": "不能修改自己的角色或状态",
+    "editUser": "编辑用户",
+    "userUpdated": "用户已更新",
+    "rolesHint": "系统内置角色及其权限范围。",
+    "description": "说明",
+    "memberCount": "成员数",
+    "auditHint": "登录、改密与权限变更等关键操作留痕。",
+    "searchAuditLogs": "按操作人或对象搜索",
+    "actor": "操作人",
+    "action": "操作",
+    "target": "对象",
+    "result": "结果",
+    "ip": "来源 IP",
+    "time": "时间",
+    "actions": {
+      "LOGIN": "登录",
+      "LOGOUT": "退出登录",
+      "REGISTER": "建号",
+      "PASSWORD_CHANGED": "修改密码",
+      "RESET_REQUESTED": "申请重置密码",
+      "PASSWORD_RESET": "重置密码",
+      "PROFILE_UPDATED": "更新资料",
+      "ROLE_CHANGED": "变更角色",
+      "STATUS_CHANGED": "变更状态"
+    },
+    "results": {
+      "OK": "成功",
+      "FAILED": "失败"
+    }
   }
 }

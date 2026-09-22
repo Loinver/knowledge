@@ -12,15 +12,46 @@ const { data, loading, error, reload } = useAsyncData((signal) => dashboardApi.s
 
 const stats = computed<DashboardStats | null>(() => data.value)
 const hasIssues = computed(
-  () => (stats.value && (stats.value.quarantineCount > 0 || stats.value.unpublishedCount > 0)) || false,
+  () =>
+    (stats.value && (stats.value.quarantineCount > 0 || stats.value.unpublishedCount > 0)) || false,
 )
 const pipeline = computed(() => [
-  { step: t('dashboard.step1'), count: stats.value?.entityTypes ?? 0, link: 'entity-types', label: t('dashboard.goEntityTypes') },
-  { step: t('dashboard.step2'), count: stats.value?.datasources ?? 0, link: 'datasources', label: t('dashboard.goDataSources') },
-  { step: t('dashboard.step3'), count: 0, link: 'mapping-wizard', label: t('dashboard.goMappingWizard') },
-  { step: t('dashboard.step4'), count: stats.value?.runs ?? 0, link: 'extraction-runs', label: t('dashboard.goExtractionRuns') },
-  { step: t('dashboard.step5'), count: stats.value?.resultSetCount ?? 0, link: 'graph-browse', label: t('dashboard.goGraphBrowse') },
-  { step: t('dashboard.step6'), count: stats.value?.quarantineCount ?? 0, link: 'graph-reports', label: t('dashboard.goGraphReports') },
+  {
+    step: t('dashboard.step1'),
+    count: stats.value?.entityTypes ?? 0,
+    link: 'entity-types',
+    label: t('dashboard.goEntityTypes'),
+  },
+  {
+    step: t('dashboard.step2'),
+    count: stats.value?.datasources ?? 0,
+    link: 'datasources',
+    label: t('dashboard.goDataSources'),
+  },
+  {
+    step: t('dashboard.step3'),
+    count: 0,
+    link: 'mapping-wizard',
+    label: t('dashboard.goMappingWizard'),
+  },
+  {
+    step: t('dashboard.step4'),
+    count: stats.value?.runs ?? 0,
+    link: 'extraction-runs',
+    label: t('dashboard.goExtractionRuns'),
+  },
+  {
+    step: t('dashboard.step5'),
+    count: stats.value?.resultSetCount ?? 0,
+    link: 'graph-browse',
+    label: t('dashboard.goGraphBrowse'),
+  },
+  {
+    step: t('dashboard.step6'),
+    count: stats.value?.quarantineCount ?? 0,
+    link: 'graph-reports',
+    label: t('dashboard.goGraphReports'),
+  },
 ])
 </script>
 
@@ -59,7 +90,11 @@ const pipeline = computed(() => [
         <NCard size="small">
           <NStatistic
             :label="t('dashboard.currentGraph')"
-            :value="stats?.currentGraphId ? t('dashboard.resultSet', { id: stats.currentGraphId }) : t('dashboard.none')"
+            :value="
+              stats?.currentGraphId
+                ? t('dashboard.resultSet', { id: stats.currentGraphId })
+                : t('dashboard.none')
+            "
           />
           <p v-if="!stats?.currentGraphId" class="hint">{{ t('dashboard.noCurrentGraph') }}</p>
         </NCard>

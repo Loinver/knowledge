@@ -32,19 +32,13 @@ export interface GraphRevisionBrief {
 
 export const validationApi = {
   validateGraph: (graphRevisionId: number) =>
-    http
-      .post(`/validation/graph/${  graphRevisionId}`)
-      .then((r) => r.data as ValidationReport),
+    http.post(`/validation/graph/${graphRevisionId}`).then((r) => r.data as ValidationReport),
   getReport: (reportId: number) =>
-    http
-      .get(`/validation/reports/${  reportId}`)
-      .then((r) => r.data as ValidationReport),
+    http.get(`/validation/reports/${reportId}`).then((r) => r.data as ValidationReport),
   getResults: (reportId: number) =>
     http
-      .get(`/validation/reports/${  reportId  }/results`)
+      .get(`/validation/reports/${reportId}/results`)
       .then((r) => r.data as ValidationResultItem[]),
   revisions: () =>
-    http
-      .get('/extraction/graph/revisions')
-      .then((r) => r.data as GraphRevisionBrief[]),
+    http.get('/extraction/graph/revisions').then((r) => r.data as GraphRevisionBrief[]),
 }

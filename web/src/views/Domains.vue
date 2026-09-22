@@ -241,7 +241,7 @@ onMounted(async () => {
 
 <style scoped>
 .page-container {
-  padding: 24px;
+  /* 内容区留白由 AdminLayout 统一提供，页面不再自带 padding */
 }
 .page-header {
   margin-bottom: 16px;

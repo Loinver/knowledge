@@ -1231,6 +1231,331 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/governance/clauses': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Clauses Endpoint */
+    get: operations['list_clauses_endpoint_api_v1_governance_clauses_get']
+    put?: never
+    /** Create Clause Endpoint */
+    post: operations['create_clause_endpoint_api_v1_governance_clauses_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/clauses/{clause_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Clause Endpoint */
+    get: operations['get_clause_endpoint_api_v1_governance_clauses__clause_id__get']
+    /** Update Clause Endpoint */
+    put: operations['update_clause_endpoint_api_v1_governance_clauses__clause_id__put']
+    post?: never
+    /** Delete Clause Endpoint */
+    delete: operations['delete_clause_endpoint_api_v1_governance_clauses__clause_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/config': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Auth Config
+     * @description 公开配置：前端据此决定是否展示注册入口、口令长度提示。
+     */
+    get: operations['auth_config_api_v1_auth_config_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/register': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Register
+     * @description 公开注册，成功即建立会话。默认关闭（`KG_ALLOW_PUBLIC_REGISTRATION=1` 打开）。
+     */
+    post: operations['register_api_v1_auth_register_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/login': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Login
+     * @description 登录。失败也要留痕，所以异常路径同样提交一次。
+     */
+    post: operations['login_api_v1_auth_login_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/refresh': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Refresh
+     * @description 刷新访问令牌。旧刷新令牌立即失效（轮转）。
+     */
+    post: operations['refresh_api_v1_auth_refresh_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/logout': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Logout
+     * @description 登出。请求体可选：带上 `refresh_token` 才能把会话彻底吊销。
+     */
+    post: operations['logout_api_v1_auth_logout_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/forgot-password': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Forgot Password
+     * @description 申请重置。邮箱是否存在都返回 200，避免账号枚举。
+     *
+     *     开发态没有邮件服务，`reset_token` 直接下发（`KG_EXPOSE_RESET_TOKEN=0` 关闭）；
+     *     生产由后端发信，响应里只有 `null`。
+     */
+    post: operations['forgot_password_api_v1_auth_forgot_password_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/reset-password': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reset Password
+     * @description 凭邮件令牌重置口令。令牌一次性，用后所有会话失效。
+     */
+    post: operations['reset_password_api_v1_auth_reset_password_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/auth/me': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Me
+     * @description 当前用户信息：布局用户区与路由守卫都依赖它。
+     */
+    get: operations['me_api_v1_auth_me_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/users/me/profile': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read My Profile
+     * @description 个人中心资料。
+     */
+    get: operations['read_my_profile_api_v1_users_me_profile_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /**
+     * Update My Profile
+     * @description 更新昵称与头像。只覆盖显式传入的字段。
+     */
+    patch: operations['update_my_profile_api_v1_users_me_profile_patch']
+    trace?: never
+  }
+  '/api/v1/users/me/password': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Change My Password
+     * @description 改密。旧口令错误同样留痕，因此异常路径也提交一次。
+     */
+    put: operations['change_my_password_api_v1_users_me_password_put']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/users': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Users */
+    get: operations['list_users_api_v1_users_get']
+    put?: never
+    /**
+     * Create User
+     * @description 管理员建号。公开注册关闭时，这是唯一的建号入口。
+     */
+    post: operations['create_user_api_v1_users_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/users/{user_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /**
+     * Patch User
+     * @description 改角色或启停账号。管理员不能把自己降级或禁用。
+     */
+    patch: operations['patch_user_api_v1_users__user_id__patch']
+    trace?: never
+  }
+  '/api/v1/roles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Roles
+     * @description 角色与成员数。角色名与说明由前端按 code 走 i18n。
+     */
+    get: operations['list_roles_api_v1_roles_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/audit-logs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * List Audit Logs
+     * @description 全局操作日志，按时间倒序。
+     */
+    get: operations['list_audit_logs_api_v1_audit_logs_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/health': {
     parameters: {
       query?: never
@@ -1252,9 +1577,1208 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** ApiResponse[AuditLogPage] */
+    ApiResponse_AuditLogPage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['AuditLogPage'] | null
+    }
+    /** ApiResponse[AuthConfigOut] */
+    ApiResponse_AuthConfigOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['AuthConfigOut'] | null
+    }
+    /** ApiResponse[CanvasLayoutOut] */
+    ApiResponse_CanvasLayoutOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['CanvasLayoutOut'] | null
+    }
+    /** ApiResponse[DatasourceOut] */
+    ApiResponse_DatasourceOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['DatasourceOut'] | null
+    }
+    /** ApiResponse[DomainMemberOut] */
+    ApiResponse_DomainMemberOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['DomainMemberOut'] | null
+    }
+    /** ApiResponse[DomainOut] */
+    ApiResponse_DomainOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['DomainOut'] | null
+    }
+    /** ApiResponse[EntityDetailOut] */
+    ApiResponse_EntityDetailOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityDetailOut'] | null
+    }
+    /** ApiResponse[EntityPage] */
+    ApiResponse_EntityPage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityPage'] | null
+    }
+    /** ApiResponse[EntityTraceOut] */
+    ApiResponse_EntityTraceOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityTraceOut'] | null
+    }
+    /** ApiResponse[EntityTypeOut] */
+    ApiResponse_EntityTypeOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityTypeOut'] | null
+    }
+    /** ApiResponse[ExtractionRunOut] */
+    ApiResponse_ExtractionRunOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ExtractionRunOut'] | null
+    }
+    /** ApiResponse[FactTraceOut] */
+    ApiResponse_FactTraceOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['FactTraceOut'] | null
+    }
+    /** ApiResponse[ForgotPasswordResult] */
+    ApiResponse_ForgotPasswordResult_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ForgotPasswordResult'] | null
+    }
+    /** ApiResponse[GraphRevisionOut] */
+    ApiResponse_GraphRevisionOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['GraphRevisionOut'] | null
+    }
+    /** ApiResponse[GraphViewOut] */
+    ApiResponse_GraphViewOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['GraphViewOut'] | null
+    }
+    /** ApiResponse[HealthResponse] */
+    ApiResponse_HealthResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['HealthResponse'] | null
+    }
+    /** ApiResponse[ImpactResponse] */
+    ApiResponse_ImpactResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ImpactResponse'] | null
+    }
+    /** ApiResponse[IriBuildResponse] */
+    ApiResponse_IriBuildResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['IriBuildResponse'] | null
+    }
+    /** ApiResponse[IriValidateResponse] */
+    ApiResponse_IriValidateResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['IriValidateResponse'] | null
+    }
+    /** ApiResponse[MappingOut] */
+    ApiResponse_MappingOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['MappingOut'] | null
+    }
+    /** ApiResponse[MappingPreviewResult] */
+    ApiResponse_MappingPreviewResult_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['MappingPreviewResult'] | null
+    }
+    /** ApiResponse[MappingRevisionOut] */
+    ApiResponse_MappingRevisionOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['MappingRevisionOut'] | null
+    }
+    /** ApiResponse[MetadataSnapshotOut] */
+    ApiResponse_MetadataSnapshotOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['MetadataSnapshotOut'] | null
+    }
+    /** ApiResponse[NamespaceOut] */
+    ApiResponse_NamespaceOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['NamespaceOut'] | null
+    }
+    /** ApiResponse[NoneType] */
+    ApiResponse_NoneType_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: null
+    }
+    /** ApiResponse[OntologyOut] */
+    ApiResponse_OntologyOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyOut'] | null
+    }
+    /** ApiResponse[OntologyRefOut] */
+    ApiResponse_OntologyRefOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyRefOut'] | null
+    }
+    /** ApiResponse[PreviewResponse] */
+    ApiResponse_PreviewResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['PreviewResponse'] | null
+    }
+    /** ApiResponse[PublishCheckResult] */
+    ApiResponse_PublishCheckResult_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['PublishCheckResult'] | null
+    }
+    /** ApiResponse[RelationTypeOut] */
+    ApiResponse_RelationTypeOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RelationTypeOut'] | null
+    }
+    /** ApiResponse[RevisionOut] */
+    ApiResponse_RevisionOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RevisionOut'] | null
+    }
+    /** ApiResponse[RuleOut] */
+    ApiResponse_RuleOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RuleOut'] | null
+    }
+    /** ApiResponse[RulePage] */
+    ApiResponse_RulePage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RulePage'] | null
+    }
+    /** ApiResponse[RuleTestOut] */
+    ApiResponse_RuleTestOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RuleTestOut'] | null
+    }
+    /** ApiResponse[RunStartResponse] */
+    ApiResponse_RunStartResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RunStartResponse'] | null
+    }
+    /** ApiResponse[StandardClauseOut] */
+    ApiResponse_StandardClauseOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['StandardClauseOut'] | null
+    }
+    /** ApiResponse[StandardClausePage] */
+    ApiResponse_StandardClausePage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['StandardClausePage'] | null
+    }
+    /** ApiResponse[TableReferenceResponse] */
+    ApiResponse_TableReferenceResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['TableReferenceResponse'] | null
+    }
+    /** ApiResponse[TemplateOut] */
+    ApiResponse_TemplateOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['TemplateOut'] | null
+    }
+    /** ApiResponse[TemplatePage] */
+    ApiResponse_TemplatePage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['TemplatePage'] | null
+    }
+    /** ApiResponse[TemplateResourcePage] */
+    ApiResponse_TemplateResourcePage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['TemplateResourcePage'] | null
+    }
+    /** ApiResponse[TestConnectionResponse] */
+    ApiResponse_TestConnectionResponse_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['TestConnectionResponse'] | null
+    }
+    /** ApiResponse[TokenPair] */
+    ApiResponse_TokenPair_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['TokenPair'] | null
+    }
+    /** ApiResponse[Union[GraphRevisionOut, NoneType]] */
+    ApiResponse_Union_GraphRevisionOut__NoneType__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['GraphRevisionOut'] | null
+    }
+    /** ApiResponse[Union[MappingRevisionOut, NoneType]] */
+    ApiResponse_Union_MappingRevisionOut__NoneType__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['MappingRevisionOut'] | null
+    }
+    /** ApiResponse[UserOut] */
+    ApiResponse_UserOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['UserOut'] | null
+    }
+    /** ApiResponse[UserPage] */
+    ApiResponse_UserPage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['UserPage'] | null
+    }
+    /** ApiResponse[ValidationReportOut] */
+    ApiResponse_ValidationReportOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ValidationReportOut'] | null
+    }
+    /** ApiResponse[list[ConflictInfo]] */
+    ApiResponse_list_ConflictInfo__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['ConflictInfo'][] | null
+    }
+    /** ApiResponse[list[DatasourceBrief]] */
+    ApiResponse_list_DatasourceBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['DatasourceBrief'][] | null
+    }
+    /** ApiResponse[list[DomainBrief]] */
+    ApiResponse_list_DomainBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['DomainBrief'][] | null
+    }
+    /** ApiResponse[list[DomainMemberOut]] */
+    ApiResponse_list_DomainMemberOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['DomainMemberOut'][] | null
+    }
+    /** ApiResponse[list[EntityIdentityOut]] */
+    ApiResponse_list_EntityIdentityOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['EntityIdentityOut'][] | null
+    }
+    /** ApiResponse[list[EntityTypeBrief]] */
+    ApiResponse_list_EntityTypeBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['EntityTypeBrief'][] | null
+    }
+    /** ApiResponse[list[ExtractionRunOut]] */
+    ApiResponse_list_ExtractionRunOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['ExtractionRunOut'][] | null
+    }
+    /** ApiResponse[list[FactEvidenceOut]] */
+    ApiResponse_list_FactEvidenceOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['FactEvidenceOut'][] | null
+    }
+    /** ApiResponse[list[GraphRevisionOut]] */
+    ApiResponse_list_GraphRevisionOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['GraphRevisionOut'][] | null
+    }
+    /** ApiResponse[list[GraphTripleOut]] */
+    ApiResponse_list_GraphTripleOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['GraphTripleOut'][] | null
+    }
+    /** ApiResponse[list[MappingBrief]] */
+    ApiResponse_list_MappingBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['MappingBrief'][] | null
+    }
+    /** ApiResponse[list[MetadataSnapshotBrief]] */
+    ApiResponse_list_MetadataSnapshotBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['MetadataSnapshotBrief'][] | null
+    }
+    /** ApiResponse[list[NamespaceOut]] */
+    ApiResponse_list_NamespaceOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['NamespaceOut'][] | null
+    }
+    /** ApiResponse[list[OntologyBrief]] */
+    ApiResponse_list_OntologyBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['OntologyBrief'][] | null
+    }
+    /** ApiResponse[list[OntologyRefOut]] */
+    ApiResponse_list_OntologyRefOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['OntologyRefOut'][] | null
+    }
+    /** ApiResponse[list[QuarantineOut]] */
+    ApiResponse_list_QuarantineOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['QuarantineOut'][] | null
+    }
+    /** ApiResponse[list[RelationTypeBrief]] */
+    ApiResponse_list_RelationTypeBrief__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['RelationTypeBrief'][] | null
+    }
+    /** ApiResponse[list[RoleOut]] */
+    ApiResponse_list_RoleOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['RoleOut'][] | null
+    }
+    /** ApiResponse[list[ValidationResultOut]] */
+    ApiResponse_list_ValidationResultOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['ValidationResultOut'][] | null
+    }
     /**
      * AttributeDefOut
-     * @description 关联实体上的属性定义（M1 存结构，M4 补完整 OWL 语义）。
+     * @description 关联实体上的属性定义（M-07 起 datatype/nullable/枚举与默认值真实落库）。
      */
     AttributeDefOut: {
       /** Name */
@@ -1266,6 +2790,70 @@ export interface components {
        * @default true
        */
       nullable: boolean
+      /** Enum Dict Id */
+      enum_dict_id?: number | null
+      /** Default Value */
+      default_value?: string | null
+    }
+    /**
+     * AuditAction
+     * @description 账号操作留痕的动作码，前端按码走 i18n。
+     * @enum {string}
+     */
+    AuditAction:
+      | 'LOGIN'
+      | 'LOGOUT'
+      | 'REGISTER'
+      | 'PASSWORD_CHANGED'
+      | 'RESET_REQUESTED'
+      | 'PASSWORD_RESET'
+      | 'PROFILE_UPDATED'
+      | 'ROLE_CHANGED'
+      | 'STATUS_CHANGED'
+    /** AuditLogOut */
+    AuditLogOut: {
+      /** Id */
+      id: number
+      /** Actor */
+      actor: string
+      action: components['schemas']['AuditAction']
+      /** Target */
+      target?: string | null
+      result: components['schemas']['AuditResult']
+      /** Ip */
+      ip?: string | null
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+    }
+    /** AuditLogPage */
+    AuditLogPage: {
+      /** Items */
+      items: components['schemas']['AuditLogOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /**
+     * AuditResult
+     * @description 留痕结果。失败也要记——登录失败是安全信号。
+     * @enum {string}
+     */
+    AuditResult: 'OK' | 'FAILED'
+    /**
+     * AuthConfigOut
+     * @description 公开的认证配置：前端据此决定是否展示注册入口。
+     */
+    AuthConfigOut: {
+      /** Registration Enabled */
+      registration_enabled: boolean
+      /** Password Min Length */
+      password_min_length: number
     }
     /** CanvasLayoutOut */
     CanvasLayoutOut: {
@@ -1871,6 +3459,22 @@ export interface components {
       /** Default Value */
       default_value?: string | null
     }
+    /**
+     * ForgotPasswordResult
+     * @description 重置申请结果。
+     *
+     *     无论邮箱是否存在都返回 200，避免账号枚举；`reset_token` 仅在
+     *     开发态（`KG_EXPOSE_RESET_TOKEN=1`）下发，生产由邮件送达。
+     */
+    ForgotPasswordResult: {
+      /** Reset Token */
+      reset_token?: string | null
+      /**
+       * Expires In
+       * @default 0
+       */
+      expires_in: number
+    }
     /** GraphRevisionOut */
     GraphRevisionOut: {
       /** Id */
@@ -2009,6 +3613,24 @@ export interface components {
       name: boolean
       /** Namespace */
       namespace: boolean
+    }
+    /**
+     * LoginRequest
+     * @description 登录。`account` 同时接受用户名与邮箱。
+     */
+    LoginRequest: {
+      /** Account */
+      account: string
+      /** Password */
+      password: string
+    }
+    /**
+     * LogoutRequest
+     * @description 登出。带上刷新令牌才能把会话彻底吊销，只给访问令牌则只失效当前凭据。
+     */
+    LogoutRequest: {
+      /** Refresh Token */
+      refresh_token?: string | null
     }
     /** MappingBrief */
     MappingBrief: {
@@ -2298,6 +3920,25 @@ export interface components {
        */
       transitive: boolean
     }
+    /** PasswordChange */
+    PasswordChange: {
+      /** Old Password */
+      old_password: string
+      /** New Password */
+      new_password: string
+    }
+    /** PasswordResetRequest */
+    PasswordResetRequest: {
+      /** Email */
+      email: string
+    }
+    /** PasswordResetSubmit */
+    PasswordResetSubmit: {
+      /** Token */
+      token: string
+      /** Password */
+      password: string
+    }
     /** PreviewColumnMeta */
     PreviewColumnMeta: {
       /** Name */
@@ -2348,6 +3989,16 @@ export interface components {
       total_returned: number
       /** Truncated */
       truncated: boolean
+    }
+    /**
+     * ProfileUpdate
+     * @description 个人中心资料。用 `exclude_unset` 区分「没传」与「传了 null」。
+     */
+    ProfileUpdate: {
+      /** Display Name */
+      display_name?: string | null
+      /** Avatar Url */
+      avatar_url?: string | null
     }
     /**
      * PublishCheckResult
@@ -2407,6 +4058,25 @@ export interface components {
       mapping_name: string
       /** Role */
       role: string
+    }
+    /** RefreshRequest */
+    RefreshRequest: {
+      /** Refresh Token */
+      refresh_token: string
+    }
+    /**
+     * RegisterRequest
+     * @description 公开注册。默认关闭，仅在 `KG_ALLOW_PUBLIC_REGISTRATION=1` 时可用。
+     */
+    RegisterRequest: {
+      /** Username */
+      username: string
+      /** Email */
+      email: string
+      /** Password */
+      password: string
+      /** Display Name */
+      display_name?: string | null
     }
     /**
      * RelEndpointSpec
@@ -2621,6 +4291,15 @@ export interface components {
       /** Checksum */
       checksum: string
     }
+    /**
+     * RoleOut
+     * @description 角色与成员数。角色名与说明是界面文案，由前端按 `code` 走 i18n。
+     */
+    RoleOut: {
+      code: components['schemas']['UserRole']
+      /** Member Count */
+      member_count: number
+    }
     /** RuleCreate */
     RuleCreate: {
       /** Identifier */
@@ -2758,6 +4437,107 @@ export interface components {
       draft: components['schemas']['MappingRevisionCreate']
       /** If Match */
       if_match: number
+    }
+    /** StandardClauseBrief */
+    StandardClauseBrief: {
+      /** Id */
+      id: number
+      /** Standard */
+      standard: string
+      /** Clause Number */
+      clause_number: string
+      /** Product Fallback */
+      product_fallback: string | null
+    }
+    /** StandardClauseCreate */
+    StandardClauseCreate: {
+      /** Standard */
+      standard: string
+      /** Clause Number */
+      clause_number: string
+      /** Title I18N */
+      title_i18n: {
+        [key: string]: string
+      }
+      /** Self Authored Description */
+      self_authored_description: {
+        [key: string]: string
+      }
+      /** Product Fallback */
+      product_fallback?: string | null
+      /**
+       * Appendix Nature
+       * @default NORMATIVE
+       * @enum {string}
+       */
+      appendix_nature: 'NORMATIVE' | 'INFORMATIVE'
+      /** Date Lexicon */
+      date_lexicon?: string | null
+      /** Clause Disambiguation */
+      clause_disambiguation?: string | null
+      /** Example Domain */
+      example_domain?: string | null
+    }
+    /** StandardClauseOut */
+    StandardClauseOut: {
+      /** Id */
+      id: number
+      /** Revision */
+      revision: number
+      /** Standard */
+      standard: string
+      /** Clause Number */
+      clause_number: string
+      /** Title I18N */
+      title_i18n: {
+        [key: string]: string
+      }
+      /** Self Authored Description */
+      self_authored_description: {
+        [key: string]: string
+      }
+      /** Product Fallback */
+      product_fallback: string | null
+      /** Appendix Nature */
+      appendix_nature: string
+      /** Date Lexicon */
+      date_lexicon: string | null
+      /** Clause Disambiguation */
+      clause_disambiguation: string | null
+      /** Example Domain */
+      example_domain: string | null
+    }
+    /** StandardClausePage */
+    StandardClausePage: {
+      /** Items */
+      items: components['schemas']['StandardClauseBrief'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /** StandardClauseUpdate */
+    StandardClauseUpdate: {
+      /** Title I18N */
+      title_i18n?: {
+        [key: string]: string
+      } | null
+      /** Self Authored Description */
+      self_authored_description?: {
+        [key: string]: string
+      } | null
+      /** Product Fallback */
+      product_fallback?: string | null
+      /** Appendix Nature */
+      appendix_nature?: ('NORMATIVE' | 'INFORMATIVE') | null
+      /** Date Lexicon */
+      date_lexicon?: string | null
+      /** Clause Disambiguation */
+      clause_disambiguation?: string | null
+      /** Example Domain */
+      example_domain?: string | null
     }
     /** TableReferenceResponse */
     TableReferenceResponse: {
@@ -2937,11 +4717,90 @@ export interface components {
       table_count?: number | null
     }
     /**
+     * TokenPair
+     * @description 登录、注册、刷新统一返回双令牌。`expires_in` 是访问令牌剩余秒数。
+     */
+    TokenPair: {
+      /** Access Token */
+      access_token: string
+      /** Refresh Token */
+      refresh_token: string
+      /** Expires In */
+      expires_in: number
+    }
+    /**
      * TransformKind
      * @description 字段转换规则。
      * @enum {string}
      */
     TransformKind: 'IDENTITY' | 'TEMPLATE' | 'DATE' | 'ENUM' | 'DECIMAL'
+    /**
+     * UserCreate
+     * @description 管理员建号。角色由管理员指定，注册开关不影响这条路径。
+     */
+    UserCreate: {
+      /** Username */
+      username: string
+      /** Email */
+      email: string
+      /** Password */
+      password: string
+      /** @default VIEWER */
+      role: components['schemas']['UserRole']
+      /** Display Name */
+      display_name?: string | null
+    }
+    /**
+     * UserOut
+     * @description 账号对外形态。`password_hash` 永不出现。
+     */
+    UserOut: {
+      /** Id */
+      id: string
+      /** Username */
+      username: string
+      /** Email */
+      email: string
+      role: components['schemas']['UserRole']
+      status: components['schemas']['UserStatus']
+      /** Display Name */
+      display_name?: string | null
+      /** Avatar Url */
+      avatar_url?: string | null
+      /** Last Login At */
+      last_login_at?: string | null
+    }
+    /** UserPage */
+    UserPage: {
+      /** Items */
+      items: components['schemas']['UserOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /**
+     * UserPatch
+     * @description 管理员改角色或状态。字段缺省表示不改，显式 null 非法。
+     */
+    UserPatch: {
+      role?: components['schemas']['UserRole'] | null
+      status?: components['schemas']['UserStatus'] | null
+    }
+    /**
+     * UserRole
+     * @description 账号角色。单角色起步，多角色与细粒度权限留待权限基线（M5）。
+     * @enum {string}
+     */
+    UserRole: 'ADMIN' | 'EDITOR' | 'VIEWER'
+    /**
+     * UserStatus
+     * @description 账号状态。DISABLED 的账号登录被拒。
+     * @enum {string}
+     */
+    UserStatus: 'ACTIVE' | 'DISABLED'
     /** ValidationError */
     ValidationError: {
       /** Location */
@@ -2954,6 +4813,42 @@ export interface components {
       input?: unknown
       /** Context */
       ctx?: Record<string, never>
+    }
+    /**
+     * ValidationReportOut
+     * @description 一次校验的总体结论。summary 为四态计数。
+     */
+    ValidationReportOut: {
+      /** Report Id */
+      report_id: number
+      /** Scope */
+      scope: string
+      /** Target Id */
+      target_id: number
+      /** Summary */
+      summary?: {
+        [key: string]: unknown
+      }
+    }
+    /**
+     * ValidationResultOut
+     * @description 逐项校验结果。state 为四态枚举码之一，绝不能把未执行渲染成通过。
+     */
+    ValidationResultOut: {
+      /** Check Code */
+      check_code: string
+      /** State */
+      state: string
+      /** Focus Node */
+      focus_node?: string | null
+      /** Rule Id */
+      rule_id?: string | null
+      /** Detail */
+      detail?: {
+        [key: string]: unknown
+      } | null
+      /** Message */
+      message?: string | null
     }
     /**
      * ValidationState
@@ -2985,7 +4880,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['NamespaceOut'][]
+          'application/json': components['schemas']['ApiResponse_list_NamespaceOut__']
         }
       }
     }
@@ -3009,7 +4904,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['NamespaceOut']
+          'application/json': components['schemas']['ApiResponse_NamespaceOut_']
         }
       }
       /** @description Validation Error */
@@ -3035,11 +4930,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -3071,7 +4968,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['IriBuildResponse']
+          'application/json': components['schemas']['ApiResponse_IriBuildResponse_']
         }
       }
       /** @description Validation Error */
@@ -3103,7 +5000,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['IriValidateResponse']
+          'application/json': components['schemas']['ApiResponse_IriValidateResponse_']
         }
       }
       /** @description Validation Error */
@@ -3134,7 +5031,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['ImpactResponse']
+          'application/json': components['schemas']['ApiResponse_ImpactResponse_']
         }
       }
       /** @description Validation Error */
@@ -3167,7 +5064,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_OntologyBrief__']
         }
       }
       /** @description Validation Error */
@@ -3200,7 +5097,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyOut']
+          'application/json': components['schemas']['ApiResponse_OntologyOut_']
         }
       }
       /** @description Validation Error */
@@ -3231,7 +5128,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyOut']
+          'application/json': components['schemas']['ApiResponse_OntologyOut_']
         }
       }
       /** @description Validation Error */
@@ -3266,7 +5163,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyOut']
+          'application/json': components['schemas']['ApiResponse_OntologyOut_']
         }
       }
       /** @description Validation Error */
@@ -3297,7 +5194,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyRefOut'][]
+          'application/json': components['schemas']['ApiResponse_list_OntologyRefOut__']
         }
       }
       /** @description Validation Error */
@@ -3332,7 +5229,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyRefOut']
+          'application/json': components['schemas']['ApiResponse_OntologyRefOut_']
         }
       }
       /** @description Validation Error */
@@ -3359,11 +5256,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -3393,7 +5292,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['ConflictInfo'][]
+          'application/json': components['schemas']['ApiResponse_list_ConflictInfo__']
         }
       }
       /** @description Validation Error */
@@ -3424,7 +5323,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['CanvasLayoutOut']
+          'application/json': components['schemas']['ApiResponse_CanvasLayoutOut_']
         }
       }
       /** @description Validation Error */
@@ -3459,7 +5358,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['CanvasLayoutOut']
+          'application/json': components['schemas']['ApiResponse_CanvasLayoutOut_']
         }
       }
       /** @description Validation Error */
@@ -3558,7 +5457,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DatasourceBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_DatasourceBrief__']
         }
       }
       /** @description Validation Error */
@@ -3591,7 +5490,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DatasourceOut']
+          'application/json': components['schemas']['ApiResponse_DatasourceOut_']
         }
       }
       /** @description Validation Error */
@@ -3622,7 +5521,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DatasourceOut']
+          'application/json': components['schemas']['ApiResponse_DatasourceOut_']
         }
       }
       /** @description Validation Error */
@@ -3648,11 +5547,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -3684,7 +5585,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TestConnectionResponse']
+          'application/json': components['schemas']['ApiResponse_TestConnectionResponse_']
         }
       }
       /** @description Validation Error */
@@ -3717,7 +5618,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DomainBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_DomainBrief__']
         }
       }
       /** @description Validation Error */
@@ -3750,7 +5651,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DomainOut']
+          'application/json': components['schemas']['ApiResponse_DomainOut_']
         }
       }
       /** @description Validation Error */
@@ -3781,7 +5682,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DomainOut']
+          'application/json': components['schemas']['ApiResponse_DomainOut_']
         }
       }
       /** @description Validation Error */
@@ -3816,7 +5717,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DomainOut']
+          'application/json': components['schemas']['ApiResponse_DomainOut_']
         }
       }
       /** @description Validation Error */
@@ -3847,7 +5748,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DomainMemberOut'][]
+          'application/json': components['schemas']['ApiResponse_list_DomainMemberOut__']
         }
       }
       /** @description Validation Error */
@@ -3882,7 +5783,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['DomainMemberOut']
+          'application/json': components['schemas']['ApiResponse_DomainMemberOut_']
         }
       }
       /** @description Validation Error */
@@ -3909,11 +5810,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -3943,7 +5846,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['PublishCheckResult']
+          'application/json': components['schemas']['ApiResponse_PublishCheckResult_']
         }
       }
       /** @description Validation Error */
@@ -4009,7 +5912,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_MappingBrief__']
         }
       }
       /** @description Validation Error */
@@ -4042,7 +5945,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingOut']
+          'application/json': components['schemas']['ApiResponse_MappingOut_']
         }
       }
       /** @description Validation Error */
@@ -4073,7 +5976,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingOut']
+          'application/json': components['schemas']['ApiResponse_MappingOut_']
         }
       }
       /** @description Validation Error */
@@ -4099,11 +6002,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -4133,7 +6038,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingRevisionOut'] | null
+          'application/json': components['schemas']['ApiResponse_Union_MappingRevisionOut__NoneType__']
         }
       }
       /** @description Validation Error */
@@ -4168,7 +6073,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingRevisionOut']
+          'application/json': components['schemas']['ApiResponse_MappingRevisionOut_']
         }
       }
       /** @description Validation Error */
@@ -4203,7 +6108,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingRevisionOut']
+          'application/json': components['schemas']['ApiResponse_MappingRevisionOut_']
         }
       }
       /** @description Validation Error */
@@ -4234,7 +6139,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingRevisionOut']
+          'application/json': components['schemas']['ApiResponse_MappingRevisionOut_']
         }
       }
       /** @description Validation Error */
@@ -4269,7 +6174,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MappingPreviewResult']
+          'application/json': components['schemas']['ApiResponse_MappingPreviewResult_']
         }
       }
       /** @description Validation Error */
@@ -4300,7 +6205,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MetadataSnapshotOut']
+          'application/json': components['schemas']['ApiResponse_MetadataSnapshotOut_']
         }
       }
       /** @description Validation Error */
@@ -4334,7 +6239,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MetadataSnapshotBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_MetadataSnapshotBrief__']
         }
       }
       /** @description Validation Error */
@@ -4365,7 +6270,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MetadataSnapshotOut']
+          'application/json': components['schemas']['ApiResponse_MetadataSnapshotOut_']
         }
       }
       /** @description Validation Error */
@@ -4396,7 +6301,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['MetadataSnapshotOut']
+          'application/json': components['schemas']['ApiResponse_MetadataSnapshotOut_']
         }
       }
       /** @description Validation Error */
@@ -4427,7 +6332,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TableReferenceResponse']
+          'application/json': components['schemas']['ApiResponse_TableReferenceResponse_']
         }
       }
       /** @description Validation Error */
@@ -4460,7 +6365,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['PreviewResponse']
+          'application/json': components['schemas']['ApiResponse_PreviewResponse_']
         }
       }
       /** @description Validation Error */
@@ -4493,7 +6398,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityTypeBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_EntityTypeBrief__']
         }
       }
       /** @description Validation Error */
@@ -4526,7 +6431,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityTypeOut']
+          'application/json': components['schemas']['ApiResponse_EntityTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -4557,7 +6462,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityTypeOut']
+          'application/json': components['schemas']['ApiResponse_EntityTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -4592,7 +6497,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityTypeOut']
+          'application/json': components['schemas']['ApiResponse_EntityTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -4623,7 +6528,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RevisionOut']
+          'application/json': components['schemas']['ApiResponse_RevisionOut_']
         }
       }
       /** @description Validation Error */
@@ -4657,7 +6562,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplatePage']
+          'application/json': components['schemas']['ApiResponse_TemplatePage_']
         }
       }
       /** @description Validation Error */
@@ -4690,7 +6595,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplateOut']
+          'application/json': components['schemas']['ApiResponse_TemplateOut_']
         }
       }
       /** @description Validation Error */
@@ -4723,7 +6628,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplateResourcePage']
+          'application/json': components['schemas']['ApiResponse_TemplateResourcePage_']
         }
       }
       /** @description Validation Error */
@@ -4756,7 +6661,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplateOut']
+          'application/json': components['schemas']['ApiResponse_TemplateOut_']
         }
       }
       /** @description Validation Error */
@@ -4787,7 +6692,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplateOut']
+          'application/json': components['schemas']['ApiResponse_TemplateOut_']
         }
       }
       /** @description Validation Error */
@@ -4824,7 +6729,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplateOut']
+          'application/json': components['schemas']['ApiResponse_TemplateOut_']
         }
       }
       /** @description Validation Error */
@@ -4852,11 +6757,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -4892,7 +6799,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['TemplateOut']
+          'application/json': components['schemas']['ApiResponse_TemplateOut_']
         }
       }
       /** @description Validation Error */
@@ -4929,7 +6836,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['OntologyOut']
+          'application/json': components['schemas']['ApiResponse_OntologyOut_']
         }
       }
       /** @description Validation Error */
@@ -4962,7 +6869,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RelationTypeBrief'][]
+          'application/json': components['schemas']['ApiResponse_list_RelationTypeBrief__']
         }
       }
       /** @description Validation Error */
@@ -4995,7 +6902,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RelationTypeOut']
+          'application/json': components['schemas']['ApiResponse_RelationTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -5026,7 +6933,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RelationTypeOut']
+          'application/json': components['schemas']['ApiResponse_RelationTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -5061,7 +6968,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RelationTypeOut']
+          'application/json': components['schemas']['ApiResponse_RelationTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -5092,7 +6999,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RevisionOut']
+          'application/json': components['schemas']['ApiResponse_RevisionOut_']
         }
       }
       /** @description Validation Error */
@@ -5123,9 +7030,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': {
-            [key: string]: unknown
-          }
+          'application/json': components['schemas']['ApiResponse_ValidationReportOut_']
         }
       }
       /** @description Validation Error */
@@ -5156,9 +7061,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': {
-            [key: string]: unknown
-          }
+          'application/json': components['schemas']['ApiResponse_ValidationReportOut_']
         }
       }
       /** @description Validation Error */
@@ -5189,9 +7092,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': {
-            [key: string]: unknown
-          }
+          'application/json': components['schemas']['ApiResponse_ValidationReportOut_']
         }
       }
       /** @description Validation Error */
@@ -5222,9 +7123,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': {
-            [key: string]: unknown
-          }[]
+          'application/json': components['schemas']['ApiResponse_list_ValidationResultOut__']
         }
       }
       /** @description Validation Error */
@@ -5261,7 +7160,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['GraphViewOut']
+          'application/json': components['schemas']['ApiResponse_GraphViewOut_']
         }
       }
       /** @description Validation Error */
@@ -5293,7 +7192,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['ExtractionRunOut'][]
+          'application/json': components['schemas']['ApiResponse_list_ExtractionRunOut__']
         }
       }
       /** @description Validation Error */
@@ -5326,7 +7225,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RunStartResponse']
+          'application/json': components['schemas']['ApiResponse_RunStartResponse_']
         }
       }
       /** @description Validation Error */
@@ -5357,7 +7256,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['ExtractionRunOut']
+          'application/json': components['schemas']['ApiResponse_ExtractionRunOut_']
         }
       }
       /** @description Validation Error */
@@ -5388,7 +7287,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['QuarantineOut'][]
+          'application/json': components['schemas']['ApiResponse_list_QuarantineOut__']
         }
       }
       /** @description Validation Error */
@@ -5417,7 +7316,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['GraphRevisionOut'] | null
+          'application/json': components['schemas']['ApiResponse_Union_GraphRevisionOut__NoneType__']
         }
       }
     }
@@ -5440,7 +7339,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['GraphRevisionOut'][]
+          'application/json': components['schemas']['ApiResponse_list_GraphRevisionOut__']
         }
       }
       /** @description Validation Error */
@@ -5471,7 +7370,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['GraphRevisionOut']
+          'application/json': components['schemas']['ApiResponse_GraphRevisionOut_']
         }
       }
       /** @description Validation Error */
@@ -5506,7 +7405,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityIdentityOut'][]
+          'application/json': components['schemas']['ApiResponse_list_EntityIdentityOut__']
         }
       }
       /** @description Validation Error */
@@ -5541,7 +7440,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['GraphTripleOut'][]
+          'application/json': components['schemas']['ApiResponse_list_GraphTripleOut__']
         }
       }
       /** @description Validation Error */
@@ -5576,7 +7475,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityPage']
+          'application/json': components['schemas']['ApiResponse_EntityPage_']
         }
       }
       /** @description Validation Error */
@@ -5609,7 +7508,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityDetailOut']
+          'application/json': components['schemas']['ApiResponse_EntityDetailOut_']
         }
       }
       /** @description Validation Error */
@@ -5641,7 +7540,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityDetailOut']
+          'application/json': components['schemas']['ApiResponse_EntityDetailOut_']
         }
       }
       /** @description Validation Error */
@@ -5675,7 +7574,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['FactEvidenceOut'][]
+          'application/json': components['schemas']['ApiResponse_list_FactEvidenceOut__']
         }
       }
       /** @description Validation Error */
@@ -5709,7 +7608,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['FactTraceOut']
+          'application/json': components['schemas']['ApiResponse_FactTraceOut_']
         }
       }
       /** @description Validation Error */
@@ -5742,7 +7641,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityTraceOut']
+          'application/json': components['schemas']['ApiResponse_EntityTraceOut_']
         }
       }
       /** @description Validation Error */
@@ -5774,7 +7673,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['EntityTraceOut']
+          'application/json': components['schemas']['ApiResponse_EntityTraceOut_']
         }
       }
       /** @description Validation Error */
@@ -5809,7 +7708,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RulePage']
+          'application/json': components['schemas']['ApiResponse_RulePage_']
         }
       }
       /** @description Validation Error */
@@ -5842,7 +7741,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RuleOut']
+          'application/json': components['schemas']['ApiResponse_RuleOut_']
         }
       }
       /** @description Validation Error */
@@ -5873,7 +7772,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RuleOut']
+          'application/json': components['schemas']['ApiResponse_RuleOut_']
         }
       }
       /** @description Validation Error */
@@ -5910,7 +7809,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RuleOut']
+          'application/json': components['schemas']['ApiResponse_RuleOut_']
         }
       }
       /** @description Validation Error */
@@ -5938,11 +7837,13 @@ export interface operations {
     requestBody?: never
     responses: {
       /** @description Successful Response */
-      204: {
+      200: {
         headers: {
           [name: string]: unknown
         }
-        content?: never
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
       }
       /** @description Validation Error */
       422: {
@@ -5974,7 +7875,657 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['RuleTestOut']
+          'application/json': components['schemas']['ApiResponse_RuleTestOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_clauses_endpoint_api_v1_governance_clauses_get: {
+    parameters: {
+      query?: {
+        q?: string
+        page?: number
+        page_size?: number
+        /** @description 为空时按标准号 → 条款号升序（索引默认序） */
+        sort?: ('standard' | '-standard' | 'clause_number' | '-clause_number' | 'id' | '-id') | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_StandardClausePage_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_clause_endpoint_api_v1_governance_clauses_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StandardClauseCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_StandardClauseOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_clause_endpoint_api_v1_governance_clauses__clause_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        clause_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_StandardClauseOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  update_clause_endpoint_api_v1_governance_clauses__clause_id__put: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        clause_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StandardClauseUpdate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_StandardClauseOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_clause_endpoint_api_v1_governance_clauses__clause_id__delete: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        clause_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  auth_config_api_v1_auth_config_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_AuthConfigOut_']
+        }
+      }
+    }
+  }
+  register_api_v1_auth_register_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RegisterRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_TokenPair_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  login_api_v1_auth_login_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoginRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_TokenPair_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  refresh_api_v1_auth_refresh_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RefreshRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_TokenPair_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  logout_api_v1_auth_logout_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['LogoutRequest'] | null
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  forgot_password_api_v1_auth_forgot_password_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PasswordResetRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ForgotPasswordResult_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  reset_password_api_v1_auth_reset_password_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PasswordResetSubmit']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  me_api_v1_auth_me_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+    }
+  }
+  read_my_profile_api_v1_users_me_profile_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+    }
+  }
+  update_my_profile_api_v1_users_me_profile_patch: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ProfileUpdate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  change_my_password_api_v1_users_me_password_put: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['PasswordChange']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_users_api_v1_users_get: {
+    parameters: {
+      query?: {
+        q?: string
+        role?: components['schemas']['UserRole'] | null
+        status?: components['schemas']['UserStatus'] | null
+        page?: number
+        page_size?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_UserPage_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_user_api_v1_users_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UserCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  patch_user_api_v1_users__user_id__patch: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        user_id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UserPatch']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_roles_api_v1_roles_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_RoleOut__']
+        }
+      }
+    }
+  }
+  list_audit_logs_api_v1_audit_logs_get: {
+    parameters: {
+      query?: {
+        q?: string
+        action?: components['schemas']['AuditAction'] | null
+        page?: number
+        page_size?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_AuditLogPage_']
         }
       }
       /** @description Validation Error */
@@ -6003,7 +8554,7 @@ export interface operations {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['HealthResponse']
+          'application/json': components['schemas']['ApiResponse_HealthResponse_']
         }
       }
     }

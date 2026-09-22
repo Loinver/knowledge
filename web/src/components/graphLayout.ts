@@ -44,7 +44,10 @@ export function layoutGraph(nodes: GraphView['nodes'], neighborhood: boolean) {
   }
 }
 
-export function graphPaths(nodes: ReturnType<typeof layoutGraph>['nodes'], edges: GraphView['edges']) {
+export function graphPaths(
+  nodes: ReturnType<typeof layoutGraph>['nodes'],
+  edges: GraphView['edges'],
+) {
   const byIri = new Map(nodes.map((node) => [node.iri, node]))
   const pairs = new Map<string, GraphView['edges']>()
   for (const edge of edges) {

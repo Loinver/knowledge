@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { type AppLocale,getLocale, setLocale } from '@/i18n'
+import { type AppLocale, getLocale, setLocale } from '@/i18n'
 
 export const useLocaleStore = defineStore('locale', () => {
   const current = ref<AppLocale>(getLocale())
 
-  const label = computed(() => (current.value === 'zh-CN' ? '中文' : 'EN'))
+  // 显示「可以切换到的语言」，而不是当前语言：顶栏按钮的语义是动作目标
+  const label = computed(() => (current.value === 'zh-CN' ? 'EN' : '中文'))
 
   function change(locale: AppLocale) {
     setLocale(locale)
