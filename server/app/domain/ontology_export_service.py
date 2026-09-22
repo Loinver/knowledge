@@ -6,12 +6,13 @@ urn:knowledge:semantics:resourceKind 区分共享 OWL 类别的应用资源种�
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ValidationError
-from rdflib import OWL, RDF, RDFS, SKOS, XSD, Graph, Literal, Namespace, URIRef
+from pydantic import BaseModel, Field, ValidationError
+from rdflib import OWL, RDF, RDFS, SKOS, XSD, BNode, Graph, Literal, Namespace, URIRef
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from app.schemas.ontology import OntologyExportFormat
 _LANGUAGES = {"zh-CN": "zh-Hans", "en-US": "en"}
 _REF = Namespace("urn:knowledge:ref:")
 _SEMANTICS = Namespace("urn:knowledge:semantics:")
+_SH = Namespace("http://www.w3.org/ns/shacl#")
 _RDF_TYPES = {
     ResourceKind.ENTITY: OWL.Class,
     ResourceKind.ASSOC: OWL.Class,
@@ -64,6 +66,8 @@ class _Snapshot(BaseModel):
     namespace: dict[str, str]
     parent_ids: list[int]
     resource_refs: list[_StructureRef]
+    datatype_props: list[dict[str, object]] = Field(default_factory=list)
+    object_prop: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -156,6 +160,7 @@ def export_ontology(
     graph.bind("owl", OWL)
     graph.bind("rdfs", RDFS)
     graph.bind("xsd", XSD)
+    graph.bind("sh", _SH)
     graph.bind("kgref", _REF)
     graph.bind("kg", _SEMANTICS)
     ontology_iri = _iri(metadata.iri)
@@ -182,6 +187,7 @@ def export_ontology(
                 raise _violation(rid, "invalid_parent_kind", target_id=parent_id)
             graph.add((subject, RDFS.subClassOf, _iri(parent.iri)))
         _add_references(graph, rid, snapshot, snapshots)
+        _add_constraints(graph, rid, snapshot, snapshots)
         if snapshot.kind == ResourceKind.DATATYPE_PROP:
             datatype = (snapshot.definition_i18n or {}).get("datatype")
             if datatype is None or datatype not in _DATATYPES:
@@ -209,6 +215,144 @@ def _add_annotations(
                 graph.add(
                     (subject, predicate, Literal(text, lang=_LANGUAGES[language]))
                 )
+
+
+def _add_constraints(
+    graph: Graph,
+    resource_id: int,
+    snapshot: _Snapshot,
+    snapshots: dict[int, _Snapshot],
+) -> None:
+    subject = _iri(snapshot.iri)
+    if snapshot.kind in (ResourceKind.ENTITY, ResourceKind.ASSOC):
+        for detail in snapshot.datatype_props:
+            prop_iri = detail.get("iri")
+            if not isinstance(prop_iri, str):
+                continue
+            prop = _iri(prop_iri)
+            _add_datatype_constraints(graph, subject, prop, detail)
+    if snapshot.kind == ResourceKind.OBJECT_PROP and snapshot.object_prop:
+        _add_object_constraints(graph, resource_id, subject, snapshot, snapshots)
+
+
+def _add_datatype_constraints(
+    graph: Graph,
+    owner: URIRef,
+    prop: URIRef,
+    detail: dict[str, object],
+) -> None:
+    datatype = detail.get("datatype")
+    if isinstance(datatype, str) and datatype in _DATATYPES:
+        graph.add((prop, RDFS.range, _DATATYPES[datatype]))
+    nullable = detail.get("nullable")
+    default = detail.get("default_value")
+    if isinstance(nullable, bool):
+        graph.add((prop, _SEMANTICS.nullable, Literal(nullable)))
+    if isinstance(default, str):
+        graph.add((prop, _SEMANTICS.defaultValue, Literal(default)))
+
+    enum_id = detail.get("enum_dict_id")
+    enum_revision = detail.get("enum_dict_revision")
+    enum_snapshot = detail.get("enum_dictionary")
+    shape = URIRef(f"{prop}#shape")
+    graph.add((owner, _SH.property, shape))
+    graph.add((shape, _SH.path, prop))
+    if isinstance(datatype, str) and datatype in _DATATYPES:
+        graph.add((shape, _SH.datatype, _DATATYPES[datatype]))
+    if nullable is False:
+        graph.add((shape, _SH.minCount, Literal(1)))
+    if isinstance(default, str):
+        graph.add((shape, _SH.defaultValue, Literal(default)))
+    if isinstance(enum_id, int) and isinstance(enum_revision, int):
+        enum_iri = URIRef(f"urn:knowledge:enum:{enum_id}:r{enum_revision}")
+        graph.add((prop, _SEMANTICS.enumDictionary, enum_iri))
+        graph.add((enum_iri, _SEMANTICS.revision, Literal(enum_revision)))
+        if isinstance(enum_snapshot, dict):
+            values: list[str] = []
+            for index, entry in enumerate(enum_snapshot.get("entries", [])):
+                if not isinstance(entry, dict):
+                    continue
+                value = entry.get("value")
+                if not isinstance(value, str):
+                    continue
+                values.append(value)
+                entry_iri = URIRef(f"{enum_iri}#entry-{index}")
+                graph.add((enum_iri, _SEMANTICS.entry, entry_iri))
+                graph.add((entry_iri, _SEMANTICS.value, Literal(value)))
+                labels = entry.get("label_i18n")
+                if isinstance(labels, dict):
+                    _add_annotations(graph, entry_iri, labels, None)
+            if values:
+                graph.add((shape, _SH.in_, _rdf_list(graph, values, str(prop))))
+
+
+def _rdf_list(graph: Graph, values: list[str], stem: str) -> URIRef | BNode:
+    head: URIRef | BNode = RDF.nil
+    for index, value in reversed(list(enumerate(values))):
+        node = URIRef(f"{stem}#enum-list-{index}")
+        graph.add((node, RDF.first, Literal(value)))
+        graph.add((node, RDF.rest, head))
+        head = node
+    return head
+
+
+def _add_object_constraints(
+    graph: Graph,
+    resource_id: int,
+    subject: URIRef,
+    snapshot: _Snapshot,
+    snapshots: dict[int, _Snapshot],
+) -> None:
+    detail = snapshot.object_prop or {}
+    for key, predicate in (
+        ("domain_cardinality", _SEMANTICS.domainCardinality),
+        ("range_cardinality", _SEMANTICS.rangeCardinality),
+        ("domain_role_i18n", _SEMANTICS.domainRole),
+        ("range_role_i18n", _SEMANTICS.rangeRole),
+        ("owl", _SEMANTICS.owlFeatures),
+    ):
+        value = detail.get(key)
+        if value is not None:
+            graph.add(
+                (subject, predicate, Literal(json.dumps(value, ensure_ascii=False)))
+            )
+    owl = detail.get("owl")
+    if isinstance(owl, dict):
+        for feature, rdf_type in (
+            ("functional", OWL.FunctionalProperty),
+            ("inverse_functional", OWL.InverseFunctionalProperty),
+            ("symmetric", OWL.SymmetricProperty),
+            ("transitive", OWL.TransitiveProperty),
+        ):
+            if owl.get(feature) is True:
+                graph.add((subject, RDF.type, rdf_type))
+
+    for ref in snapshot.resource_refs:
+        if ref.role not in {"relation_domain", "relation_range"}:
+            continue
+        target = _target(snapshots, resource_id, ref.target_id)
+        target_iri = _iri(target.iri)
+        cardinality = detail.get(
+            "domain_cardinality"
+            if ref.role == "relation_domain"
+            else "range_cardinality",
+            {},
+        )
+        if not isinstance(cardinality, dict):
+            continue
+        path: URIRef | BNode = subject
+        if ref.role == "relation_range":
+            path = URIRef(f"{subject}#inverse-range")
+            graph.add((path, _SH.inversePath, subject))
+        shape = URIRef(f"{target_iri}#relation-shape-{resource_id}-{ref.role}")
+        graph.add((target_iri, _SH.property, shape))
+        graph.add((shape, _SH.path, path))
+        minimum = cardinality.get("min")
+        maximum = cardinality.get("max")
+        if isinstance(minimum, int):
+            graph.add((shape, _SH.minCount, Literal(minimum)))
+        if isinstance(maximum, int) and maximum >= 0:
+            graph.add((shape, _SH.maxCount, Literal(maximum)))
 
 
 def _target(

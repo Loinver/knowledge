@@ -20,13 +20,18 @@ from app.domain.status_service import get_revision, publish_resource
 from app.domain.type_service import create_entity_type
 from app.models.domain import Ontology, OntologyResourceRef, OntologyRevision
 from app.models.enums import ResourceKind, ResourceStatus
-from app.models.resource import ModelResource, ResourceParent, ResourceRef
+from app.models.resource import (
+    DatatypePropDetail,
+    ModelResource,
+    ResourceParent,
+    ResourceRef,
+)
 from app.schemas.ontology import OntologyCreate
 from app.schemas.relation import EndpointSpec, RelationTypeCreate
 from app.schemas.type import EntityTypeCreate
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from rdflib import OWL, RDF, RDFS, XSD, Graph, Literal, URIRef
+from rdflib import OWL, RDF, RDFS, SH, XSD, Graph, Literal, URIRef
 from rdflib.compare import isomorphic
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.orm import Session
@@ -77,6 +82,15 @@ def published(session: Session) -> tuple[Ontology, dict[str, ModelResource]]:
     )
     session.add(salary)
     session.flush()
+    session.add(
+        DatatypePropDetail(
+            resource_id=salary.id,
+            prop_name="salary",
+            datatype="decimal",
+            nullable=False,
+            default_value="0",
+        )
+    )
     resources["Salary"] = salary
     session.add(
         ResourceRef(
@@ -191,6 +205,32 @@ def test_formats_roundtrip_and_preserve_semantics(
         URIRef("urn:knowledge:semantics:resourceKind"),
         Literal("ASSOC"),
     ) in graph
+
+
+def test_export_includes_frozen_property_and_relation_constraints(
+    client: TestClient,
+    session: Session,
+    published: tuple[Ontology, dict[str, ModelResource]],
+) -> None:
+    ontology, resources = published
+    graph = Graph().parse(
+        data=client.get(f"/api/v1/ontologies/{ontology.id}/export?format=turtle").text,
+        format="turtle",
+    )
+    salary = URIRef(resources["Salary"].iri)
+    assert (salary, RDFS.range, XSD.decimal) in graph
+    employee = URIRef(resources["Employee"].iri)
+    shapes = list(graph.objects(employee, SH.property))
+    assert shapes
+    assert any((shape, SH.path, salary) in graph for shape in shapes)
+
+    relation = URIRef(resources["WorksFor"].iri)
+    assert (
+        relation,
+        URIRef("urn:knowledge:semantics:domainCardinality"),
+        None,
+    ) in graph
+    assert (relation, URIRef("urn:knowledge:semantics:owlFeatures"), None) in graph
 
 
 def test_export_is_frozen_after_live_mutation_and_republication(
