@@ -1,8 +1,8 @@
 ---
 name: Feature request
 about: Propose a capability for the knowledge platform
-title: "[feat] "
-labels: ["enhancement", "needs-triage"]
+title: '[feat] '
+labels: ['enhancement', 'needs-triage']
 assignees: []
 ---
 

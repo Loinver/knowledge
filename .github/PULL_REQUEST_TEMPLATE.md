@@ -5,14 +5,14 @@ docs/implementation-plan.zh-CN.md (e.g. M0 / H-04) and any linked issue.
 
 ## Type of change
 
-- [ ] feat     New feature
-- [ ] fix       Bug fix
+- [ ] feat New feature
+- [ ] fix Bug fix
 - [ ] refactor Code restructuring, no behavior change
-- [ ] perf     Performance improvement
-- [ ] docs     Documentation only
-- [ ] ci       CI / tooling
-- [ ] test     Test additions or fixes
-- [ ] chore    Build / deps / housekeeping
+- [ ] perf Performance improvement
+- [ ] docs Documentation only
+- [ ] ci CI / tooling
+- [ ] test Test additions or fixes
+- [ ] chore Build / deps / housekeeping
 
 ## Checklist
 

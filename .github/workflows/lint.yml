@@ -10,23 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - name: ESLint
-        run: npm run lint:web
+        run: pnpm run lint:web
       - name: Prettier
-        run: npm run format:check
+        run: pnpm run format:check
       - name: Type check
-        run: npm run typecheck --workspace=web
+        run: pnpm -C web typecheck
       - name: Build
-        run: npm run build
+        run: pnpm run build
       - name: i18n keys
         run: node scripts/check-i18n-keys.mjs
       - name: License check
-        run: npx license-checker --production --summary --failOn "GPL;GPL-2.0;GPL-3.0;LGPL;LGPL-2.0;LGPL-2.1;LGPL-3.0;AGPL-3.0;SSPL;Unlicensed"
+        run: pnpm exec license-checker --production --summary --failOn "GPL;GPL-2.0;GPL-3.0;LGPL;LGPL-2.0;LGPL-2.1;LGPL-3.0;AGPL-3.0;SSPL;Unlicensed"
 
   server:
     runs-on: ubuntu-latest

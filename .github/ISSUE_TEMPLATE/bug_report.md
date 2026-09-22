@@ -1,8 +1,8 @@
 ---
 name: Bug report
 about: Report a defect in the knowledge platform
-title: "[bug] "
-labels: ["bug", "needs-triage"]
+title: '[bug] '
+labels: ['bug', 'needs-triage']
 assignees: []
 ---
 
