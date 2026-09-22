@@ -33,3 +33,8 @@ coverage/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# 开发态元数据库：含口令哈希、会话令牌与审计记录，绝不入库
+# （样例源库在 samples/ 下，用 .sqlite 后缀，不受此规则影响）
+*.db
+*.db-journal

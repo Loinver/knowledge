@@ -12,5 +12,6 @@ coverage/
 demo/
 .workbuddy/
 package-lock.json
+pnpm-lock.yaml
 *.min.js
 *.svg
