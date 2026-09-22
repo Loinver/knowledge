@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.db import get_session
+from app.domain.evidence_service import trace_entity_evidence
+from app.domain.evidence_service import trace_fact as trace_fact_evidence
 from app.domain.extraction_service import (
     get_current_graph,
     get_entity_detail,
@@ -17,20 +21,50 @@ from app.domain.extraction_service import (
     list_quarantine,
     list_runs,
     list_triples,
+    resolve_graph,
     start_run,
     switch_current,
 )
+from app.domain.graph_view_service import graph_view
 from app.schemas.extraction import (
+    EntityDetailOut,
     EntityIdentityOut,
+    EntityPage,
+    EntityTraceOut,
     ExtractionRunOut,
     FactEvidenceOut,
+    FactTraceOut,
     GraphRevisionOut,
     GraphTripleOut,
+    GraphViewOut,
     QuarantineOut,
     RunStartRequest,
 )
 
 router = APIRouter(prefix="/extraction", tags=["extraction"])
+
+
+@router.get("/graph-view", response_model=GraphViewOut)
+def browse_graph(
+    graph_revision_id: int | None = Query(None, ge=1),
+    center: str = Query("", max_length=640),
+    depth: int = Query(1, ge=1, le=2),
+    excluded_types: list[str] = Query(default=[]),
+    include_derived: bool = True,
+    node_limit: int = Query(200, ge=1, le=500),
+    edge_limit: int = Query(1000, ge=1, le=2000),
+    session: Session = Depends(get_session),
+) -> dict:
+    return graph_view(
+        session,
+        graph_revision_id,
+        center,
+        depth,
+        excluded_types,
+        include_derived,
+        node_limit,
+        edge_limit,
+    )
 
 
 class RunStartResponse(BaseModel):
@@ -140,13 +174,35 @@ def list_graph_triples(
     return [GraphTripleOut.model_validate(i) for i in items]
 
 
-@router.get("/entities/{iri:path}/detail")
+@router.get("/entities", response_model=EntityPage)
+def search_entities(
+    graph_revision_id: int | None = Query(None, ge=1),
+    q: str = Query("", max_length=640),
+    sort: Literal["iri", "-iri"] = "iri",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> EntityPage:
+    gr = resolve_graph(session, graph_revision_id)
+    items, total = list_entity_identities(session, gr.id, q, page, page_size, sort)
+    return EntityPage(
+        graph_revision_id=gr.id,
+        items=[EntityIdentityOut.model_validate(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/entity-detail", response_model=EntityDetailOut)
+@router.get("/entities/{iri:path}/detail", response_model=EntityDetailOut)
 def entity_detail(
     iri: str,
+    graph_revision_id: int | None = Query(None, ge=1),
     session: Session = Depends(get_session),
 ) -> dict:
     """实体详情：属性 + 出边 + 入边 + 派生边 + 证据。"""
-    return get_entity_detail(session, iri)
+    return get_entity_detail(session, iri, graph_revision_id)
 
 
 @router.get("/evidence", response_model=list[FactEvidenceOut])
@@ -154,9 +210,33 @@ def evidence(
     subject: str = Query(...),
     predicate: str = Query(...),
     object_: str = Query(..., alias="object"),
+    graph_revision_id: int | None = Query(None, ge=1),
     session: Session = Depends(get_session),
 ) -> list[FactEvidenceOut]:
     return [
         FactEvidenceOut.model_validate(e)
-        for e in get_evidence(session, subject, predicate, object_)
+        for e in get_evidence(session, subject, predicate, object_, graph_revision_id)
     ]
+
+
+@router.get("/evidence/trace", response_model=FactTraceOut)
+def trace_fact(
+    subject: str = Query(...),
+    predicate: str = Query(...),
+    object_: str = Query(..., alias="object"),
+    graph_revision_id: int | None = Query(None, ge=1),
+    session: Session = Depends(get_session),
+) -> dict:
+    """从一条事实反查完整追溯链：来源连接/表/行键/字段/运行批次/证据类型。"""
+    return trace_fact_evidence(session, subject, predicate, object_, graph_revision_id)
+
+
+@router.get("/evidence/trace/entity", response_model=EntityTraceOut)
+@router.get("/evidence/trace/entity/{iri:path}", response_model=EntityTraceOut)
+def trace_entity(
+    iri: str,
+    graph_revision_id: int | None = Query(None, ge=1),
+    session: Session = Depends(get_session),
+) -> dict:
+    """实体维度的证据汇总。"""
+    return trace_entity_evidence(session, iri, graph_revision_id)

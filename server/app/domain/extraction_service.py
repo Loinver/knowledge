@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 
-from sqlalchemy import select, text
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -386,6 +386,11 @@ def _phase2_relation(
     sql = text(f"SELECT * FROM {qualified}")
     try:
         with engine.connect() as conn:
+            key_fields = (
+                inspect(conn)
+                .get_pk_constraint(table, schema=None if schema == "main" else schema)
+                .get("constrained_columns", [])
+            )
             result = conn.execute(sql)
             raw_rows = [dict(r._mapping) for r in result.fetchall()]
     except Exception as e:
@@ -397,7 +402,11 @@ def _phase2_relation(
         return 0, 1, 0
 
     for idx, raw in enumerate(raw_rows):
-        row_key = f"row-{idx}"
+        row_key = (
+            "|".join(str(raw[key]) for key in key_fields)
+            if key_fields
+            else f"row-{idx}"
+        )
         if mode == "FK":
             fk_field = rm.get("fk_field", "")
             src_val = raw.get(fk_field)
@@ -743,17 +752,26 @@ def switch_current(session: Session, graph_revision_id: int) -> GraphRevision:
 
 
 def list_entity_identities(
-    session: Session, gr_id: int, q: str = "", page: int = 1, page_size: int = 50
+    session: Session,
+    gr_id: int,
+    q: str = "",
+    page: int = 1,
+    page_size: int = 50,
+    sort: str = "iri",
 ) -> tuple[list[EntityIdentity], int]:
     stmt = select(EntityIdentity).where(EntityIdentity.graph_revision_id == gr_id)
     if q:
-        stmt = stmt.where(EntityIdentity.iri.ilike(f"%{q}%"))
-    total = len(list(session.execute(stmt).scalars()))
+        stmt = stmt.where(
+            EntityIdentity.iri.icontains(q, autoescape=True)
+            | EntityIdentity.type_iri.icontains(q, autoescape=True)
+            | EntityIdentity.row_key.icontains(q, autoescape=True)
+            | EntityIdentity.attrs["name"].as_string().icontains(q, autoescape=True)
+        )
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    order = EntityIdentity.iri.desc() if sort == "-iri" else EntityIdentity.iri.asc()
     items = list(
         session.execute(
-            stmt.order_by(EntityIdentity.iri)
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            stmt.order_by(order).offset((page - 1) * page_size).limit(page_size)
         ).scalars()
     )
     return items, total
@@ -773,14 +791,20 @@ def list_triples(
 
 
 def get_evidence(
-    session: Session, subject: str, predicate: str, object_: str
+    session: Session,
+    subject: str,
+    predicate: str,
+    object_: str,
+    graph_revision_id: int | None = None,
 ) -> list[FactEvidence]:
+    gr = resolve_graph(session, graph_revision_id)
     return list(
         session.execute(
             select(FactEvidence).where(
                 FactEvidence.subject == subject,
                 FactEvidence.predicate == predicate,
                 FactEvidence.object_ == object_,
+                FactEvidence.graph_revision_id == gr.id,
             )
         )
         .scalars()
@@ -788,11 +812,28 @@ def get_evidence(
     )
 
 
-def get_entity_detail(session: Session, iri: str) -> dict:
-    """实体详情：属性 + 出边 + 入边 + 派生边 + 证据。"""
-    gr = get_current_graph(session)
+def resolve_graph(
+    session: Session, graph_revision_id: int | None = None
+) -> GraphRevision:
+    """固定到显式结果集；未指定时才解析当前结果集。"""
+    gr = (
+        session.get(GraphRevision, graph_revision_id)
+        if graph_revision_id is not None
+        else get_current_graph(session)
+    )
     if gr is None:
-        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"reason": "no_current_graph"})
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            {"reason": "graph_not_found", "graph_revision_id": graph_revision_id},
+        )
+    return gr
+
+
+def get_entity_detail(
+    session: Session, iri: str, graph_revision_id: int | None = None
+) -> dict:
+    """实体详情：属性 + 出边 + 入边 + 派生边 + 证据。"""
+    gr = resolve_graph(session, graph_revision_id)
     entity = (
         session.execute(
             select(EntityIdentity).where(

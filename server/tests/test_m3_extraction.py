@@ -364,7 +364,7 @@ def test_result_set_switch(session, source_db):
     assert gr_now.id == gr1.id
 
 
-def test_evidence_traceability(session, source_db):
+def test_evidence_traceability(session: Session, source_db: str) -> None:
     """证据追溯：任一事实反查到来源表/行键/字段/运行批次。"""
     onto = _setup_onto(session)
     ds = _setup_ds(session, source_db)
@@ -389,6 +389,16 @@ def test_evidence_traceability(session, source_db):
     assert e.table_name == "hr_employee"
     assert e.evidence_type == "RELATION"
     assert "enterprise_id" in e.columns
+    assert e.row_key in {"8001", "8002"}
+
+    # 复合主键与带属性关系同样定位到真实源键，而不是遍历序号。
+    expected_keys = {"contract_project": "6001|7001", "participates": "1"}
+    for fact in triples:
+        if fact.predicate in expected_keys:
+            evidence = get_evidence(session, fact.subject, fact.predicate, fact.object_)
+            assert [item.row_key for item in evidence] == [
+                expected_keys[fact.predicate]
+            ]
 
 
 def test_cannot_run_draft(session, source_db):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -79,3 +80,82 @@ class RunStartRequest(BaseModel):
     mapping_revision_id: int
     datasource_id: int
     namespace: str = "https://example.org/kg/"
+
+
+class EntityPage(BaseModel):
+    graph_revision_id: int
+    items: list[EntityIdentityOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class EntityDetailOut(BaseModel):
+    entity: EntityIdentityOut
+    out_edges: list[GraphTripleOut]
+    in_edges: list[GraphTripleOut]
+    derived_edges: list[GraphTripleOut]
+    evidence: list[FactEvidenceOut]
+
+
+class FactOut(BaseModel):
+    subject: str
+    predicate: str
+    object: str
+
+
+class EvidenceTraceItem(FactOut):
+    id: int
+    source_id: int
+    source_name: str | None
+    source_kind: str | None
+    table_name: str
+    row_key: str
+    columns: list[str]
+    run_id: int
+    evidence_type: str
+    quarantined: bool
+
+
+class EvidenceTraceOut(BaseModel):
+    graph_revision_id: int
+    evidences: list[EvidenceTraceItem]
+    total_count: int
+    quarantined_count: int
+
+
+class FactTraceOut(EvidenceTraceOut):
+    fact: FactOut
+
+
+class EntityTraceIdentity(BaseModel):
+    iri: str
+    type_iri: str
+
+
+class EntityTraceOut(EvidenceTraceOut):
+    entity: EntityTraceIdentity
+
+
+class GraphViewNode(EntityIdentityOut):
+    distance: int
+
+
+class GraphViewEdge(GraphTripleOut):
+    kind: Literal["DIRECT", "DERIVED"]
+
+
+class GraphTypeCount(BaseModel):
+    type_iri: str
+    count: int
+
+
+class GraphViewOut(BaseModel):
+    graph_revision_id: int
+    run_id: int
+    nodes: list[GraphViewNode]
+    edges: list[GraphViewEdge]
+    type_counts: list[GraphTypeCount]
+    entity_total: int
+    quarantine_count: int
+    truncated: bool
