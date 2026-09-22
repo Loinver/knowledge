@@ -117,7 +117,7 @@ def test_crud_paging_source_filter_and_bilingual_search(client: TestClient) -> N
     assert updated.json()["name_i18n"] == {"zh-CN": "更新姓名"}
     assert updated.headers["etag"] == '"2"'
     deleted = client.delete(f"{URL}/{first['id']}", headers={"If-Match": "2"})
-    assert deleted.status_code == 204
+    assert deleted.status_code == 200
     assert client.get(f"{URL}/{first['id']}").status_code == 404
 
 

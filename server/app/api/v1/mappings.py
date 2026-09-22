@@ -24,6 +24,7 @@ from app.schemas.mapping import (
     MappingRevisionCreate,
     MappingRevisionOut,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/mappings", tags=["mappings"])
 
@@ -37,7 +38,7 @@ class PublishRequest(BaseModel):
     if_match: int
 
 
-@router.get("", response_model=list[MappingBrief])
+@router.get("", response_model=ApiResponse[list[MappingBrief]])
 def list_m(
     q: str = Query(""),
     page: int = Query(1, ge=1),
@@ -48,7 +49,7 @@ def list_m(
     return [MappingBrief.model_validate(i) for i in items]
 
 
-@router.post("", response_model=MappingOut, status_code=201)
+@router.post("", response_model=ApiResponse[MappingOut], status_code=201)
 def create_m(
     payload: MappingCreate, session: Session = Depends(get_session)
 ) -> MappingOut:
@@ -57,19 +58,19 @@ def create_m(
     return MappingOut.model_validate(m)
 
 
-@router.get("/{mapping_id}", response_model=MappingOut)
+@router.get("/{mapping_id}", response_model=ApiResponse[MappingOut])
 def get_m(mapping_id: int, session: Session = Depends(get_session)) -> MappingOut:
     m = get_mapping(session, mapping_id)
     return MappingOut.model_validate(m)
 
 
-@router.delete("/{mapping_id}", status_code=204)
+@router.delete("/{mapping_id}", response_model=ApiResponse[None])
 def remove_m(mapping_id: int, session: Session = Depends(get_session)) -> None:
     delete_mapping(session, mapping_id)
     session.commit()
 
 
-@router.put("/{mapping_id}/draft", response_model=MappingRevisionOut)
+@router.put("/{mapping_id}/draft", response_model=ApiResponse[MappingRevisionOut])
 def put_draft(
     mapping_id: int,
     payload: SaveDraftRequest,
@@ -80,7 +81,9 @@ def put_draft(
     return MappingRevisionOut.model_validate(rev)
 
 
-@router.get("/{mapping_id}/draft", response_model=MappingRevisionOut | None)
+@router.get(
+    "/{mapping_id}/draft", response_model=ApiResponse[MappingRevisionOut | None]
+)
 def get_draft(
     mapping_id: int, session: Session = Depends(get_session)
 ) -> MappingRevisionOut | None:
@@ -90,7 +93,7 @@ def get_draft(
     return MappingRevisionOut.model_validate(rev)
 
 
-@router.post("/{mapping_id}/publish", response_model=MappingRevisionOut)
+@router.post("/{mapping_id}/publish", response_model=ApiResponse[MappingRevisionOut])
 def publish_m(
     mapping_id: int,
     payload: PublishRequest,
@@ -101,7 +104,7 @@ def publish_m(
     return MappingRevisionOut.model_validate(rev)
 
 
-@router.get("/{mapping_id}/published", response_model=MappingRevisionOut)
+@router.get("/{mapping_id}/published", response_model=ApiResponse[MappingRevisionOut])
 def get_pub(
     mapping_id: int, session: Session = Depends(get_session)
 ) -> MappingRevisionOut:

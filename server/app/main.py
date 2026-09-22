@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.api.v1.clauses import router as clauses_router
 from app.api.v1.datasources import router as datasources_router
 from app.api.v1.domains import router as domains_router
 from app.api.v1.extraction import router as extraction_router
@@ -29,6 +30,7 @@ from app.api.v1.types import router as types_router
 from app.api.v1.validation import router as validation_router
 from app.core.db import Base, get_engine
 from app.core.errors import install_error_handler
+from app.schemas.response import ApiResponse
 
 API_PREFIX = "/api/v1"
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
@@ -62,6 +64,7 @@ app.include_router(relations_router, prefix=API_PREFIX)
 app.include_router(validation_router, prefix=API_PREFIX)
 app.include_router(extraction_router, prefix=API_PREFIX)
 app.include_router(governance_router, prefix=API_PREFIX)
+app.include_router(clauses_router, prefix=API_PREFIX)
 
 
 class IriRequest(BaseModel):
@@ -78,7 +81,7 @@ class HealthResponse(BaseModel):
     version: str
 
 
-@app.get(f"{API_PREFIX}/health", response_model=HealthResponse)
+@app.get(f"{API_PREFIX}/health", response_model=ApiResponse[HealthResponse])
 def health() -> HealthResponse:
     return HealthResponse(status="ok", version=app.version)
 

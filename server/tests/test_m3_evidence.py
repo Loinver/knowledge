@@ -399,7 +399,8 @@ def test_entity_evidence_api_shape_and_no_connection_secrets(
     response_schema = schema["paths"]["/api/v1/extraction/entity-detail"]["get"][
         "responses"
     ]["200"]["content"]["application/json"]["schema"]
-    assert response_schema["$ref"].endswith("/EntityDetailOut")
+    # 响应统一包裹外壳（见 app/schemas/response.py）
+    assert response_schema["$ref"].endswith("/ApiResponse_EntityDetailOut_")
 
 
 def test_graph_reads_reject_missing_graph_and_invalid_pagination(

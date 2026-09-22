@@ -26,11 +26,12 @@ from app.schemas.domain import (
     DomainUpdate,
     PublishCheckResult,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/domains", tags=["domains"])
 
 
-@router.get("", response_model=list[DomainBrief])
+@router.get("", response_model=ApiResponse[list[DomainBrief]])
 def list_domain(
     q: str = Query(""),
     page: int = Query(1, ge=1),
@@ -41,7 +42,7 @@ def list_domain(
     return [DomainBrief.model_validate(i) for i in items]
 
 
-@router.post("", response_model=DomainOut, status_code=201)
+@router.post("", response_model=ApiResponse[DomainOut], status_code=201)
 def create_domain_endpoint(
     payload: DomainCreate, session: Session = Depends(get_session)
 ) -> DomainOut:
@@ -50,7 +51,7 @@ def create_domain_endpoint(
     return DomainOut.model_validate(domain)
 
 
-@router.get("/{domain_id}", response_model=DomainOut)
+@router.get("/{domain_id}", response_model=ApiResponse[DomainOut])
 def get_domain_endpoint(
     domain_id: int, session: Session = Depends(get_session)
 ) -> DomainOut:
@@ -58,7 +59,7 @@ def get_domain_endpoint(
     return DomainOut.model_validate(domain)
 
 
-@router.put("/{domain_id}", response_model=DomainOut)
+@router.put("/{domain_id}", response_model=ApiResponse[DomainOut])
 def update_domain_endpoint(
     domain_id: int,
     payload: DomainUpdate,
@@ -70,7 +71,7 @@ def update_domain_endpoint(
     return DomainOut.model_validate(domain)
 
 
-@router.get("/{domain_id}/members", response_model=list[DomainMemberOut])
+@router.get("/{domain_id}/members", response_model=ApiResponse[list[DomainMemberOut]])
 def list_members_endpoint(
     domain_id: int, session: Session = Depends(get_session)
 ) -> list[DomainMemberOut]:
@@ -78,7 +79,9 @@ def list_members_endpoint(
     return [DomainMemberOut.model_validate(m) for m in members]
 
 
-@router.post("/{domain_id}/members", response_model=DomainMemberOut, status_code=201)
+@router.post(
+    "/{domain_id}/members", response_model=ApiResponse[DomainMemberOut], status_code=201
+)
 def add_member_endpoint(
     domain_id: int,
     payload: DomainMemberAdd,
@@ -89,7 +92,7 @@ def add_member_endpoint(
     return DomainMemberOut.model_validate(member)
 
 
-@router.delete("/{domain_id}/members/{member_id}", status_code=204)
+@router.delete("/{domain_id}/members/{member_id}", response_model=ApiResponse[None])
 def remove_member_endpoint(
     domain_id: int, member_id: int, session: Session = Depends(get_session)
 ) -> None:
@@ -97,7 +100,9 @@ def remove_member_endpoint(
     session.commit()
 
 
-@router.get("/{domain_id}/publish-check", response_model=PublishCheckResult)
+@router.get(
+    "/{domain_id}/publish-check", response_model=ApiResponse[PublishCheckResult]
+)
 def publish_check_endpoint(
     domain_id: int, session: Session = Depends(get_session)
 ) -> PublishCheckResult:

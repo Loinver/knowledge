@@ -21,11 +21,12 @@ from app.schemas.datasource import (
     TestConnectionRequest,
     TestConnectionResponse,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/datasources", tags=["datasources"])
 
 
-@router.get("", response_model=list[DatasourceBrief])
+@router.get("", response_model=ApiResponse[list[DatasourceBrief]])
 def list_ds(
     q: str = Query(""),
     session: Session = Depends(get_session),
@@ -34,7 +35,7 @@ def list_ds(
     return [DatasourceBrief.model_validate(i) for i in items]
 
 
-@router.post("", response_model=DatasourceOut, status_code=201)
+@router.post("", response_model=ApiResponse[DatasourceOut], status_code=201)
 def create_ds(
     payload: DatasourceCreate, session: Session = Depends(get_session)
 ) -> DatasourceOut:
@@ -49,7 +50,7 @@ def create_ds(
     )
 
 
-@router.get("/{ds_id}", response_model=DatasourceOut)
+@router.get("/{ds_id}", response_model=ApiResponse[DatasourceOut])
 def get_ds(ds_id: int, session: Session = Depends(get_session)) -> DatasourceOut:
     ds = get_datasource(session, ds_id)
     return DatasourceOut(
@@ -61,13 +62,13 @@ def get_ds(ds_id: int, session: Session = Depends(get_session)) -> DatasourceOut
     )
 
 
-@router.delete("/{ds_id}", status_code=204)
+@router.delete("/{ds_id}", response_model=ApiResponse[None])
 def remove_ds(ds_id: int, session: Session = Depends(get_session)) -> None:
     delete_datasource(session, ds_id)
     session.commit()
 
 
-@router.post("/test-connection", response_model=TestConnectionResponse)
+@router.post("/test-connection", response_model=ApiResponse[TestConnectionResponse])
 def test_conn(payload: TestConnectionRequest) -> TestConnectionResponse:
     result = test_connection(payload.kind, payload.params, payload.credential)
     return TestConnectionResponse(**result)

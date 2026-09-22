@@ -40,11 +40,12 @@ from app.schemas.extraction import (
     QuarantineOut,
     RunStartRequest,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/extraction", tags=["extraction"])
 
 
-@router.get("/graph-view", response_model=GraphViewOut)
+@router.get("/graph-view", response_model=ApiResponse[GraphViewOut])
 def browse_graph(
     graph_revision_id: int | None = Query(None, ge=1),
     center: str = Query("", max_length=640),
@@ -72,7 +73,7 @@ class RunStartResponse(BaseModel):
     graph_revision: GraphRevisionOut | None
 
 
-@router.post("/runs", response_model=RunStartResponse, status_code=201)
+@router.post("/runs", response_model=ApiResponse[RunStartResponse], status_code=201)
 def create_run(
     payload: RunStartRequest,
     session: Session = Depends(get_session),
@@ -92,7 +93,7 @@ def create_run(
     )
 
 
-@router.get("/runs", response_model=list[ExtractionRunOut])
+@router.get("/runs", response_model=ApiResponse[list[ExtractionRunOut]])
 def list_all_runs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -102,21 +103,23 @@ def list_all_runs(
     return [ExtractionRunOut.model_validate(i) for i in items]
 
 
-@router.get("/runs/{run_id}", response_model=ExtractionRunOut)
+@router.get("/runs/{run_id}", response_model=ApiResponse[ExtractionRunOut])
 def get_one_run(
     run_id: int, session: Session = Depends(get_session)
 ) -> ExtractionRunOut:
     return ExtractionRunOut.model_validate(get_run(session, run_id))
 
 
-@router.get("/runs/{run_id}/quarantine", response_model=list[QuarantineOut])
+@router.get(
+    "/runs/{run_id}/quarantine", response_model=ApiResponse[list[QuarantineOut]]
+)
 def get_run_quarantine(
     run_id: int, session: Session = Depends(get_session)
 ) -> list[QuarantineOut]:
     return [QuarantineOut.model_validate(q) for q in list_quarantine(session, run_id)]
 
 
-@router.get("/graph/current", response_model=GraphRevisionOut | None)
+@router.get("/graph/current", response_model=ApiResponse[GraphRevisionOut | None])
 def get_current(
     session: Session = Depends(get_session),
 ) -> GraphRevisionOut | None:
@@ -124,7 +127,7 @@ def get_current(
     return GraphRevisionOut.model_validate(gr) if gr else None
 
 
-@router.get("/graph/revisions", response_model=list[GraphRevisionOut])
+@router.get("/graph/revisions", response_model=ApiResponse[list[GraphRevisionOut]])
 def list_revisions(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -134,7 +137,9 @@ def list_revisions(
     return [GraphRevisionOut.model_validate(i) for i in items]
 
 
-@router.post("/graph/{graph_revision_id}/switch", response_model=GraphRevisionOut)
+@router.post(
+    "/graph/{graph_revision_id}/switch", response_model=ApiResponse[GraphRevisionOut]
+)
 def switch_graph(
     graph_revision_id: int,
     session: Session = Depends(get_session),
@@ -147,7 +152,7 @@ def switch_graph(
 
 @router.get(
     "/graph/{graph_revision_id}/entities",
-    response_model=list[EntityIdentityOut],
+    response_model=ApiResponse[list[EntityIdentityOut]],
 )
 def list_entities(
     graph_revision_id: int,
@@ -162,7 +167,10 @@ def list_entities(
     return [EntityIdentityOut.model_validate(i) for i in items]
 
 
-@router.get("/graph/{graph_revision_id}/triples", response_model=list[GraphTripleOut])
+@router.get(
+    "/graph/{graph_revision_id}/triples",
+    response_model=ApiResponse[list[GraphTripleOut]],
+)
 def list_graph_triples(
     graph_revision_id: int,
     subject: str = Query(""),
@@ -174,7 +182,7 @@ def list_graph_triples(
     return [GraphTripleOut.model_validate(i) for i in items]
 
 
-@router.get("/entities", response_model=EntityPage)
+@router.get("/entities", response_model=ApiResponse[EntityPage])
 def search_entities(
     graph_revision_id: int | None = Query(None, ge=1),
     q: str = Query("", max_length=640),
@@ -194,8 +202,8 @@ def search_entities(
     )
 
 
-@router.get("/entity-detail", response_model=EntityDetailOut)
-@router.get("/entities/{iri:path}/detail", response_model=EntityDetailOut)
+@router.get("/entity-detail", response_model=ApiResponse[EntityDetailOut])
+@router.get("/entities/{iri:path}/detail", response_model=ApiResponse[EntityDetailOut])
 def entity_detail(
     iri: str,
     graph_revision_id: int | None = Query(None, ge=1),
@@ -205,7 +213,7 @@ def entity_detail(
     return get_entity_detail(session, iri, graph_revision_id)
 
 
-@router.get("/evidence", response_model=list[FactEvidenceOut])
+@router.get("/evidence", response_model=ApiResponse[list[FactEvidenceOut]])
 def evidence(
     subject: str = Query(...),
     predicate: str = Query(...),
@@ -219,7 +227,7 @@ def evidence(
     ]
 
 
-@router.get("/evidence/trace", response_model=FactTraceOut)
+@router.get("/evidence/trace", response_model=ApiResponse[FactTraceOut])
 def trace_fact(
     subject: str = Query(...),
     predicate: str = Query(...),
@@ -231,8 +239,10 @@ def trace_fact(
     return trace_fact_evidence(session, subject, predicate, object_, graph_revision_id)
 
 
-@router.get("/evidence/trace/entity", response_model=EntityTraceOut)
-@router.get("/evidence/trace/entity/{iri:path}", response_model=EntityTraceOut)
+@router.get("/evidence/trace/entity", response_model=ApiResponse[EntityTraceOut])
+@router.get(
+    "/evidence/trace/entity/{iri:path}", response_model=ApiResponse[EntityTraceOut]
+)
 def trace_entity(
     iri: str,
     graph_revision_id: int | None = Query(None, ge=1),

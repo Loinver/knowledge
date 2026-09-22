@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -10,8 +10,17 @@ from app.core.errors import KGError
 from app.domain.iri_service import build_resource_iri, validate_name
 from app.domain.status_service import check_revision, publish_resource
 from app.models.enums import ResourceKind, ResourceStatus
-from app.models.resource import ModelResource, ResourceParent, ResourceRef
-from app.schemas.type import EntityTypeCreate, EntityTypeUpdate
+from app.models.resource import (
+    DatatypePropDetail,
+    ModelResource,
+    ResourceParent,
+    ResourceRef,
+)
+from app.schemas.type import (
+    DataTypePropCreate,
+    EntityTypeCreate,
+    EntityTypeUpdate,
+)
 
 
 def create_entity_type(session: Session, payload: EntityTypeCreate) -> ModelResource:
@@ -72,20 +81,37 @@ def _set_parents(
         seen.add(pid)
 
 
-def _set_data_props(session: Session, resource: ModelResource, props: list) -> None:
-    """存数据属性到 resource 的 payload（M1 用 JSONB 存在关联资源上）。
+def _set_data_props(
+    session: Session, resource: ModelResource, props: list[DataTypePropCreate]
+) -> None:
+    """存数据属性：DATATYPE_PROP 子资源 + ResourceRef + 约束明细。
 
-    简化实现：数据属性作为 DATATYPE_PROP 类型的 ModelResource，通过 ResourceRef 关联。
+    数据类型、枚举引用、可空性与默认值落 datatype_prop_detail 正式列
+    （M-07 补齐；此前只在 API 层接受，写库时静默丢弃）。
+
+    注：被替换掉的旧属性子资源保留不删——已发布版本的历史 payload 里
+    仍以 id 引用它们，删掉会让历史版本指向空。
     """
-    from app.schemas.type import DataTypePropCreate
-
-    # 删旧的数据属性引用
-    session.query(ResourceRef).where(
-        ResourceRef.source_id == resource.id, ResourceRef.role == "data_prop"
-    ).delete()
+    old_ids = list(
+        session.scalars(
+            select(ResourceRef.target_id).where(
+                ResourceRef.source_id == resource.id,
+                ResourceRef.role == "data_prop",
+            )
+        )
+    )
+    if old_ids:
+        session.execute(
+            delete(DatatypePropDetail).where(
+                DatatypePropDetail.resource_id.in_(old_ids)
+            )
+        )
+    session.execute(
+        delete(ResourceRef).where(
+            ResourceRef.source_id == resource.id, ResourceRef.role == "data_prop"
+        )
+    )
     for prop in props:
-        if not isinstance(prop, DataTypePropCreate):
-            continue
         prop_resource = ModelResource(
             kind=ResourceKind.DATATYPE_PROP,
             name=f"{resource.name}.{prop.name}",
@@ -102,6 +128,21 @@ def _set_data_props(session: Session, resource: ModelResource, props: list) -> N
                 source_id=resource.id, target_id=prop_resource.id, role="data_prop"
             )
         )
+        session.add(
+            DatatypePropDetail(
+                resource_id=prop_resource.id,
+                prop_name=prop.name,
+                datatype=prop.datatype,
+                enum_dict_id=prop.enum_dict_id,
+                nullable=prop.nullable,
+                default_value=prop.default_value,
+            )
+        )
+
+
+def get_prop_detail(session: Session, prop_id: int) -> DatatypePropDetail | None:
+    """取数据属性的约束明细；历史行可能没有明细，调用方需有保守回退。"""
+    return session.get(DatatypePropDetail, prop_id)
 
 
 def update_entity_type(

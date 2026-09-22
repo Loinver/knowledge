@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_session
 from app.domain.mapping_compiler import compile_mapping
 from app.schemas.mapping_compile import MappingPreviewResult
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/mappings", tags=["mapping-preview"])
 
@@ -19,7 +20,7 @@ class CompileRequest(BaseModel):
     use_draft: bool = False
 
 
-@router.post("/{mapping_id}/compile", response_model=MappingPreviewResult)
+@router.post("/{mapping_id}/compile", response_model=ApiResponse[MappingPreviewResult])
 def compile_map(
     mapping_id: int,
     payload: CompileRequest,

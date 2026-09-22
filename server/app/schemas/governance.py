@@ -88,3 +88,79 @@ class RuleTestOut(BaseModel):
     state: ValidationState
     positive: RuleExampleOut | None = None
     negative: RuleExampleOut | None = None
+
+
+ClauseAppendixNature = Literal["NORMATIVE", "INFORMATIVE"]
+ClauseSort = Literal[
+    "standard",
+    "-standard",
+    "clause_number",
+    "-clause_number",
+    "id",
+    "-id",
+]
+
+
+class StandardClauseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    standard: str = Field(min_length=1, max_length=64)
+    clause_number: str = Field(min_length=1, max_length=32)
+    title_i18n: dict[str, str]
+    self_authored_description: dict[str, str]
+    product_fallback: str | None = Field(default=None, max_length=256)
+    appendix_nature: ClauseAppendixNature = "NORMATIVE"
+    date_lexicon: str | None = Field(default=None, max_length=128)
+    clause_disambiguation: str | None = Field(default=None, max_length=512)
+    example_domain: str | None = Field(default=None, max_length=128)
+
+    @field_validator("title_i18n", "self_authored_description")
+    @classmethod
+    def _require_zh_cn(cls, value: dict[str, str]) -> dict[str, str]:
+        if not value.get("zh-CN", "").strip():
+            raise ValueError("zh-CN is required")
+        if set(value) - {"zh-CN", "en-US"}:
+            raise ValueError("only zh-CN and en-US are allowed")
+        return value
+
+
+class StandardClauseUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title_i18n: dict[str, str] | None = None
+    self_authored_description: dict[str, str] | None = None
+    product_fallback: str | None = None
+    appendix_nature: ClauseAppendixNature | None = None
+    date_lexicon: str | None = None
+    clause_disambiguation: str | None = None
+    example_domain: str | None = None
+
+
+class StandardClauseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    revision: int
+    standard: str
+    clause_number: str
+    title_i18n: dict[str, str]
+    self_authored_description: dict[str, str]
+    product_fallback: str | None
+    appendix_nature: str
+    date_lexicon: str | None
+    clause_disambiguation: str | None
+    example_domain: str | None
+
+
+class StandardClauseBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    standard: str
+    clause_number: str
+    product_fallback: str | None
+
+
+class StandardClausePage(BaseModel):
+    items: list[StandardClauseBrief]
+    total: int
+    page: int
+    page_size: int

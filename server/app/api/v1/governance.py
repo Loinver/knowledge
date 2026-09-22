@@ -19,13 +19,14 @@ from app.schemas.governance import (
     RuleSourceKind,
     RuleTestOut,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(
     prefix="/governance/rules", tags=["governance"], route_class=GovernanceRoute
 )
 
 
-@router.get("", response_model=RulePage)
+@router.get("", response_model=ApiResponse[RulePage])
 def list_rules_endpoint(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -45,7 +46,7 @@ def list_rules_endpoint(
     )
 
 
-@router.post("", response_model=RuleOut, status_code=201)
+@router.post("", response_model=ApiResponse[RuleOut], status_code=201)
 def create_rule_endpoint(
     payload: RuleCreate,
     response: Response,
@@ -58,7 +59,7 @@ def create_rule_endpoint(
     return result
 
 
-@router.get("/{rule_id}", response_model=RuleOut)
+@router.get("/{rule_id}", response_model=ApiResponse[RuleOut])
 def get_rule_endpoint(
     rule_id: int, response: Response, session: Session = Depends(governance_session)
 ) -> RuleOut:
@@ -67,7 +68,7 @@ def get_rule_endpoint(
     return result
 
 
-@router.put("/{rule_id}", response_model=RuleOut)
+@router.put("/{rule_id}", response_model=ApiResponse[RuleOut])
 def update_rule_endpoint(
     rule_id: int,
     payload: RuleCreate,
@@ -82,7 +83,7 @@ def update_rule_endpoint(
     return result
 
 
-@router.delete("/{rule_id}", status_code=204)
+@router.delete("/{rule_id}", response_model=ApiResponse[None])
 def delete_rule_endpoint(
     rule_id: int,
     revision: int = Depends(required_revision),
@@ -92,7 +93,7 @@ def delete_rule_endpoint(
         rule_service.delete_rule(session, rule_id, revision)
 
 
-@router.post("/{rule_id}/test", response_model=RuleTestOut)
+@router.post("/{rule_id}/test", response_model=ApiResponse[RuleTestOut])
 def test_rule_endpoint(
     rule_id: int,
     revision: int = Depends(required_revision),

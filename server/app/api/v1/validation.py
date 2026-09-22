@@ -9,11 +9,15 @@ from app.core.db import get_session
 from app.domain.instance_validation_service import run_instance_validation
 from app.domain.validation_service import run_ontology_validation
 from app.models.validation import ValidationReport
+from app.schemas.response import ApiResponse
+from app.schemas.validation import ValidationReportOut, ValidationResultOut
 
 router = APIRouter(prefix="/validation", tags=["validation"])
 
 
-@router.post("/ontologies/{ontology_id}")
+@router.post(
+    "/ontologies/{ontology_id}", response_model=ApiResponse[ValidationReportOut]
+)
 def validate_ontology(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> dict:
@@ -27,7 +31,9 @@ def validate_ontology(
     }
 
 
-@router.post("/graph/{graph_revision_id}")
+@router.post(
+    "/graph/{graph_revision_id}", response_model=ApiResponse[ValidationReportOut]
+)
 def validate_graph(
     graph_revision_id: int, session: Session = Depends(get_session)
 ) -> dict:
@@ -42,7 +48,7 @@ def validate_graph(
     }
 
 
-@router.get("/reports/{report_id}")
+@router.get("/reports/{report_id}", response_model=ApiResponse[ValidationReportOut])
 def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
     report = session.get(ValidationReport, report_id)
     if report is None:
@@ -58,7 +64,10 @@ def get_report(report_id: int, session: Session = Depends(get_session)) -> dict:
     }
 
 
-@router.get("/reports/{report_id}/results")
+@router.get(
+    "/reports/{report_id}/results",
+    response_model=ApiResponse[list[ValidationResultOut]],
+)
 def get_report_results(
     report_id: int, session: Session = Depends(get_session)
 ) -> list[dict]:

@@ -7,17 +7,32 @@
 FastAPI 自动生成 OpenAPI → CI 用 `openapi-typescript` 生成 `web/src/api/schema.d.ts` 与类型化客户端。
 **前端禁止手写接口类型**，需要改契约就改后端，重新生成。
 
-## 2. 错误契约
+## 2. 统一响应外壳
 
-统一结构，HTTP 状态码表达大类，`code` 表达具体原因：
+所有 JSON 接口（文件下载等二进制响应除外）**一律包裹** `{ code, message, data }`，
+成功与失败结构同构，前端只认这一层：
 
 ```json
-{
-  "code": "KG.REVISION_CONFLICT",
-  "params": { "resource": "type:Employee", "expected": 7, "actual": 9 },
-  "message": "Revision conflict"
-}
+{ "code": "KG.OK", "message": "OK", "data": { "...业务数据..." } }
 ```
+
+```json
+{ "code": "KG.REVISION_CONFLICT", "message": "...", "params": {}, "data": null }
+```
+
+约定：
+
+- 成功固定 `code = "KG.OK"`，`data` 为业务数据；无数据时 `data` 为 `null`。
+- 删除类接口返回 `200 + { code: "KG.OK", data: null }`，**不再用 204 空响应**。
+- `status_code=201` 仍用于「资源已创建」语义，只是响应体同样带外壳。
+- 后端实现只写 `response_model=ApiResponse[X]`（`app/schemas/response.py`），
+  路由直接返回裸数据即可，外壳由 `model_validator` 自动补齐；**禁止在路由里手写 dict 外壳**。
+- 前端在 `web/src/api/client.ts` 的响应拦截器里解包，业务代码继续用 `res.data` 拿 payload；
+  blob 下载响应不是外壳，原样透传。
+
+### 2.1 错误契约
+
+失败时 `code` 表达具体原因，HTTP 状态码表达大类，`data` 恒为 `null`：
 
 | HTTP | 含义              | 典型 code                                         |
 | ---- | ----------------- | ------------------------------------------------- |

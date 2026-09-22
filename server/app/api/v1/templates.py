@@ -13,6 +13,7 @@ from app.api.v1.governance_common import (
 from app.domain import template_service as service
 from app.domain.ontology_service import create_ontology
 from app.schemas.ontology import OntologyCreate, OntologyOut
+from app.schemas.response import ApiResponse
 from app.schemas.template import (
     TemplateCreate,
     TemplateFromOntology,
@@ -29,7 +30,7 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=TemplatePage)
+@router.get("", response_model=ApiResponse[TemplatePage])
 def list_templates(
     q: str = Query("", max_length=256),
     builtin: bool | None = None,
@@ -46,7 +47,7 @@ def list_templates(
     )
 
 
-@router.get("/resources", response_model=TemplateResourcePage)
+@router.get("/resources", response_model=ApiResponse[TemplateResourcePage])
 def list_resources(
     q: str = Query("", max_length=256),
     page: int = Query(1, ge=1),
@@ -56,7 +57,7 @@ def list_resources(
     return service.resource_catalog(session, q, page, page_size)
 
 
-@router.post("", response_model=TemplateOut, status_code=201)
+@router.post("", response_model=ApiResponse[TemplateOut], status_code=201)
 def create_template(
     payload: TemplateCreate,
     response: Response,
@@ -70,7 +71,7 @@ def create_template(
     return result
 
 
-@router.post("/from-ontology", response_model=TemplateOut, status_code=201)
+@router.post("/from-ontology", response_model=ApiResponse[TemplateOut], status_code=201)
 def from_ontology(
     payload: TemplateFromOntology, session: Session = Depends(governance_session)
 ) -> TemplateOut:
@@ -78,7 +79,7 @@ def from_ontology(
         return service.template_out(session, service.from_ontology(session, payload))
 
 
-@router.get("/{template_id}", response_model=TemplateOut)
+@router.get("/{template_id}", response_model=ApiResponse[TemplateOut])
 def get_template(
     template_id: int, response: Response, session: Session = Depends(governance_session)
 ) -> TemplateOut:
@@ -87,7 +88,7 @@ def get_template(
     return result
 
 
-@router.put("/{template_id}", response_model=TemplateOut)
+@router.put("/{template_id}", response_model=ApiResponse[TemplateOut])
 def update_template(
     template_id: int,
     payload: TemplateCreate,
@@ -103,7 +104,7 @@ def update_template(
     return result
 
 
-@router.delete("/{template_id}", status_code=204)
+@router.delete("/{template_id}", response_model=ApiResponse[None])
 def delete_template(
     template_id: int,
     revision: int = Depends(required_revision),
@@ -113,7 +114,9 @@ def delete_template(
         service.delete_template(session, template_id, revision)
 
 
-@router.post("/{template_id}/copy", response_model=TemplateOut, status_code=201)
+@router.post(
+    "/{template_id}/copy", response_model=ApiResponse[TemplateOut], status_code=201
+)
 def copy_template(
     template_id: int,
     payload: TemplateMetadata,
@@ -126,7 +129,11 @@ def copy_template(
         )
 
 
-@router.post("/{template_id}/instantiate", response_model=OntologyOut, status_code=201)
+@router.post(
+    "/{template_id}/instantiate",
+    response_model=ApiResponse[OntologyOut],
+    status_code=201,
+)
 def instantiate(
     template_id: int,
     payload: TemplateInstantiate,

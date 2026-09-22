@@ -12,9 +12,9 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Literal, TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -22,9 +22,16 @@ from app.core.errors import KGError
 from app.domain.iri_service import build_resource_iri, validate_name
 from app.domain.status_service import check_revision, publish_resource
 from app.models.enums import ResourceKind, ResourceStatus
-from app.models.resource import ModelResource, Namespace, ResourceRef
+from app.models.resource import (
+    DatatypePropDetail,
+    ModelResource,
+    Namespace,
+    ObjectPropDetail,
+    ResourceRef,
+)
 from app.schemas.relation import (
     AttributeDefOut,
+    CardinalitySpec,
     EndpointSpec,
     OwlFeatures,
     RelationTypeCreate,
@@ -201,6 +208,7 @@ def _create_assoc_resource(
     )
     # 属性定义存到 ASSOC 的引用（M1 存结构，M4 补完整 OWL 语义）
     # 简化：属性定义作为 DATATYPE_PROP 子资源挂在 ASSOC 上
+    # 属性定义落正式列（M-07）：此前只存了名字，datatype/nullable 读回时被丢弃
     for attr in attribute_defs:
         attr_name = str(attr.get("name", ""))
         if not attr_name:
@@ -219,7 +227,36 @@ def _create_assoc_resource(
                 source_id=assoc.id, target_id=prop_res.id, role="assoc_attribute"
             )
         )
+        session.add(
+            DatatypePropDetail(
+                resource_id=prop_res.id,
+                prop_name=attr_name,
+                datatype=str(attr.get("datatype", "string")),
+                enum_dict_id=_optional_int(attr.get("enum_dict_id")),
+                nullable=bool(attr.get("nullable", True)),
+                default_value=_optional_str(attr.get("default_value")),
+            )
+        )
     return assoc
+
+
+def _optional_int(value: object) -> int | None:
+    """关联实体属性定义来自自由 dict，这里做保守的取值收敛。"""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _optional_str(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _relation_detail(session: Session, relation: ModelResource) -> ObjectPropDetail:
+    """取（或建）关系的约束明细行。端点基数与 OWL 特征落在这里。"""
+    detail = session.get(ObjectPropDetail, relation.id)
+    if detail is None:
+        detail = ObjectPropDetail(resource_id=relation.id)
+        session.add(detail)
+        session.flush()
+    return detail
 
 
 def _set_endpoints(
@@ -230,16 +267,18 @@ def _set_endpoints(
     domain_type: ModelResource,
     range_type: ModelResource,
 ) -> None:
-    """存关系端点引用。按 IRI 去重：同一类型被多关系引用是允许的。
+    """存关系端点引用与基数约束。
 
-    role 区分 domain/range，基数约束存在 ResourceRef 的元信息里（M1 用 JSON，
-    后续 M4 补完整 OWL 语义时迁到正式列）。
+    role 区分 domain/range，端点引用按 IRI 去重：同一类型被多关系引用是允许的。
+    基数与角色标签落 object_prop_detail 的正式列（M-07 补齐，此前读写往返丢失）。
     """
     # 清旧端点
-    session.query(ResourceRef).where(
-        ResourceRef.source_id == relation.id,
-        ResourceRef.role.in_(["relation_domain", "relation_range"]),
-    ).delete()
+    session.execute(
+        delete(ResourceRef).where(
+            ResourceRef.source_id == relation.id,
+            ResourceRef.role.in_(["relation_domain", "relation_range"]),
+        )
+    )
     session.add(
         ResourceRef(
             source_id=relation.id,
@@ -255,26 +294,47 @@ def _set_endpoints(
         )
     )
 
+    detail = _relation_detail(session, relation)
+    detail.domain_min = domain_spec.cardinality.min
+    detail.domain_max = domain_spec.cardinality.max
+    detail.domain_role_i18n = domain_spec.role_i18n
+    detail.domain_cardinality_role_i18n = domain_spec.cardinality.role_label_i18n
+    detail.range_min = range_spec.cardinality.min
+    detail.range_max = range_spec.cardinality.max
+    detail.range_role_i18n = range_spec.role_i18n
+    detail.range_cardinality_role_i18n = range_spec.cardinality.role_label_i18n
+
 
 def _set_owl_and_meta(
     session: Session,
     relation: ModelResource,
     owl: OwlFeatures,
-    payload: RelationTypeCreate,
+    payload: RelationTypeCreate | RelationTypeUpdate,
     assoc_resource: ModelResource | None,
 ) -> None:
-    """存 OWL 特征与元信息。
+    """存 OWL 特征与端点外的元信息。
 
-    M1 阶段 OWL 特征与 union/intersection 存在 resource 的扩展字段。
-    ModelResource 没有专门的 meta 列，M0 设计上 payload 风格——
-    这里用 ResourceRef 关联 assoc_resource，OWL 特征待 H-50 校验引擎
-    读取时从领域服务查（本函数校验已做，存储用最小方式）。
-
-    注：当前 ModelResource 无 meta JSONB 列，OWL 特征在 update/get 时
-    由本服务从 payload 重建（见 _build_out）。这与 type_service 的
-    data_props 处理方式一致（DATATYPE_PROP 子资源 + ResourceRef）。
+    OWL 特征落 object_prop_detail.owl（M-07 补齐）；
+    inverse_of / union_of / intersection_of 存为 ResourceRef。
+    传 `None` 的列表字段视为「不修改」，显式传空列表表示清空。
     """
-    # inverse_of 存为 ResourceRef（role=inverse_of）
+    detail = _relation_detail(session, relation)
+    detail.owl = owl.model_dump()
+
+    # 关系型引用整体重写：先清旧，再按 payload 重建（None = 不改）
+    refs_to_rewrite = (
+        payload.inverse_of is not None
+        or payload.union_of is not None
+        or payload.intersection_of is not None
+    )
+    if not refs_to_rewrite:
+        return
+    session.execute(
+        delete(ResourceRef).where(
+            ResourceRef.source_id == relation.id,
+            ResourceRef.role.in_(["inverse_of", "union_of", "intersection_of"]),
+        )
+    )
     if payload.inverse_of is not None:
         session.add(
             ResourceRef(
@@ -283,19 +343,50 @@ def _set_owl_and_meta(
                 role="inverse_of",
             )
         )
-    # union_of / intersection_of 存为 ResourceRef
-    for tid in payload.union_of:
+    for tid in payload.union_of or []:
         session.add(ResourceRef(source_id=relation.id, target_id=tid, role="union_of"))
-    for tid in payload.intersection_of:
+    for tid in payload.intersection_of or []:
         session.add(
             ResourceRef(source_id=relation.id, target_id=tid, role="intersection_of")
         )
 
 
+def _endpoint_spec(
+    meta: RelationMeta, side: Literal["domain", "range"]
+) -> EndpointSpec:
+    """从已存约束重建端点，供「只改一侧端点」的更新用。"""
+    if side == "domain":
+        ids = meta["domain_ids"]
+        cardinality = CardinalitySpec(
+            min=meta["domain_min"],
+            max=meta["domain_max"],
+            role_label_i18n=meta["domain_cardinality_role_i18n"],
+        )
+        role_i18n = meta["domain_role_i18n"]
+    else:
+        ids = meta["range_ids"]
+        cardinality = CardinalitySpec(
+            min=meta["range_min"],
+            max=meta["range_max"],
+            role_label_i18n=meta["range_cardinality_role_i18n"],
+        )
+        role_i18n = meta["range_role_i18n"]
+    if not ids:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            {f"{side}_ids": [], "reason": "endpoint_missing"},
+        )
+    return EndpointSpec(type_id=ids[0], cardinality=cardinality, role_i18n=role_i18n)
+
+
 def update_relation_type(
     session: Session, resource: ModelResource, payload: RelationTypeUpdate
 ) -> ModelResource:
-    """更新关系类型（草稿态）。带 If-Match 乐观锁。"""
+    """更新关系类型（草稿态）。带 If-Match 乐观锁。
+
+    端点基数、角色标签、OWL 特征、逆关系与 union/intersection 都会真正落库——
+    M1 阶段这些字段被接受后丢弃，等于静默丢用户输入。
+    """
     check_revision(resource, payload.if_match)
     if resource.status == ResourceStatus.PUBLISHED:
         raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource": resource.name})
@@ -306,13 +397,39 @@ def update_relation_type(
         resource.definition_i18n = payload.definition_i18n
     if payload.owl is not None:
         validate_owl_compatibility(payload.owl)
-    if payload.domain_spec is not None:
-        _get_entity_type(session, payload.domain_spec.type_id)
-    if payload.range_spec is not None:
-        _get_entity_type(session, payload.range_spec.type_id)
+    if payload.inverse_of is not None:
+        inverse = session.get(ModelResource, payload.inverse_of)
+        if inverse is None or inverse.kind != ResourceKind.OBJECT_PROP:
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {"inverse_of": payload.inverse_of, "reason": "not_a_relation"},
+            )
+
+    if payload.domain_spec is not None or payload.range_spec is not None:
+        meta = get_relation_meta(session, resource)
+        domain_spec = payload.domain_spec or _endpoint_spec(meta, "domain")
+        range_spec = payload.range_spec or _endpoint_spec(meta, "range")
+        _set_endpoints(
+            session,
+            resource,
+            domain_spec,
+            range_spec,
+            _get_entity_type(session, domain_spec.type_id),
+            _get_entity_type(session, range_spec.type_id),
+        )
+
+    owl = payload.owl if payload.owl is not None else _stored_owl(session, resource)
+    _set_owl_and_meta(session, resource, owl, payload, None)
 
     session.flush()
     return resource
+
+
+def _stored_owl(session: Session, relation: ModelResource) -> OwlFeatures:
+    detail = session.get(ObjectPropDetail, relation.id)
+    if detail is None or not detail.owl:
+        return OwlFeatures()
+    return OwlFeatures(**detail.owl)
 
 
 def get_relation_type(session: Session, relation_id: int) -> ModelResource:
@@ -345,9 +462,10 @@ def list_relation_types(
 
 
 def get_relation_meta(session: Session, relation: ModelResource) -> RelationMeta:
-    """取关系元数据：端点、inverse_of、union/intersection、assoc_resource。
+    """取关系元数据：端点、基数、角色标签、OWL 特征、inverse_of、assoc_resource。
 
-    供 API 层组装 RelationTypeOut。
+    供 API 层组装 RelationTypeOut；基数与 OWL 特征来自 object_prop_detail
+    正式列（M-07 补齐），不再在读取时按默认值猜。
     """
     refs = (
         session.execute(select(ResourceRef).where(ResourceRef.source_id == relation.id))
@@ -373,6 +491,7 @@ def get_relation_meta(session: Session, relation: ModelResource) -> RelationMeta
             intersection_of.append(r.target_id)
         elif r.role == "assoc_resource":
             assoc_resource_id = r.target_id
+    detail = session.get(ObjectPropDetail, relation.id)
     return RelationMeta(
         domain_ids=domain_ids,
         range_ids=range_ids,
@@ -380,6 +499,19 @@ def get_relation_meta(session: Session, relation: ModelResource) -> RelationMeta
         union_of=union_of,
         intersection_of=intersection_of,
         assoc_resource_id=assoc_resource_id,
+        domain_min=detail.domain_min if detail else 0,
+        domain_max=detail.domain_max if detail else -1,
+        range_min=detail.range_min if detail else 0,
+        range_max=detail.range_max if detail else -1,
+        domain_role_i18n=detail.domain_role_i18n if detail else None,
+        domain_cardinality_role_i18n=(
+            detail.domain_cardinality_role_i18n if detail else None
+        ),
+        range_role_i18n=detail.range_role_i18n if detail else None,
+        range_cardinality_role_i18n=(
+            detail.range_cardinality_role_i18n if detail else None
+        ),
+        owl=dict(detail.owl) if detail else {},
     )
 
 
@@ -392,12 +524,25 @@ class RelationMeta(TypedDict):
     union_of: list[int]
     intersection_of: list[int]
     assoc_resource_id: int | None
+    domain_min: int
+    domain_max: int
+    range_min: int
+    range_max: int
+    domain_role_i18n: dict[str, str] | None
+    domain_cardinality_role_i18n: dict[str, str] | None
+    range_role_i18n: dict[str, str] | None
+    range_cardinality_role_i18n: dict[str, str] | None
+    owl: dict[str, bool]
 
 
 def get_assoc_attributes(
     session: Session, assoc_resource: ModelResource
 ) -> list[AttributeDefOut]:
-    """取关联实体的属性定义。"""
+    """取关联实体的属性定义。
+
+    数据类型与可空性从 datatype_prop_detail 读回（M-07 补齐），
+    历史行缺失明细时回退到 string / nullable 的保守默认。
+    """
     refs = (
         session.execute(
             select(ResourceRef).where(
@@ -411,14 +556,18 @@ def get_assoc_attributes(
     attrs: list[AttributeDefOut] = []
     for r in refs:
         prop = session.get(ModelResource, r.target_id)
-        if prop is not None:
-            attrs.append(
-                AttributeDefOut(
-                    name=prop.name.split(".")[-1],
-                    datatype="string",
-                    nullable=True,
-                )
+        if prop is None:
+            continue
+        detail = session.get(DatatypePropDetail, prop.id)
+        attrs.append(
+            AttributeDefOut(
+                name=detail.prop_name if detail else prop.name.split(".")[-1],
+                datatype=detail.datatype if detail else "string",
+                nullable=detail.nullable if detail else True,
+                enum_dict_id=detail.enum_dict_id if detail else None,
+                default_value=detail.default_value if detail else None,
             )
+        )
     return attrs
 
 

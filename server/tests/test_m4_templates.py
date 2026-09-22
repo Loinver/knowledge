@@ -174,7 +174,7 @@ def test_builtin_readonly_and_copy_creates_independent_custom(
         client.delete(
             f"{URL}/{copied.json()['id']}", headers={"If-Match": "1"}
         ).status_code
-        == 204
+        == 200
     )
     assert client.get(url).status_code == 200
     assert (
@@ -285,7 +285,7 @@ def test_delete_and_attach_cannot_leave_dangling_reference(
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         deleted, created = list(pool.map(operation, (True, False)))
-    assert (deleted, created) in {(204, 404), (422, 201)}
+    assert (deleted, created) in {(200, 404), (422, 201)}
     with sessions() as session:
         for onto in session.scalars(select(Ontology)):
             assert session.get(AssemblyTemplate, onto.template_id) is not None

@@ -19,12 +19,15 @@ from app.schemas.metadata import (
     ReferenceItem,
     TableReferenceResponse,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/datasources", tags=["metadata"])
 
 
 @router.post(
-    "/{ds_id}/metadata/capture", response_model=MetadataSnapshotOut, status_code=201
+    "/{ds_id}/metadata/capture",
+    response_model=ApiResponse[MetadataSnapshotOut],
+    status_code=201,
 )
 def capture(ds_id: int, session: Session = Depends(get_session)) -> MetadataSnapshotOut:
     snap = capture_metadata(session, ds_id)
@@ -32,7 +35,10 @@ def capture(ds_id: int, session: Session = Depends(get_session)) -> MetadataSnap
     return MetadataSnapshotOut.model_validate(snap)
 
 
-@router.get("/{ds_id}/metadata/snapshots", response_model=list[MetadataSnapshotBrief])
+@router.get(
+    "/{ds_id}/metadata/snapshots",
+    response_model=ApiResponse[list[MetadataSnapshotBrief]],
+)
 def list_snap(
     ds_id: int,
     page: int = Query(1, ge=1),
@@ -43,7 +49,7 @@ def list_snap(
     return [MetadataSnapshotBrief.model_validate(i) for i in items]
 
 
-@router.get("/{ds_id}/metadata/latest", response_model=MetadataSnapshotOut)
+@router.get("/{ds_id}/metadata/latest", response_model=ApiResponse[MetadataSnapshotOut])
 def get_latest(
     ds_id: int, session: Session = Depends(get_session)
 ) -> MetadataSnapshotOut:
@@ -59,7 +65,7 @@ def get_latest(
     return MetadataSnapshotOut.model_validate(snap)
 
 
-@router.get("/metadata/{snapshot_id}", response_model=MetadataSnapshotOut)
+@router.get("/metadata/{snapshot_id}", response_model=ApiResponse[MetadataSnapshotOut])
 def get_snap(
     snapshot_id: int, session: Session = Depends(get_session)
 ) -> MetadataSnapshotOut:
@@ -68,7 +74,8 @@ def get_snap(
 
 
 @router.get(
-    "/metadata/tables/{table_name}/references", response_model=TableReferenceResponse
+    "/metadata/tables/{table_name}/references",
+    response_model=ApiResponse[TableReferenceResponse],
 )
 def table_refs(
     table_name: str, session: Session = Depends(get_session)

@@ -22,16 +22,17 @@ from app.schemas.common import (
     NamespaceCreate,
     NamespaceOut,
 )
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/namespaces", tags=["namespaces"])
 
 
-@router.get("", response_model=list[NamespaceOut])
+@router.get("", response_model=ApiResponse[list[NamespaceOut]])
 def list_namespaces(session: Session = Depends(get_session)) -> list[Namespace]:
     return list(session.execute(select(Namespace).order_by(Namespace.prefix)).scalars())
 
 
-@router.post("", response_model=NamespaceOut, status_code=201)
+@router.post("", response_model=ApiResponse[NamespaceOut], status_code=201)
 def create_namespace(
     payload: NamespaceCreate, session: Session = Depends(get_session)
 ) -> Namespace:
@@ -42,7 +43,7 @@ def create_namespace(
     return ns
 
 
-@router.delete("/{namespace_id}", status_code=204)
+@router.delete("/{namespace_id}", response_model=ApiResponse[None])
 def remove_namespace(
     namespace_id: int, session: Session = Depends(get_session)
 ) -> None:
@@ -50,20 +51,20 @@ def remove_namespace(
     session.commit()
 
 
-@router.get("/iri/build", response_model=IriBuildResponse)
+@router.get("/iri/build", response_model=ApiResponse[IriBuildResponse])
 def build_iri_endpoint(payload: IriBuildRequest) -> IriBuildResponse:
     """直接按命名空间 IRI + 机读名拼接，不查库。"""
     return IriBuildResponse(iri=build_iri(payload.namespace, payload.name))
 
 
-@router.get("/iri/validate", response_model=IriValidateResponse)
+@router.get("/iri/validate", response_model=ApiResponse[IriValidateResponse])
 def validate_iri_endpoint(name: str, namespace: str = "") -> IriValidateResponse:
     return IriValidateResponse(
         name=is_valid_name(name), namespace=is_valid_namespace(namespace)
     )
 
 
-@router.get("/iri/impact/{resource_id}", response_model=ImpactResponse)
+@router.get("/iri/impact/{resource_id}", response_model=ApiResponse[ImpactResponse])
 def rename_impact(
     resource_id: int, session: Session = Depends(get_session)
 ) -> ImpactResponse:

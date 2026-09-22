@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from app.core.db import get_session
 from app.domain.preview_service import preview_table
 from app.schemas.preview import PreviewColumnMeta, PreviewRequest, PreviewResponse
+from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/datasources", tags=["preview"])
 
 
-@router.post("/preview", response_model=PreviewResponse)
+@router.post("/preview", response_model=ApiResponse[PreviewResponse])
 def preview(
     payload: PreviewRequest,
     session: Session = Depends(get_session),

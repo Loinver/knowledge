@@ -35,6 +35,7 @@ from app.schemas.ontology import (
     OntologyRefOut,
     OntologyUpdate,
 )
+from app.schemas.response import ApiResponse
 from app.schemas.template import TemplateLink
 
 router = APIRouter(prefix="/ontologies", tags=["ontologies"])
@@ -49,7 +50,7 @@ def _out(session: Session, onto: Ontology) -> OntologyOut:
     return result
 
 
-@router.get("", response_model=list[OntologyBrief])
+@router.get("", response_model=ApiResponse[list[OntologyBrief]])
 def list_onto(
     q: str = Query(""),
     page: int = Query(1, ge=1),
@@ -60,7 +61,7 @@ def list_onto(
     return [OntologyBrief.model_validate(i) for i in items]
 
 
-@router.post("", response_model=OntologyOut, status_code=201)
+@router.post("", response_model=ApiResponse[OntologyOut], status_code=201)
 def create_onto_endpoint(
     payload: OntologyCreate, session: Session = Depends(governance_session)
 ) -> OntologyOut:
@@ -69,7 +70,7 @@ def create_onto_endpoint(
         return _out(session, onto)
 
 
-@router.get("/{ontology_id}", response_model=OntologyOut)
+@router.get("/{ontology_id}", response_model=ApiResponse[OntologyOut])
 def get_onto_endpoint(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> OntologyOut:
@@ -77,7 +78,7 @@ def get_onto_endpoint(
     return _out(session, onto)
 
 
-@router.put("/{ontology_id}", response_model=OntologyOut)
+@router.put("/{ontology_id}", response_model=ApiResponse[OntologyOut])
 def update_onto_endpoint(
     ontology_id: int,
     payload: OntologyUpdate,
@@ -89,7 +90,7 @@ def update_onto_endpoint(
     return _out(session, onto)
 
 
-@router.get("/{ontology_id}/refs", response_model=list[OntologyRefOut])
+@router.get("/{ontology_id}/refs", response_model=ApiResponse[list[OntologyRefOut]])
 def list_refs_endpoint(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> list[OntologyRefOut]:
@@ -97,7 +98,9 @@ def list_refs_endpoint(
     return [OntologyRefOut.model_validate(r) for r in refs]
 
 
-@router.post("/{ontology_id}/refs", response_model=OntologyRefOut, status_code=201)
+@router.post(
+    "/{ontology_id}/refs", response_model=ApiResponse[OntologyRefOut], status_code=201
+)
 def add_ref_endpoint(
     ontology_id: int,
     payload: OntologyRefAdd,
@@ -108,7 +111,7 @@ def add_ref_endpoint(
     return OntologyRefOut.model_validate(ref)
 
 
-@router.delete("/{ontology_id}/refs/{ref_id}", status_code=204)
+@router.delete("/{ontology_id}/refs/{ref_id}", response_model=ApiResponse[None])
 def remove_ref_endpoint(
     ontology_id: int, ref_id: int, session: Session = Depends(get_session)
 ) -> None:
@@ -116,14 +119,14 @@ def remove_ref_endpoint(
     session.commit()
 
 
-@router.get("/{ontology_id}/conflicts", response_model=list[ConflictInfo])
+@router.get("/{ontology_id}/conflicts", response_model=ApiResponse[list[ConflictInfo]])
 def conflicts_endpoint(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> list[ConflictInfo]:
     return detect_conflicts(session, ontology_id)
 
 
-@router.get("/{ontology_id}/canvas", response_model=CanvasLayoutOut)
+@router.get("/{ontology_id}/canvas", response_model=ApiResponse[CanvasLayoutOut])
 def get_canvas_endpoint(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> CanvasLayoutOut:
@@ -132,7 +135,7 @@ def get_canvas_endpoint(
     return CanvasLayoutOut.model_validate(layout)
 
 
-@router.put("/{ontology_id}/canvas", response_model=CanvasLayoutOut)
+@router.put("/{ontology_id}/canvas", response_model=ApiResponse[CanvasLayoutOut])
 def update_canvas_endpoint(
     ontology_id: int,
     payload: CanvasLayoutUpdate,

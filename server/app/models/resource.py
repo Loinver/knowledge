@@ -156,3 +156,50 @@ class ResourceRef(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class DatatypePropDetail(Base):
+    """数据属性明细（M-07 补齐）。
+
+    M1 只落了属性名与双语标签，数据类型、枚举引用、可空性与默认值都没保存，
+    导致 create → get 往返丢字段。这里按 1:1 补齐为正式列。
+    """
+
+    __tablename__ = "datatype_prop_detail"
+
+    resource_id: Mapped[int] = mapped_column(
+        ForeignKey("model_resource.id"), primary_key=True
+    )
+    # 属性机读名（不含所属类型前缀），让读回不依赖 name 拼接规则
+    prop_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    datatype: Mapped[str] = mapped_column(String(64), nullable=False)
+    enum_dict_id: Mapped[int | None] = mapped_column(Integer, default=None)
+    nullable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    default_value: Mapped[str | None] = mapped_column(String(256), default=None)
+
+
+class ObjectPropDetail(Base):
+    """对象属性（关系）明细：端点基数、角色标签与 OWL 特征（M-07 补齐）。
+
+    M1 只存了端点引用，基数与 OWL 特征在 get/update 时按默认值重建，
+    等于静默丢失用户输入；这里按 1:1 落正式列。
+
+    max = -1 表示无上限。
+    """
+
+    __tablename__ = "object_prop_detail"
+
+    resource_id: Mapped[int] = mapped_column(
+        ForeignKey("model_resource.id"), primary_key=True
+    )
+    domain_min: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    domain_max: Mapped[int] = mapped_column(Integer, default=-1, nullable=False)
+    range_min: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    range_max: Mapped[int] = mapped_column(Integer, default=-1, nullable=False)
+    domain_role_i18n: Mapped[dict | None] = mapped_column(JSON, default=None)
+    domain_cardinality_role_i18n: Mapped[dict | None] = mapped_column(
+        JSON, default=None
+    )
+    range_role_i18n: Mapped[dict | None] = mapped_column(JSON, default=None)
+    range_cardinality_role_i18n: Mapped[dict | None] = mapped_column(JSON, default=None)
+    owl: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)

@@ -73,11 +73,13 @@ class RelationTypeCreate(BaseModel):
 
 
 class AttributeDefOut(BaseModel):
-    """关联实体上的属性定义（M1 存结构，M4 补完整 OWL 语义）。"""
+    """关联实体上的属性定义（M-07 起 datatype/nullable/枚举与默认值真实落库）。"""
 
     name: str
     datatype: str
     nullable: bool = True
+    enum_dict_id: int | None = None
+    default_value: str | None = None
 
 
 class RelationTypeUpdate(BaseModel):
