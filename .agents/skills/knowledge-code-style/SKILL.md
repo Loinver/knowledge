@@ -20,7 +20,7 @@ make start        # 构建前端 + 单端口 :8000
 make lint         # ESLint + vue-tsc + Prettier + Ruff + Mypy
 make fix          # 自动修复
 make test         # pytest
-npm run commit    # 交互式提交，禁止 git commit -m
+pnpm run commit   # 交互式提交，禁止 git commit -m
 ```
 
 后端一律用 `cd server && .venv/bin/ruff|mypy|pytest`（全局可能没装）。

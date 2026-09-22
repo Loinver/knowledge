@@ -12,4 +12,4 @@ AI Agent 协作者请先读这里。
 - [.agents/conventions/testing.md](./.agents/conventions/testing.md) — 测试策略与必测断言
 - [.agents/conventions/security-and-license.md](./.agents/conventions/security-and-license.md) — 合规红线
 
-最短上手：`make lint` 全绿、`make test` 通过、提交走 `npm run commit`。
+最短上手：`make lint` 全绿、`make test` 通过、提交走 `pnpm run commit`。

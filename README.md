@@ -31,7 +31,7 @@ make dev         # 前后端一体启动（后端 :8000，前端 :5173 代理 /a
 make start       # 构建前端 + 单端口启动（:8000 同时提供页面与 API）
 make lint        # 全量代码校验（ESLint + Prettier + vue-tsc + Ruff + Mypy）
 make test        # 后端测试
-npm run commit   # 交互式提交（Conventional Commits）
+pnpm run commit  # 交互式提交（Conventional Commits）
 ```
 
 贡献前请先读 [CONTRIBUTING.md](./CONTRIBUTING.md)。

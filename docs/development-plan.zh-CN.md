@@ -431,7 +431,7 @@ demo 的 `tests/*.cjs` 断言（图谱邻域深度与过滤器组合、本体合
 | 统一格式化     | Prettier（行宽 100、单引号、无分号）                                                     | `.prettierrc.json` / `.prettierignore` |
 | 后端语法与风格 | Ruff（lint + format，替代 black/isort/flake8）                                           | `server/pyproject.toml` `[tool.ruff]`  |
 | 后端类型       | Mypy（`disallow_untyped_defs`，函数签名必须有注解）                                      | 同上 `[tool.mypy]`                     |
-| 提交规范       | commitizen + cz-git（`npm run commit`）+ commitlint 强校验                               | `commitlint.config.cjs`                |
+| 提交规范       | commitizen + cz-git（`pnpm run commit`）+ commitlint 强校验                              | `commitlint.config.cjs`                |
 | 提交前钩子     | husky + lint-staged（改什么校验什么）                                                    | `.husky/` + `package.json`             |
 | CI             | GitHub Actions：ESLint / Prettier / vue-tsc / Ruff / Mypy / Pytest                       | `.github/workflows/lint.yml`           |
 | 编辑器一致性   | EditorConfig（LF、UTF-8、末尾空行）                                                      | `.editorconfig`                        |

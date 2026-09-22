@@ -3,7 +3,7 @@
 ## 1. 提交方式
 
 ```bash
-npm run commit     # git-cz 交互式提交（唯一推荐）
+pnpm run commit   # git-cz 交互式提交（唯一推荐）
 git commit         # husky 已接管，同样进入交互
 ```
 

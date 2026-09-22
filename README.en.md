@@ -31,7 +31,7 @@ make install     # install dependencies and git hooks
 make dev         # run frontend and backend together
 make lint        # ESLint + Prettier + vue-tsc + Ruff + Mypy
 make test        # backend tests
-npm run commit   # interactive commit (Conventional Commits)
+pnpm run commit  # interactive commit (Conventional Commits)
 ```
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR. Design docs live in [docs/](./docs/).
