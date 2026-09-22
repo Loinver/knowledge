@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-server"
-version = "0.0.0"
+version = "0.1.0"
 description = "知识中台后端：本体建模、数据接入、映射配置、抽取执行、图谱与证据追溯"
 requires-python = ">=3.12"
 dependencies = [
