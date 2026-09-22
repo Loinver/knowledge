@@ -6,6 +6,12 @@ registry 能发现全部表；新增模型必须在这里登记。
 
 from __future__ import annotations
 
+from app.models.account import (
+    AuditLog,
+    AuthToken,
+    PasswordResetToken,
+    User,
+)
 from app.models.data_access import (
     Datasource,
     Mapping,
@@ -24,10 +30,15 @@ from app.models.domain import (
     OntologyRevision,
 )
 from app.models.enums import (
+    AuditAction,
+    AuditResult,
+    AuthTokenKind,
     RelMapMode,
     ResourceKind,
     ResourceStatus,
     RunResult,
+    UserRole,
+    UserStatus,
     ValidationState,
 )
 from app.models.extraction import (
@@ -51,6 +62,11 @@ from app.models.validation import ValidationReport, ValidationResult
 
 __all__ = [
     "AssemblyTemplate",
+    "AuditAction",
+    "AuditLog",
+    "AuditResult",
+    "AuthToken",
+    "AuthTokenKind",
     "BusinessDomain",
     "CanvasLayout",
     "Datasource",
@@ -71,6 +87,7 @@ __all__ = [
     "Ontology",
     "OntologyResourceRef",
     "OntologyRevision",
+    "PasswordResetToken",
     "Quarantine",
     "RelMapMode",
     "ResourceKind",
@@ -80,6 +97,9 @@ __all__ = [
     "ResourceStatus",
     "Rule",
     "RunResult",
+    "User",
+    "UserRole",
+    "UserStatus",
     "ValidationReport",
     "ValidationResult",
     "ValidationState",

@@ -30,6 +30,21 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
 
+    # --- 账号模块 ---
+    # 公开注册默认关闭：账号由管理员在用户管理里创建，首个管理员用
+    # `make seed-admin` 生成（见 docs/adr/0002-account-auth.md）。
+    allow_public_registration: bool = False
+    # 开发态没有邮件服务，忘记密码接口直接把重置令牌放在响应里，
+    # **生产必须置 0**（KG_EXPOSE_RESET_TOKEN=0），否则等于开放改密入口。
+    expose_reset_token: bool = True
+    # 令牌有效期：访问令牌短、刷新令牌长；重置令牌只够走完一次改密。
+    access_token_ttl_seconds: int = 3600
+    refresh_token_ttl_seconds: int = 1_209_600
+    reset_token_ttl_seconds: int = 3600
+    # 口令派生迭代次数。默认值按 OWASP 对 PBKDF2-HMAC-SHA256 的建议量级，
+    # 测试里会调低到 1000 以免拖慢用例。
+    password_iterations: int = 260_000
+
 
 @lru_cache
 def get_settings() -> Settings:

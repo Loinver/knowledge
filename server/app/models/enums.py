@@ -52,3 +52,46 @@ class RelMapMode(StrEnum):
     FK = "FK"
     JUNCTION = "JUNCTION"
     ASSOCIATIVE = "ASSOCIATIVE"
+
+
+class UserRole(StrEnum):
+    """账号角色。单角色起步，多角色与细粒度权限留待权限基线（M5）。"""
+
+    ADMIN = "ADMIN"
+    EDITOR = "EDITOR"
+    VIEWER = "VIEWER"
+
+
+class UserStatus(StrEnum):
+    """账号状态。DISABLED 的账号登录被拒。"""
+
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"
+
+
+class AuthTokenKind(StrEnum):
+    """令牌种类。刷新令牌只能用于换新，不能直接访问业务接口。"""
+
+    ACCESS = "ACCESS"
+    REFRESH = "REFRESH"
+
+
+class AuditAction(StrEnum):
+    """账号操作留痕的动作码，前端按码走 i18n。"""
+
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    REGISTER = "REGISTER"
+    PASSWORD_CHANGED = "PASSWORD_CHANGED"
+    RESET_REQUESTED = "RESET_REQUESTED"
+    PASSWORD_RESET = "PASSWORD_RESET"
+    PROFILE_UPDATED = "PROFILE_UPDATED"
+    ROLE_CHANGED = "ROLE_CHANGED"
+    STATUS_CHANGED = "STATUS_CHANGED"
+
+
+class AuditResult(StrEnum):
+    """留痕结果。失败也要记——登录失败是安全信号。"""
+
+    OK = "OK"
+    FAILED = "FAILED"

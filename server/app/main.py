@@ -13,6 +13,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.api.v1.accounts import router as accounts_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.clauses import router as clauses_router
 from app.api.v1.datasources import router as datasources_router
 from app.api.v1.domains import router as domains_router
@@ -65,6 +67,8 @@ app.include_router(validation_router, prefix=API_PREFIX)
 app.include_router(extraction_router, prefix=API_PREFIX)
 app.include_router(governance_router, prefix=API_PREFIX)
 app.include_router(clauses_router, prefix=API_PREFIX)
+app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(accounts_router, prefix=API_PREFIX)
 
 
 class IriRequest(BaseModel):

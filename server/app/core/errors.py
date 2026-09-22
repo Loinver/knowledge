@@ -21,6 +21,8 @@ from app.schemas.response import ErrorResponse
 # HTTP 状态码 → 兜底错误码。用于 FastAPI/Starlette 自带异常的统一化。
 STATUS_FALLBACK_CODE: dict[int, ErrorCode] = {
     400: ErrorCode.INVALID_REQUEST,
+    401: ErrorCode.TOKEN_EXPIRED,
+    403: ErrorCode.FORBIDDEN,
     404: ErrorCode.RESOURCE_NOT_FOUND,
     409: ErrorCode.REVISION_CONFLICT,
     422: ErrorCode.VALIDATION_VIOLATION,

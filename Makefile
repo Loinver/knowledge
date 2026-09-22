@@ -1,4 +1,4 @@
-.PHONY: install dev lint lint-web lint-server fix test typecheck format commit
+.PHONY: install dev lint lint-web lint-server fix test typecheck format commit seed-admin
 
 install: ## 安装前后端依赖与 git hooks
 	npm install
@@ -36,3 +36,6 @@ format:
 
 commit: ## 交互式提交（commitizen + cz-git）
 	npm run commit
+
+seed-admin: ## 创建首个管理员（可覆盖 USERNAME= EMAIL= PASSWORD=），公开注册默认关闭
+	cd server && .venv/bin/python ../scripts/seed_admin.py $(if $(USERNAME),--username "$(USERNAME)") $(if $(EMAIL),--email "$(EMAIL)") $(if $(PASSWORD),--password "$(PASSWORD)") $(if $(DISPLAY_NAME),--display-name "$(DISPLAY_NAME)")
