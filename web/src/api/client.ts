@@ -1,7 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 
-const http: AxiosInstance = axios.create({
+export const http: AxiosInstance = axios.create({
   baseURL: '/api/v1',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
