@@ -39,6 +39,7 @@ from app.models.extraction import (
     GraphTriple,
     Quarantine,
 )
+from app.models.governance import Rule
 from app.models.resource import (
     ModelResource,
     Namespace,
@@ -77,6 +78,7 @@ __all__ = [
     "ResourceRef",
     "ResourceRevision",
     "ResourceStatus",
+    "Rule",
     "RunResult",
     "ValidationReport",
     "ValidationResult",

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from app.api.v1.datasources import router as datasources_router
 from app.api.v1.domains import router as domains_router
 from app.api.v1.extraction import router as extraction_router
+from app.api.v1.governance import router as governance_router
 from app.api.v1.mapping_preview import router as mapping_preview_router
 from app.api.v1.mappings import router as mappings_router
 from app.api.v1.metadata import router as metadata_router
@@ -23,6 +24,7 @@ from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.ontologies import router as ontologies_router
 from app.api.v1.preview import router as preview_router
 from app.api.v1.relations import router as relations_router
+from app.api.v1.templates import router as templates_router
 from app.api.v1.types import router as types_router
 from app.api.v1.validation import router as validation_router
 from app.core.db import Base, get_engine
@@ -55,9 +57,11 @@ app.include_router(mapping_preview_router, prefix=API_PREFIX)
 app.include_router(metadata_router, prefix=API_PREFIX)
 app.include_router(preview_router, prefix=API_PREFIX)
 app.include_router(types_router, prefix=API_PREFIX)
+app.include_router(templates_router, prefix=API_PREFIX)
 app.include_router(relations_router, prefix=API_PREFIX)
 app.include_router(validation_router, prefix=API_PREFIX)
 app.include_router(extraction_router, prefix=API_PREFIX)
+app.include_router(governance_router, prefix=API_PREFIX)
 
 
 class IriRequest(BaseModel):

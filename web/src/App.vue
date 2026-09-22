@@ -33,7 +33,15 @@ const menuOptions = computed<MenuOption[]>(() => [
   { label: () => t('menu.datasources'), key: 'datasources' },
   { label: () => t('menu.extraction'), key: 'extraction' },
   { label: () => t('menu.graph'), key: 'graph' },
-  { label: () => t('menu.governance'), key: 'governance' },
+  {
+    label: () => t('menu.governance'),
+    key: 'governance',
+    children: [
+      { label: () => t('page.governanceRules'), key: 'governance-rules' },
+      { label: () => t('export.title'), key: 'ontology-export' },
+      { label: () => t('templates.title'), key: 'assembly-templates' },
+    ],
+  },
 ])
 function handleMenuSelect(key: string) {
   if (key === 'dashboard') router.push('/')
@@ -42,6 +50,9 @@ function handleMenuSelect(key: string) {
   else if (key === 'extraction') router.push('/extraction')
   else if (key === 'graph') router.push('/graph')
   else if (key === 'governance') router.push('/governance/rules')
+  else if (key === 'governance-rules') router.push('/governance/rules')
+  else if (key === 'ontology-export') router.push('/governance/export')
+  else if (key === 'assembly-templates') router.push('/governance/templates')
 }
 function toggleLocale() {
   localeStore.change(locale.value === 'zh-CN' ? 'en-US' : 'zh-CN')

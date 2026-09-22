@@ -49,7 +49,13 @@
       "INVALID_NAME": "机读名不合法：{name}",
       "INVALID_NAMESPACE": "命名空间不合法：{namespace}",
       "ALREADY_PUBLISHED": "资源已发布，不可重复发布",
-      "PROTECTED_NAMESPACE": "受保护命名空间不可删除：{prefix}"
+      "PROTECTED_NAMESPACE": "受保护命名空间不可删除：{prefix}",
+      "INVALID_IRI": "IRI 不合法",
+      "INVALID_REQUEST": "请求参数不合法，请检查后重试",
+      "REVISION_NOT_FOUND": "指定的资源版本不存在",
+      "VALIDATION_VIOLATION": "语义校验未通过，请检查校验明细",
+      "SOURCE_UNREACHABLE": "数据源暂不可用",
+      "REASONER_UNAVAILABLE": "推理或校验执行器暂不可用，请稍后重试"
     }
   },
   "common": {
@@ -269,5 +275,111 @@
     "passCount": "{count} 项通过",
     "runAt": "运行时间",
     "chooseGraph": "请选择图谱版本后运行校验"
+  },
+  "rules": {
+    "intro": "管理标准条款与企业规则，保存表达式并检查正反例。",
+    "create": "新建规则",
+    "edit": "编辑规则",
+    "identifier": "规则标识",
+    "identifierTaken": "规则标识已被使用，请选择其他标识。",
+    "category": "分类",
+    "source": "规则来源",
+    "reference": "来源依据",
+    "target": "作用类型 IRI",
+    "severity": "严重程度",
+    "metadata": "基本信息与来源",
+    "expressionTab": "表达式",
+    "expression": "规则表达式（Turtle）",
+    "language": "表达语言",
+    "execution": "执行方式",
+    "examples": "正反例检查",
+    "positive": "正例",
+    "negative": "反例",
+    "allSources": "全部来源",
+    "empty": "暂无规则，请新建规则并填写来源依据。",
+    "untranslated": "未翻译",
+    "saved": "规则已保存。",
+    "deleted": "规则已删除。",
+    "editingRevision": "正在编辑规则修订版 {revision}；保存时检查并发冲突。",
+    "sourceHint": "标准规则仅记录标准编号、条款编号与自撰描述；企业规则请注明内部依据。",
+    "shaclHint": "自动检查支持 SHACL Core。表达式和样例使用 Turtle；目标类型须与作用类型 IRI 一致。",
+    "notRunHint": "该执行方式尚未连接执行器，结果为“未执行”，不表示通过。",
+    "examplesHint": "正例应符合规则，反例应违反规则；两者都需要包含作用类型的实例。检查结果仅用于验证规则示例，不代表本体整体符合标准。",
+    "runTest": "运行正反例检查",
+    "saveBeforeTest": "请先保存全部修改，再检查当前修订版。",
+    "staleTest": "表达式或样例已修改，下方报告属于修改前的修订版。",
+    "testRevision": "修订版 {revision} 的正反例结果",
+    "examplesFailed": "正反例的实际结果与预期不一致，请核查规则与样例。",
+    "confirmDelete": "确定删除规则 {identifier}？",
+    "conflict": "规则已被更新，请关闭编辑并重新打开；当前修改未覆盖服务器内容。",
+    "notFound": "规则不存在或已被删除，请刷新列表。",
+    "invalid": "规则内容无法处理，请检查表达式与样例。原因：{reason}",
+    "requestFailed": "请求失败，请重试。错误码：{code}",
+    "sources": {
+      "STANDARD": "标准条款",
+      "ENTERPRISE": "企业规则"
+    },
+    "severities": {
+      "INFO": "提示",
+      "WARNING": "警告",
+      "VIOLATION": "违反"
+    },
+    "languages": {
+      "SHACL": "SHACL",
+      "OWL": "OWL"
+    },
+    "executions": {
+      "AUTO": "自动",
+      "MANUAL": "人工"
+    }
+  },
+  "export": {
+    "title": "本体导出",
+    "intro": "下载本体已发布版本的 Turtle 或 JSON-LD 文件，保留固定资源版本与双语标签。",
+    "ontology": "本体",
+    "selectOntology": "选择已发布过的本体",
+    "revision": "发布版本",
+    "latest": "最新发布版本",
+    "format": "文件格式",
+    "formats": {
+      "turtle": "Turtle (.ttl)",
+      "jsonld": "JSON-LD (.jsonld)"
+    },
+    "snapshotHint": "导出读取发布时冻结的资源快照。草稿修改不进入文件；旧快照缺少语义结构时会拒绝导出，并给出原因。",
+    "download": "下载文件",
+    "downloaded": "文件已生成并开始下载。",
+    "failed": "导出失败，请核查所选版本的完整性。原因：{reason}"
+  },
+  "templates": {
+    "title": "装配模板",
+    "intro": "维护有来源依据的装配模板，引用明确的已发布资源版本。",
+    "create": "新建模板",
+    "edit": "模板详情",
+    "copy": "复制为自定义",
+    "fromOntology": "从本体保存模板",
+    "instantiate": "按模板创建本体",
+    "source": "来源",
+    "basis": "依据与说明",
+    "kind": "模板类型",
+    "builtin": "内置模板",
+    "custom": "自定义模板",
+    "all": "全部模板",
+    "references": "引用本体数",
+    "details": "查看 / 编辑",
+    "resources": "固定资源版本",
+    "resource": "资源",
+    "pinnedRevision": "固定版本",
+    "addResource": "添加资源",
+    "resourceUnavailable": "资源 #{id} 当前不可用",
+    "builtinHint": "内置模板只读。如需修改，请先复制为自定义模板。",
+    "pinHint": "资源版本明确固定。修改模板不会回写已创建本体的资源引用；同名资源的版本冲突需要显式解决。",
+    "revisionHint": "模板修订版 {revision}，被 {count} 个本体引用。",
+    "saved": "模板已保存。",
+    "deleted": "模板已删除。",
+    "inUse": "模板仍被本体引用，不能删除。",
+    "conflict": "模板已被更新，请关闭后重新打开再编辑。",
+    "failed": "操作失败，请检查输入与资源版本。原因：{reason}",
+    "confirmDelete": "确定删除模板 {name}？",
+    "createdOntology": "已按模板 {template} 创建草稿本体 {name}。"
   }
 }

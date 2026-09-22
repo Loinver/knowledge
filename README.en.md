@@ -48,3 +48,5 @@ docs/      design docs and ADRs
 ## Roadmap
 
 M0 foundation and semantic engine → M1 semantic assets → M2 data onboarding and mapping → **M3 extraction and graph loop (v0.1.0, end-to-end)** → M4 specification conformance (v1.0.0) → M5 scale.
+
+M4 is in development: rule management, real SHACL example checks, and published ontology RDF exports are under validation. See [M4 progress (Chinese)](./docs/m4-progress.zh-CN.md) for the full scope, remaining work, and current limitations.

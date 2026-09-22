@@ -216,6 +216,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ontologies/{ontology_id}/export': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Export Onto Endpoint */
+    get: operations['export_onto_endpoint_api_v1_ontologies__ontology_id__export_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/datasources': {
     parameters: {
       query?: never
@@ -634,6 +651,111 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/governance/templates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Templates */
+    get: operations['list_templates_api_v1_governance_templates_get']
+    put?: never
+    /** Create Template */
+    post: operations['create_template_api_v1_governance_templates_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/templates/resources': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Resources */
+    get: operations['list_resources_api_v1_governance_templates_resources_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/templates/from-ontology': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** From Ontology */
+    post: operations['from_ontology_api_v1_governance_templates_from_ontology_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/templates/{template_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Template */
+    get: operations['get_template_api_v1_governance_templates__template_id__get']
+    /** Update Template */
+    put: operations['update_template_api_v1_governance_templates__template_id__put']
+    post?: never
+    /** Delete Template */
+    delete: operations['delete_template_api_v1_governance_templates__template_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/templates/{template_id}/copy': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Copy Template */
+    post: operations['copy_template_api_v1_governance_templates__template_id__copy_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/templates/{template_id}/instantiate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Instantiate */
+    post: operations['instantiate_api_v1_governance_templates__template_id__instantiate_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/relations': {
     parameters: {
       query?: never
@@ -704,6 +826,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/validation/graph/{graph_revision_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Validate Graph
+     * @description 对图谱版本运行实例层校验（H-51）。
+     */
+    post: operations['validate_graph_api_v1_validation_graph__graph_revision_id__post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/validation/reports/{report_id}': {
     parameters: {
       query?: never
@@ -713,6 +855,26 @@ export interface paths {
     }
     /** Get Report */
     get: operations['get_report_api_v1_validation_reports__report_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/validation/reports/{report_id}/results': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Get Report Results
+     * @description 取报告的逐项校验结果明细。
+     */
+    get: operations['get_report_results_api_v1_validation_reports__report_id__results_get']
     put?: never
     post?: never
     delete?: never
@@ -1009,6 +1171,60 @@ export interface paths {
     get: operations['trace_entity_api_v1_extraction_evidence_trace_entity_get']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/rules': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Rules Endpoint */
+    get: operations['list_rules_endpoint_api_v1_governance_rules_get']
+    put?: never
+    /** Create Rule Endpoint */
+    post: operations['create_rule_endpoint_api_v1_governance_rules_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/rules/{rule_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Rule Endpoint */
+    get: operations['get_rule_endpoint_api_v1_governance_rules__rule_id__get']
+    /** Update Rule Endpoint */
+    put: operations['update_rule_endpoint_api_v1_governance_rules__rule_id__put']
+    post?: never
+    /** Delete Rule Endpoint */
+    delete: operations['delete_rule_endpoint_api_v1_governance_rules__rule_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/rules/{rule_id}/test': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Test Rule Endpoint */
+    post: operations['test_rule_endpoint_api_v1_governance_rules__rule_id__test_post']
     delete?: never
     options?: never
     head?: never
@@ -1994,6 +2210,11 @@ export interface components {
       /** Ref Resource Ids */
       ref_resource_ids?: number[]
     }
+    /**
+     * OntologyExportFormat
+     * @enum {string}
+     */
+    OntologyExportFormat: 'turtle' | 'json-ld'
     /** OntologyOut */
     OntologyOut: {
       /** Id */
@@ -2015,6 +2236,7 @@ export interface components {
       current_revision: number
       /** Template Id */
       template_id?: number | null
+      template?: components['schemas']['TemplateLink'] | null
     }
     /**
      * OntologyRefAdd
@@ -2399,6 +2621,121 @@ export interface components {
       /** Checksum */
       checksum: string
     }
+    /** RuleCreate */
+    RuleCreate: {
+      /** Identifier */
+      identifier: string
+      /** Name I18N */
+      name_i18n: {
+        [key: string]: string
+      }
+      /** Category */
+      category: string
+      /**
+       * Source Kind
+       * @enum {string}
+       */
+      source_kind: 'STANDARD' | 'ENTERPRISE'
+      /** Source Reference */
+      source_reference: string
+      /** Target Iri */
+      target_iri: string
+      /**
+       * Severity
+       * @enum {string}
+       */
+      severity: 'INFO' | 'WARNING' | 'VIOLATION'
+      /**
+       * Language
+       * @enum {string}
+       */
+      language: 'SHACL' | 'OWL'
+      /** Expression */
+      expression: string
+      /**
+       * Execution
+       * @enum {string}
+       */
+      execution: 'AUTO' | 'MANUAL'
+      /** Positive Example */
+      positive_example: string
+      /** Negative Example */
+      negative_example: string
+    }
+    /** RuleExampleOut */
+    RuleExampleOut: {
+      state: components['schemas']['ValidationState']
+      /** Conforms */
+      conforms: boolean
+      /** Report Text */
+      report_text: string
+    }
+    /** RuleOut */
+    RuleOut: {
+      /** Identifier */
+      identifier: string
+      /** Name I18N */
+      name_i18n: {
+        [key: string]: string
+      }
+      /** Category */
+      category: string
+      /**
+       * Source Kind
+       * @enum {string}
+       */
+      source_kind: 'STANDARD' | 'ENTERPRISE'
+      /** Source Reference */
+      source_reference: string
+      /** Target Iri */
+      target_iri: string
+      /**
+       * Severity
+       * @enum {string}
+       */
+      severity: 'INFO' | 'WARNING' | 'VIOLATION'
+      /**
+       * Language
+       * @enum {string}
+       */
+      language: 'SHACL' | 'OWL'
+      /** Expression */
+      expression: string
+      /**
+       * Execution
+       * @enum {string}
+       */
+      execution: 'AUTO' | 'MANUAL'
+      /** Positive Example */
+      positive_example: string
+      /** Negative Example */
+      negative_example: string
+      /** Id */
+      id: number
+      /** Revision */
+      revision: number
+    }
+    /** RulePage */
+    RulePage: {
+      /** Items */
+      items: components['schemas']['RuleOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /** RuleTestOut */
+    RuleTestOut: {
+      /** Rule Id */
+      rule_id: number
+      /** Revision */
+      revision: number
+      state: components['schemas']['ValidationState']
+      positive?: components['schemas']['RuleExampleOut'] | null
+      negative?: components['schemas']['RuleExampleOut'] | null
+    }
     /** RunStartRequest */
     RunStartRequest: {
       /** Mapping Revision Id */
@@ -2428,6 +2765,153 @@ export interface components {
       table: string
       /** References */
       references: components['schemas']['ReferenceItem'][]
+    }
+    /** TemplateCreate */
+    TemplateCreate: {
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Source */
+      source: string
+      /** Basis */
+      basis: string
+      /** Resources */
+      resources?: components['schemas']['TemplateResource'][]
+    }
+    /** TemplateFromOntology */
+    TemplateFromOntology: {
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Source */
+      source: string
+      /** Basis */
+      basis: string
+      /** Ontology Id */
+      ontology_id: number
+      /** Ontology Revision */
+      ontology_revision: number
+    }
+    /** TemplateInstantiate */
+    TemplateInstantiate: {
+      /** Name */
+      name: string
+      /** Iri */
+      iri: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Definition I18N */
+      definition_i18n?: {
+        [key: string]: string
+      } | null
+    }
+    /** TemplateLink */
+    TemplateLink: {
+      /** Id */
+      id: number
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Source */
+      source: string
+      /** Basis */
+      basis: string
+      /** Builtin */
+      builtin: boolean
+      /** Revision */
+      revision: number
+    }
+    /** TemplateMetadata */
+    TemplateMetadata: {
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Source */
+      source: string
+      /** Basis */
+      basis: string
+    }
+    /** TemplateOut */
+    TemplateOut: {
+      /** Id */
+      id: number
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Source */
+      source: string
+      /** Basis */
+      basis: string
+      /** Builtin */
+      builtin: boolean
+      /** Revision */
+      revision: number
+      /** Resources */
+      resources: components['schemas']['TemplateResource'][]
+      /** Reference Count */
+      reference_count: number
+    }
+    /** TemplatePage */
+    TemplatePage: {
+      /** Items */
+      items: components['schemas']['TemplateOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /** TemplateResource */
+    TemplateResource: {
+      /** Resource Id */
+      resource_id: number
+      /** Pinned Revision */
+      pinned_revision: number
+    }
+    /** TemplateResourceOption */
+    TemplateResourceOption: {
+      /** Resource Id */
+      resource_id: number
+      /** Name */
+      name: string
+      /** Iri */
+      iri: string
+      kind: components['schemas']['ResourceKind']
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      } | null
+      /** Revisions */
+      revisions: number[]
+    }
+    /** TemplateResourcePage */
+    TemplateResourcePage: {
+      /** Items */
+      items: components['schemas']['TemplateResourceOption'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
     }
     /** TestConnectionRequest */
     TestConnectionRequest: {
@@ -2471,6 +2955,12 @@ export interface components {
       /** Context */
       ctx?: Record<string, never>
     }
+    /**
+     * ValidationState
+     * @description 校验四态。未执行 ≠ 通过，这是产品哲学与合规底线。
+     * @enum {string}
+     */
+    ValidationState: 'PASS' | 'VIOLATION' | 'NA' | 'NOT_RUN'
   }
   responses: never
   parameters: never
@@ -3003,6 +3493,41 @@ export interface operations {
           'application/json': {
             [key: string]: unknown
           }
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  export_onto_endpoint_api_v1_ontologies__ontology_id__export_get: {
+    parameters: {
+      query?: {
+        format?: components['schemas']['OntologyExportFormat']
+        revision?: number | null
+      }
+      header?: never
+      path: {
+        ontology_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'text/turtle': string
+          'application/ld+json': string
         }
       }
       /** @description Validation Error */
@@ -4112,6 +4637,312 @@ export interface operations {
       }
     }
   }
+  list_templates_api_v1_governance_templates_get: {
+    parameters: {
+      query?: {
+        q?: string
+        builtin?: boolean | null
+        page?: number
+        page_size?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplatePage']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_template_api_v1_governance_templates_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TemplateCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplateOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_resources_api_v1_governance_templates_resources_get: {
+    parameters: {
+      query?: {
+        q?: string
+        page?: number
+        page_size?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplateResourcePage']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  from_ontology_api_v1_governance_templates_from_ontology_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TemplateFromOntology']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplateOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_template_api_v1_governance_templates__template_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplateOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  update_template_api_v1_governance_templates__template_id__put: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TemplateCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplateOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_template_api_v1_governance_templates__template_id__delete: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  copy_template_api_v1_governance_templates__template_id__copy_post: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TemplateMetadata']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TemplateOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  instantiate_api_v1_governance_templates__template_id__instantiate_post: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TemplateInstantiate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['OntologyOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   list_relations_api_v1_relations_get: {
     parameters: {
       query?: {
@@ -4308,6 +5139,39 @@ export interface operations {
       }
     }
   }
+  validate_graph_api_v1_validation_graph__graph_revision_id__post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        graph_revision_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            [key: string]: unknown
+          }
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   get_report_api_v1_validation_reports__report_id__get: {
     parameters: {
       query?: never
@@ -4328,6 +5192,39 @@ export interface operations {
           'application/json': {
             [key: string]: unknown
           }
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_report_results_api_v1_validation_reports__report_id__results_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        report_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': {
+            [key: string]: unknown
+          }[]
         }
       }
       /** @description Validation Error */
@@ -4878,6 +5775,206 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['EntityTraceOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_rules_endpoint_api_v1_governance_rules_get: {
+    parameters: {
+      query?: {
+        page?: number
+        page_size?: number
+        q?: string
+        source_kind?: ('STANDARD' | 'ENTERPRISE') | null
+        sort?: 'identifier' | '-identifier' | 'id' | '-id'
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RulePage']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_rule_endpoint_api_v1_governance_rules_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RuleCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RuleOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_rule_endpoint_api_v1_governance_rules__rule_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        rule_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RuleOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  update_rule_endpoint_api_v1_governance_rules__rule_id__put: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        rule_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RuleCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RuleOut']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_rule_endpoint_api_v1_governance_rules__rule_id__delete: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        rule_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  test_rule_endpoint_api_v1_governance_rules__rule_id__test_post: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        rule_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RuleTestOut']
         }
       }
       /** @description Validation Error */

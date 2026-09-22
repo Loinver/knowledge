@@ -49,7 +49,13 @@
       "INVALID_NAME": "Invalid machine name: {name}",
       "INVALID_NAMESPACE": "Invalid namespace: {namespace}",
       "ALREADY_PUBLISHED": "Resource already published",
-      "PROTECTED_NAMESPACE": "Protected namespace cannot be deleted: {prefix}"
+      "PROTECTED_NAMESPACE": "Protected namespace cannot be deleted: {prefix}",
+      "INVALID_IRI": "The IRI is invalid",
+      "INVALID_REQUEST": "The request parameters are invalid. Review them and retry.",
+      "REVISION_NOT_FOUND": "The requested resource revision does not exist",
+      "VALIDATION_VIOLATION": "Semantic validation failed. Review the validation details.",
+      "SOURCE_UNREACHABLE": "The data source is unavailable",
+      "REASONER_UNAVAILABLE": "The reasoning or validation engine is unavailable. Please retry later."
     }
   },
   "common": {
@@ -249,7 +255,15 @@
       "I03": "Attribute Value Types",
       "I04": "Fact Evidence Complete",
       "I05": "Quarantine Flagged",
-      "I06": "Derived Edge References"
+      "I06": "Derived Edge References",
+      "A01": "Resource closure",
+      "A02": "Type metadata",
+      "A03": "Property range",
+      "A04": "Relationship endpoints",
+      "A05": "Rule set",
+      "A06": "Core template",
+      "A07": "Namespace",
+      "A08": "OWL consistency"
     },
     "states": {
       "PASS": "Pass",
@@ -261,5 +275,111 @@
     "passCount": "{count} passed",
     "runAt": "Run at",
     "chooseGraph": "Select a graph revision to run validation"
+  },
+  "rules": {
+    "intro": "Manage standards-based and enterprise rules, save expressions, and check positive and negative examples.",
+    "create": "Create rule",
+    "edit": "Edit rule",
+    "identifier": "Rule identifier",
+    "identifierTaken": "This rule identifier is already in use. Choose another identifier.",
+    "category": "Category",
+    "source": "Rule source",
+    "reference": "Source reference",
+    "target": "Target class IRI",
+    "severity": "Severity",
+    "metadata": "Details and source",
+    "expressionTab": "Expression",
+    "expression": "Rule expression (Turtle)",
+    "language": "Expression language",
+    "execution": "Execution mode",
+    "examples": "Example checks",
+    "positive": "Positive example",
+    "negative": "Negative example",
+    "allSources": "All sources",
+    "empty": "No rules yet. Create a rule and record its source.",
+    "untranslated": "untranslated",
+    "saved": "Rule saved.",
+    "deleted": "Rule deleted.",
+    "editingRevision": "Editing rule revision {revision}. Saving checks for concurrent changes.",
+    "sourceHint": "For standards, record the standard and clause identifiers with your own description. For enterprise rules, identify the internal source.",
+    "shaclHint": "Automatic checks support SHACL Core. Use Turtle expressions and examples with the declared target class IRI.",
+    "notRunHint": "No executor is connected for this mode. The result is Not run, which does not mean Pass.",
+    "examplesHint": "The positive example must conform and the negative example must violate the rule. Both must contain instances of the target class. These checks validate the examples, not overall standards conformance.",
+    "runTest": "Check examples",
+    "saveBeforeTest": "Save all changes before checking the current revision.",
+    "staleTest": "The expression or examples have changed. The report below belongs to the previously saved revision.",
+    "testRevision": "Example results for revision {revision}",
+    "examplesFailed": "The actual example results differ from the expectations. Review the rule and examples.",
+    "confirmDelete": "Delete rule {identifier}?",
+    "conflict": "This rule has changed. Close and reopen the editor. Your changes have not overwritten the server copy.",
+    "notFound": "This rule does not exist or has been deleted. Refresh the list.",
+    "invalid": "The rule could not be processed. Check the expression and examples. Reason: {reason}",
+    "requestFailed": "Request failed. Please retry. Error code: {code}",
+    "sources": {
+      "STANDARD": "Standard clause",
+      "ENTERPRISE": "Enterprise rule"
+    },
+    "severities": {
+      "INFO": "Info",
+      "WARNING": "Warning",
+      "VIOLATION": "Violation"
+    },
+    "languages": {
+      "SHACL": "SHACL",
+      "OWL": "OWL"
+    },
+    "executions": {
+      "AUTO": "Automatic",
+      "MANUAL": "Manual"
+    }
+  },
+  "export": {
+    "title": "Ontology export",
+    "intro": "Download a published ontology as Turtle or JSON-LD with pinned resource versions and bilingual labels.",
+    "ontology": "Ontology",
+    "selectOntology": "Select an ontology with a published version",
+    "revision": "Published revision",
+    "latest": "Latest published revision",
+    "format": "File format",
+    "formats": {
+      "turtle": "Turtle (.ttl)",
+      "jsonld": "JSON-LD (.jsonld)"
+    },
+    "snapshotHint": "Exports use resource snapshots frozen at publication. Draft changes are excluded. Older snapshots without semantic structure are rejected with a reason.",
+    "download": "Download file",
+    "downloaded": "The file has been generated and the download has started.",
+    "failed": "Export failed. Check the selected revision for completeness. Reason: {reason}"
+  },
+  "templates": {
+    "title": "Assembly templates",
+    "intro": "Manage templates with clear provenance and explicitly pinned published resource revisions.",
+    "create": "Create template",
+    "edit": "Template details",
+    "copy": "Copy as custom",
+    "fromOntology": "Save from ontology",
+    "instantiate": "Create ontology",
+    "source": "Source",
+    "basis": "Basis and description",
+    "kind": "Template type",
+    "builtin": "Built-in",
+    "custom": "Custom",
+    "all": "All templates",
+    "references": "Referenced by",
+    "details": "View / edit",
+    "resources": "Pinned resources",
+    "resource": "Resource",
+    "pinnedRevision": "Pinned revision",
+    "addResource": "Add resource",
+    "resourceUnavailable": "Resource #{id} is currently unavailable",
+    "builtinHint": "Built-in templates are read-only. Copy the template before making changes.",
+    "pinHint": "Resource revisions are explicitly pinned. Template changes do not alter existing ontologies. Incompatible revisions require explicit resolution.",
+    "revisionHint": "Template revision {revision}, referenced by {count} ontologies.",
+    "saved": "Template saved.",
+    "deleted": "Template deleted.",
+    "inUse": "This template is still referenced by an ontology and cannot be deleted.",
+    "conflict": "The template has changed. Close and reopen it before editing.",
+    "failed": "Operation failed. Check the inputs and resource revisions. Reason: {reason}",
+    "confirmDelete": "Delete template {name}?",
+    "createdOntology": "Draft ontology {name} was created from template {template}."
   }
 }
