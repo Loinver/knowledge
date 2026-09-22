@@ -90,6 +90,7 @@ export function useNavigation() {
         label: t('menu.governance'),
         items: [
           { key: 'governance-rules', label: t('page.governanceRules') },
+          { key: 'governance-clauses', label: t('page.governanceClauses') },
           { key: 'ontology-export', label: t('export.title') },
           { key: 'assembly-templates', label: t('templates.title') },
         ],

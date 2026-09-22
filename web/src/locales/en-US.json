@@ -37,7 +37,8 @@
     "systemAuditLogs": "Audit logs",
     "forbiddenTitle": "Access denied",
     "forbiddenHint": "Your account has no permission for this page. Contact an administrator.",
-    "backToDashboard": "Back to dashboard"
+    "backToDashboard": "Back to dashboard",
+    "governanceClauses": "Standard clauses"
   },
   "validation": {
     "PASS": "Pass",
@@ -529,5 +530,31 @@
       "OK": "Succeeded",
       "FAILED": "Failed"
     }
+  },
+  "clauses": {
+    "title": "Clause title",
+    "intro": "Maintain standard clause numbers with self-authored notes only; the source text of the standard is never stored.",
+    "create": "New clause",
+    "edit": "Edit clause",
+    "standard": "Standard",
+    "standardPlaceholder": "GB/T 9386-2024",
+    "clauseNumber": "Clause",
+    "clauseNumberPlaceholder": "7.2",
+    "description": "Self-authored note",
+    "nature": "Appendix nature",
+    "normative": "Normative",
+    "informative": "Informative",
+    "productFallback": "Product fallback",
+    "dateLexicon": "Date lexicon",
+    "disambiguation": "Clause disambiguation",
+    "exampleDomain": "Example domain",
+    "searchPlaceholder": "Search by standard, clause or product fallback",
+    "empty": "No standard clauses yet",
+    "saved": "Clause saved.",
+    "deleted": "Clause deleted.",
+    "duplicate": "This clause already exists for the standard.",
+    "conflict": "The clause was updated elsewhere. Reopen to edit.",
+    "deleteConfirm": "Delete this standard clause?",
+    "failed": "Operation failed. Reason: {reason}"
   }
 }

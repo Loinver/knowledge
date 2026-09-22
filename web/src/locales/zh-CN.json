@@ -37,7 +37,8 @@
     "systemAuditLogs": "操作日志",
     "forbiddenTitle": "无权访问",
     "forbiddenHint": "当前账号没有访问该页面的权限，请联系管理员。",
-    "backToDashboard": "返回工作台"
+    "backToDashboard": "返回工作台",
+    "governanceClauses": "标准条款"
   },
   "validation": {
     "PASS": "通过",
@@ -529,5 +530,31 @@
       "OK": "成功",
       "FAILED": "失败"
     }
+  },
+  "clauses": {
+    "title": "条款标题",
+    "intro": "维护标准条款编号与自撰说明，不引用标准正文；记录附录性质、日期词法、条款消歧与示例域名四项解释差异。",
+    "create": "新建条款",
+    "edit": "编辑条款",
+    "standard": "标准号",
+    "standardPlaceholder": "GB/T 9386-2024",
+    "clauseNumber": "条款号",
+    "clauseNumberPlaceholder": "7.2",
+    "description": "自撰说明",
+    "nature": "附录性质",
+    "normative": "规范性",
+    "informative": "资料性",
+    "productFallback": "产品落点",
+    "dateLexicon": "日期词法",
+    "disambiguation": "条款消歧",
+    "exampleDomain": "示例域名",
+    "searchPlaceholder": "按标准号、条款号或产品落点搜索",
+    "empty": "暂无标准条款",
+    "saved": "条款已保存。",
+    "deleted": "条款已删除。",
+    "duplicate": "该标准下此条款号已存在。",
+    "conflict": "条款已被更新，请关闭后重新打开。",
+    "deleteConfirm": "确认删除该标准条款？",
+    "failed": "操作失败，请检查输入。原因：{reason}"
   }
 }

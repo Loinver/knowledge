@@ -117,6 +117,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/GovernanceRules.vue'),
       },
       {
+        path: 'governance/clauses',
+        name: 'governance-clauses',
+        component: () => import('@/views/StandardClauses.vue'),
+      },
+      {
         path: 'governance/templates',
         name: 'assembly-templates',
         component: () => import('@/views/AssemblyTemplates.vue'),

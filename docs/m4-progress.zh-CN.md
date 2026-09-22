@@ -50,6 +50,6 @@ make test
 
 组件测试编译实际 Vue 模板并做中英双语服务端渲染，使用隔离的 API 替身，不覆盖浏览器编辑、下载或布局。浏览器及本地监听尝试因自动审批服务返回 `content-blocked` 未能执行，仍需补上浏览器验收。
 
-全仓 `make lint` 曾有 11 个既有 Prettier 格式问题，已通过读取 `HEAD` 原文件单独复现；涉及 GitHub 模板和既有图谱、工作台组件。本批新增与修改文件使用定向格式检查，未将这些无关格式整理混入 M4 功能。这 11 个文件已在随后的账号模块批次中统一整理（改动均为空白与折行，无逻辑变更），`npm run format:check` 现为全绿；游离的 `pnpm-lock.yaml`（仓库统一使用 npm）已按 `package-lock.json` 的既有约定加入 `.prettierignore`。
+全仓 `make lint` 曾有 11 个既有 Prettier 格式问题，已通过读取 `HEAD` 原文件单独复现；涉及 GitHub 模板和既有图谱、工作台组件。本批新增与修改文件使用定向格式检查，未将这些无关格式整理混入 M4 功能。这 11 个文件已在随后的账号模块批次中统一整理（改动均为空白与折行，无逻辑变更），`pnpm run format:check` 现为全绿；锁文件不进 Prettier，`pnpm-lock.yaml` 已按原先 `package-lock.json` 的同一约定加入 `.prettierignore`（仓库随后迁移到 pnpm，见 `ff74e5b`）。
 
 后端测试在本机需要把临时根目录放进工作区，例如 `pytest --basetemp=.pytest_cache/tmp_full`：默认的 `pytest-of-unknown` 目录会触发沙箱 `PermissionError`，与用例本身无关。若用例会产生大量临时文件，回收阶段还需临时关闭沙箱的批量删除保护（`env -u CODEBUDDY_SAFE_DELETE_BULK_STATE_DIR -u CODEBUDDY_TOOL_CALL_ID`），否则回收会以 `SystemExit(1)` 中断整轮用例——这是本机沙箱行为，不是代码缺陷。

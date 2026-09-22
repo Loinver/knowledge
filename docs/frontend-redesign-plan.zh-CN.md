@@ -307,12 +307,11 @@ App.vue 现有内联布局代码全部拆入 AdminLayout，App.vue 只保留 NCo
 
 验证结果（2026-09-22）：
 
-- `make lint-server` 全绿：Ruff check 通过、Ruff format 110 files 已格式化、Mypy 83 source files 无问题。
-  - `pnpm run lint:web`（ESLint）与 `pnpm -C web typecheck`（vue-tsc）均无输出即通过。
-  - `pnpm run format:check` 全绿；`node scripts/check-i18n-keys.mjs` 报 455 / 455。
-- `pytest tests/test_account.py` 29 passed；后端全量用例中除 30 项既有 `test_m4_rules.py`（`HEAD` 基线同样失败，本机 SHACL 相关）外全部通过。
+- `make lint` 全绿（仓库规范入口）：`pnpm run lint:web`（ESLint）与 `pnpm -C web typecheck`（vue-tsc）均无输出即通过；`pnpm run format:check` 报 `All matched files use Prettier code style!`；`make lint-server` 报 Ruff `All checks passed`、`111 files already formatted`、Mypy `no issues found in 83 source files`。
+- `node scripts/check-i18n-keys.mjs` 报 455 / 455。
+- `pytest tests/test_account.py` 29 passed；后端全量用例收集 345 项，除 30 项既有 `test_m4_rules.py`（`HEAD` 基线同样失败，本机 SHACL 相关）外全部通过。
 - 进程内核对 OpenAPI：账号相关路径 14 条；`UserOut`、`TokenPair`、`AuthConfigOut`、`RoleOut`、`AuditLogOut`、`UserPage`、`AuditLogPage`、`ForgotPasswordResult`、`UserCreate`、`UserPatch`、`ProfileUpdate`、`PasswordChange` 全部存在。
 
-顺带整理的存量问题：全仓 `make lint` 曾有 11 个既有 Prettier 不合规文件（8 个前端图谱 / 工作台组件与测试、3 个 `.github` 模板），本批统一整理，改动均为空白与折行，无逻辑变更。游离的 `pnpm-lock.yaml`（仓库统一使用 npm，`package-lock.json` 为锁文件）已按同一约定加入 `.prettierignore`。另把 `prettier --write` 串进 `web/package.json` 的 `gen:api`——`openapi-typescript` 默认输出 4 空格缩进，与仓库 `tabWidth: 2` 不符，不串这一步每次重新生成都会再次引入格式漂移。
+顺带整理的存量问题：全仓 `make lint` 曾有 11 个既有 Prettier 不合规文件（8 个前端图谱 / 工作台组件与测试、3 个 `.github` 模板），本批统一整理，改动均为空白与折行，无逻辑变更。锁文件不进 Prettier：`pnpm-lock.yaml` 已按原先 `package-lock.json` 的同一约定加入 `.prettierignore`（仓库随后迁移到 pnpm，见 `ff74e5b`）。另把 `prettier --write` 串进 `web/package.json` 的 `gen:api`——`openapi-typescript` 默认输出 4 空格缩进，与仓库 `tabWidth: 2` 不符，不串这一步每次重新生成都会再次引入格式漂移。
 
 尚未完成：浏览器端到端实测（登录、刷新保持登录态、401 自动续期、退出清 token、个人中心读写、系统管理三页、非管理员 403）未执行。前置条件是先跑 `make seed-admin` 建出首个管理员——公开注册默认关闭，库里为空时无法登录。
