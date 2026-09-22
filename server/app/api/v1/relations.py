@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.db import get_session
+from app.api.v1.governance_common import governance_session as get_session
 from app.domain.relation_service import (
     create_relation_type,
     get_assoc_attributes,
@@ -76,6 +76,7 @@ def _to_out(session: Session, resource: ModelResource) -> RelationTypeOut:
         definition_i18n=resource.definition_i18n,
         status=resource.status,
         current_revision=resource.current_revision,
+        edit_revision=resource.edit_revision,
         domain_spec=domain_spec,
         range_spec=range_spec,
         inverse_of=meta["inverse_of"],

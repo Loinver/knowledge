@@ -29,6 +29,7 @@ from app.models.domain import (
     OntologyResourceRef,
     OntologyRevision,
 )
+from app.models.enum_dictionary import EnumDictionary, EnumDictionaryRevision
 from app.models.enums import (
     AuditAction,
     AuditResult,
@@ -74,6 +75,8 @@ __all__ = [
     "DomainMember",
     "DomainRevision",
     "EntityIdentity",
+    "EnumDictionary",
+    "EnumDictionaryRevision",
     "ExtractionRun",
     "FactEvidence",
     "GraphRevision",

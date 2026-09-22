@@ -10,8 +10,10 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -73,6 +75,7 @@ class ModelResource(Base):
         default=ResourceStatus.DRAFT, nullable=False
     )
     current_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    edit_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -166,6 +169,21 @@ class DatatypePropDetail(Base):
     """
 
     __tablename__ = "datatype_prop_detail"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["enum_dict_id", "enum_dict_revision"],
+            [
+                "enum_dictionary_revision.dictionary_id",
+                "enum_dictionary_revision.revision",
+            ],
+            name="fk_prop_enum_revision",
+        ),
+        CheckConstraint(
+            "(enum_dict_id IS NULL AND enum_dict_revision IS NULL) OR "
+            "(enum_dict_id IS NOT NULL AND enum_dict_revision IS NOT NULL)",
+            name="ck_prop_enum_pin",
+        ),
+    )
 
     resource_id: Mapped[int] = mapped_column(
         ForeignKey("model_resource.id"), primary_key=True
@@ -173,7 +191,10 @@ class DatatypePropDetail(Base):
     # 属性机读名（不含所属类型前缀），让读回不依赖 name 拼接规则
     prop_name: Mapped[str] = mapped_column(String(128), nullable=False)
     datatype: Mapped[str] = mapped_column(String(64), nullable=False)
-    enum_dict_id: Mapped[int | None] = mapped_column(Integer, default=None)
+    enum_dict_id: Mapped[int | None] = mapped_column(
+        ForeignKey("enum_dictionary.id"), default=None
+    )
+    enum_dict_revision: Mapped[int | None] = mapped_column(Integer, default=None)
     nullable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     default_value: Mapped[str | None] = mapped_column(String(256), default=None)
 

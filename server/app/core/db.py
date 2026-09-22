@@ -35,9 +35,18 @@ def get_engine() -> Engine:
     return _engine
 
 
-def get_session() -> Session:
-    """FastAPI 依赖：每个请求一个 session。"""
-    return _SessionFactory()
+def get_session() -> Iterator[Session]:
+    """FastAPI 依赖：每个请求一个 session，请求结束归还连接。
+
+    必须是生成器依赖——FastAPI 只在生成器依赖上执行 `finally`。
+    若直接 `return _SessionFactory()`，连接就只借不还：连接池（默认 5+10）
+    耗尽后，所有需要数据库的请求都会卡到 30 秒超时。
+    """
+    session = _SessionFactory()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 @contextmanager

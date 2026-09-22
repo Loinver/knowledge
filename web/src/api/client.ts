@@ -1,6 +1,7 @@
 import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import axios from 'axios'
 
+import type { components } from '@/api/schema'
 import type { TokenPair } from '@/api/tokens'
 import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from '@/api/tokens'
 
@@ -63,29 +64,10 @@ export type ResourceKind =
   'ENTITY' | 'DATATYPE_PROP' | 'OBJECT_PROP' | 'ASSOC' | 'NAMESPACE' | 'DOMAIN' | 'ONTOLOGY'
 export type ResourceStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
 
-export interface DataTypeProp {
-  name: string
-  label_i18n: Record<string, string> | null
-  definition_i18n: Record<string, string> | null
-  datatype: string
-  enum_dict_id: number | null
-  nullable: boolean
-  default_value: string | null
-}
+export type DataTypeProp = components['schemas']['DataTypePropOut']
+export type DataTypePropInput = components['schemas']['DataTypePropCreate']
 
-export interface EntityType {
-  id: number
-  kind: ResourceKind
-  name: string
-  iri: string
-  namespace_id: number
-  label_i18n: Record<string, string> | null
-  definition_i18n: Record<string, string> | null
-  status: ResourceStatus
-  current_revision: number
-  data_props: DataTypeProp[]
-  parent_ids: number[]
-}
+export type EntityType = components['schemas']['EntityTypeOut']
 
 export interface EntityTypeBrief {
   id: number
@@ -96,22 +78,8 @@ export interface EntityTypeBrief {
   current_revision: number
 }
 
-export interface EntityTypeCreate {
-  name: string
-  namespace_id: number
-  label_i18n: Record<string, string>
-  definition_i18n?: Record<string, string>
-  parent_ids?: number[]
-  data_props?: DataTypeProp[]
-}
-
-export interface EntityTypeUpdate {
-  label_i18n?: Record<string, string>
-  definition_i18n?: Record<string, string>
-  parent_ids?: number[]
-  data_props?: DataTypeProp[]
-  if_match: number
-}
+export type EntityTypeCreate = components['schemas']['EntityTypeCreate']
+export type EntityTypeUpdate = components['schemas']['EntityTypeUpdate']
 
 export interface RelationTypeBrief {
   id: number
@@ -189,6 +157,20 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
 }
 
+/**
+ * 这些接口的 401 表示「凭据无效」，不能拿 refresh token 去续期：
+ * 登录失败要如实报错，换令牌的接口自身续期会递归。
+ *
+ * 其余接口（含 `/auth/me`）的 401 都可以先尝试续期——刷新页面时
+ * access token 可能刚过期，靠这一次续期把登录态接回来。
+ */
+const NO_RENEW_PATHS = ['/auth/refresh', '/auth/login', '/auth/register']
+
+function isRenewable(config?: RetriableConfig): boolean {
+  const url = config?.url ?? ''
+  return !NO_RENEW_PATHS.some((path) => url.startsWith(path))
+}
+
 http.interceptors.request.use((config) => {
   const token = getAccessToken()
   if (token) config.headers.set('Authorization', `Bearer ${token}`)
@@ -212,10 +194,17 @@ function handleUnauthorized(): void {
   unauthorizedHandler?.()
 }
 
-/** 401 时用 refresh token 换新 access token；并发请求共用同一次刷新。 */
+/**
+ * 401 时用 refresh token 换新 access token；并发请求共用同一次刷新。
+ *
+ * 必须走 `http` 而不是原生 axios：后端所有响应都包在 `{code, message, data}`
+ * 外壳里，只有经过下面的响应拦截器解包，`response.data` 才是 `TokenPair`。
+ * 走原生 axios 会把整个外壳当成 `TokenPair` 存进 localStorage，
+ * 结果是 `Bearer undefined` —— 续期变成掉登录态。
+ */
 async function refreshTokens(): Promise<TokenPair> {
-  refreshing ??= axios
-    .post<TokenPair>('/api/v1/auth/refresh', { refresh_token: getRefreshToken() })
+  refreshing ??= http
+    .post<TokenPair>('/auth/refresh', { refresh_token: getRefreshToken() })
     .then((response) => {
       const tokens = response.data
       storeTokens(tokens)
@@ -239,9 +228,9 @@ http.interceptors.response.use(
   async (err: AxiosError) => {
     const config = err.config as RetriableConfig | undefined
     const status = err.response?.status
-    const isAuthCall = config?.url?.startsWith('/auth/') ?? false
+    const renewable = isRenewable(config)
 
-    if (status === 401 && config && !config._retried && !isAuthCall && getRefreshToken()) {
+    if (status === 401 && config && !config._retried && renewable && getRefreshToken()) {
       config._retried = true
       try {
         const tokens = await refreshTokens()
@@ -250,7 +239,7 @@ http.interceptors.response.use(
       } catch {
         handleUnauthorized()
       }
-    } else if (status === 401 && !isAuthCall) {
+    } else if (status === 401 && renewable) {
       handleUnauthorized()
     }
 

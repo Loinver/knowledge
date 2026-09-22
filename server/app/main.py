@@ -18,6 +18,12 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.clauses import router as clauses_router
 from app.api.v1.datasources import router as datasources_router
 from app.api.v1.domains import router as domains_router
+from app.api.v1.enum_dictionaries import (
+    legacy_router as enum_legacy_router,
+)
+from app.api.v1.enum_dictionaries import (
+    router as enum_dictionaries_router,
+)
 from app.api.v1.extraction import router as extraction_router
 from app.api.v1.governance import router as governance_router
 from app.api.v1.mapping_preview import router as mapping_preview_router
@@ -56,6 +62,8 @@ app.include_router(namespaces_router, prefix=API_PREFIX)
 app.include_router(ontologies_router, prefix=API_PREFIX)
 app.include_router(datasources_router, prefix=API_PREFIX)
 app.include_router(domains_router, prefix=API_PREFIX)
+app.include_router(enum_dictionaries_router, prefix=API_PREFIX)
+app.include_router(enum_legacy_router, prefix=API_PREFIX)
 app.include_router(mappings_router, prefix=API_PREFIX)
 app.include_router(mapping_preview_router, prefix=API_PREFIX)
 app.include_router(metadata_router, prefix=API_PREFIX)

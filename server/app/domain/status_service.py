@@ -6,11 +6,12 @@ import hashlib
 import json
 from copy import deepcopy
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.enum_dictionary_service import get_snapshot
 from app.models.enums import ResourceStatus
 from app.models.resource import (
     DatatypePropDetail,
@@ -46,12 +47,51 @@ def check_revision(resource: ModelResource, if_match: int | None) -> None:
         )
 
 
+def lock_resource_edit(
+    session: Session, resource: ModelResource, if_match: int, edit_revision: int | None
+) -> ModelResource:
+    """草稿修订号与发布版本分离；旧调用方仅能编辑尚未被修改的草稿。"""
+    expected_edit = 0 if edit_revision is None else edit_revision
+    locked = session.scalar(
+        update(ModelResource)
+        .where(
+            ModelResource.id == resource.id,
+            ModelResource.status == ResourceStatus.DRAFT,
+            ModelResource.current_revision == if_match,
+            ModelResource.edit_revision == expected_edit,
+        )
+        .values(edit_revision=ModelResource.edit_revision + 1)
+        .returning(ModelResource)
+        .execution_options(populate_existing=True)
+    )
+    if locked is None:
+        session.refresh(resource)
+        if resource.status != ResourceStatus.DRAFT:
+            raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource": resource.name})
+        raise KGError(
+            ErrorCode.REVISION_CONFLICT,
+            {
+                "expected": expected_edit,
+                "actual": resource.edit_revision,
+                "resource": resource.name,
+            },
+        )
+    return locked
+
+
 def publish_resource(session: Session, resource: ModelResource) -> ResourceRevision:
     """发布资源：冻结当前内容为不可变版本。
 
     resource_revision 只增不改；current_revision 前移。
     已发布状态的资源不能再次发布（需先改草稿再发新版本）。
     """
+    resource = session.scalars(
+        update(ModelResource)
+        .where(ModelResource.id == resource.id)
+        .values(edit_revision=ModelResource.edit_revision)
+        .returning(ModelResource)
+        .execution_options(populate_existing=True)
+    ).one()
     if resource.status == ResourceStatus.PUBLISHED:
         raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource": resource.name})
     new_rev = resource.current_revision + 1
@@ -85,10 +125,19 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
     # 「不静默影响下游」就只剩端点引用一层（M-07 补齐）。
     # 属性明细挂在属性子资源上，按引用聚合；关系明细挂在关系资源自身上。
     prop_details: list[dict[str, object]] = []
+    property_owners = [
+        resource.id,
+        *session.scalars(
+            select(ResourceRef.target_id).where(
+                ResourceRef.source_id == resource.id,
+                ResourceRef.role == "assoc_resource",
+            )
+        ),
+    ]
     for ref in session.scalars(
         select(ResourceRef)
         .where(
-            ResourceRef.source_id == resource.id,
+            ResourceRef.source_id.in_(property_owners),
             ResourceRef.role.in_(["data_prop", "assoc_attribute"]),
         )
         .order_by(ResourceRef.id)
@@ -105,6 +154,13 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
                 "label_i18n": deepcopy(prop.label_i18n) if prop is not None else None,
                 "datatype": detail.datatype,
                 "enum_dict_id": detail.enum_dict_id,
+                "enum_dict_revision": detail.enum_dict_revision,
+                "enum_dictionary": get_snapshot(
+                    session, detail.enum_dict_id, detail.enum_dict_revision
+                )
+                if detail.enum_dict_id is not None
+                and detail.enum_dict_revision is not None
+                else None,
                 "nullable": detail.nullable,
                 "default_value": detail.default_value,
             }
@@ -137,6 +193,7 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
     )
     session.add(rev)
     resource.current_revision = new_rev
+    resource.edit_revision += 1
     resource.status = ResourceStatus.PUBLISHED
     session.flush()
     return rev

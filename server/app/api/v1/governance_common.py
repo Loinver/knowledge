@@ -37,6 +37,11 @@ class GovernanceRoute(APIRoute):
 
 
 def governance_session(session: Session = Depends(get_session)) -> Iterator[Session]:
+    """治理路由的会话边界。
+
+    这里再包一层 `close()` 已是冗余——`get_session` 自身就是生成器依赖，
+    请求结束会归还连接。保留它只为不动既有路由的签名。
+    """
     try:
         yield session
     finally:

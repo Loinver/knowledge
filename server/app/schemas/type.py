@@ -14,7 +14,8 @@ class DataTypePropCreate(BaseModel):
     label_i18n: dict[str, str] | None = None
     definition_i18n: dict[str, str] | None = None
     datatype: str  # string/integer/decimal/boolean/date/enum
-    enum_dict_id: int | None = None  # 引用枚举字典（M4 补）
+    enum_dict_id: int | None = Field(default=None, gt=0)
+    enum_dict_revision: int | None = Field(default=None, gt=0)
     nullable: bool = True
     default_value: str | None = None
 
@@ -26,6 +27,7 @@ class DataTypePropOut(BaseModel):
     definition_i18n: dict[str, str] | None = None
     datatype: str
     enum_dict_id: int | None = None
+    enum_dict_revision: int | None = None
     nullable: bool = True
     default_value: str | None = None
 
@@ -49,6 +51,7 @@ class EntityTypeUpdate(BaseModel):
     parent_ids: list[int] | None = None
     data_props: list[DataTypePropCreate] | None = None
     if_match: int
+    edit_revision: int | None = Field(default=None, ge=0)
 
 
 class EntityTypeOut(BaseModel):
@@ -62,6 +65,7 @@ class EntityTypeOut(BaseModel):
     definition_i18n: dict[str, str] | None = None
     status: ResourceStatus
     current_revision: int
+    edit_revision: int
     data_props: list[DataTypePropOut] = Field(default_factory=list)
     parent_ids: list[int] = Field(default_factory=list)
 

@@ -19,10 +19,12 @@ from app.api.v1.relations import router as relations_router
 from app.api.v1.types import router as types_router
 from app.core.db import Base, get_session
 from app.core.errors import install_error_handler
+from app.domain.enum_dictionary_service import create_dictionary
 from app.domain.relation_service import create_relation_type, get_relation_meta
 from app.domain.status_service import publish_resource
 from app.domain.type_service import create_entity_type, get_data_props, get_prop_detail
 from app.models.resource import DatatypePropDetail, ObjectPropDetail, ResourceRevision
+from app.schemas.enum_dictionary import EnumDictionaryInput
 from app.schemas.relation import (
     CardinalitySpec,
     EndpointSpec,
@@ -44,7 +46,19 @@ def sessions(tmp_path: Path) -> Iterator[sessionmaker[Session]]:
         f"sqlite:///{tmp_path}/props.db", connect_args={"check_same_thread": False}
     )
     Base.metadata.create_all(engine)
-    yield sessionmaker(engine, expire_on_commit=False)
+    factory = sessionmaker(engine, expire_on_commit=False)
+    with factory() as session:
+        create_dictionary(
+            session,
+            EnumDictionaryInput(
+                name="EmployeeLevel",
+                label_i18n={"zh-CN": "职级"},
+                definition_i18n={"zh-CN": "员工职级"},
+                entries=[{"value": "P3", "label_i18n": {"zh-CN": "三级"}}],
+            ),
+        )
+        session.commit()
+    yield factory
     engine.dispose()
 
 
@@ -100,7 +114,8 @@ def test_data_prop_constraints_survive_create_and_read(
             {
                 "name": "level",
                 "datatype": "enum",
-                "enum_dict_id": 7,
+                "enum_dict_id": 1,
+                "enum_dict_revision": 1,
                 "nullable": True,
                 "default_value": "P3",
                 "label_i18n": {"zh-CN": "职级"},
@@ -114,6 +129,7 @@ def test_data_prop_constraints_survive_create_and_read(
             "definition_i18n": None,
             "datatype": "string",
             "enum_dict_id": None,
+            "enum_dict_revision": None,
             "nullable": False,
             "default_value": None,
         },
@@ -122,11 +138,29 @@ def test_data_prop_constraints_survive_create_and_read(
             "label_i18n": {"zh-CN": "职级"},
             "definition_i18n": None,
             "datatype": "enum",
-            "enum_dict_id": 7,
+            "enum_dict_id": 1,
+            "enum_dict_revision": 1,
             "nullable": True,
             "default_value": "P3",
         },
     ]
+
+
+def test_new_enum_property_requires_explicit_dictionary_revision(
+    client: TestClient, namespace_id: int
+) -> None:
+    response = client.post(
+        "/api/v1/entity-types",
+        json={
+            "name": "ImplicitPin",
+            "namespace_id": namespace_id,
+            "label_i18n": {"zh-CN": "隐式版本"},
+            "data_props": [{"name": "status", "datatype": "enum", "enum_dict_id": 1}],
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "KG.INVALID_REQUEST"
+    assert response.json()["params"]["reason"] == "enum_dictionary_revision_required"
 
 
 def test_data_prop_constraints_survive_update(
@@ -154,6 +188,7 @@ def test_data_prop_constraints_survive_update(
         "definition_i18n": None,
         "datatype": "integer",
         "enum_dict_id": None,
+        "enum_dict_revision": None,
         "nullable": False,
         "default_value": "1",
     }
@@ -174,7 +209,11 @@ def test_data_prop_detail_is_persisted_as_real_columns(
                 label_i18n={"zh-CN": "员工"},
                 data_props=[
                     DataTypePropCreate(
-                        name="level", datatype="enum", enum_dict_id=7, nullable=False
+                        name="level",
+                        datatype="enum",
+                        enum_dict_id=1,
+                        enum_dict_revision=1,
+                        nullable=False,
                     )
                 ],
             ),
@@ -186,7 +225,7 @@ def test_data_prop_detail_is_persisted_as_real_columns(
         assert (detail.prop_name, detail.datatype, detail.enum_dict_id) == (
             "level",
             "enum",
-            7,
+            1,
         )
         assert detail.nullable is False
 
@@ -350,6 +389,7 @@ def test_assoc_attribute_datatype_and_nullable_survive(
             "datatype": "string",
             "nullable": False,
             "enum_dict_id": None,
+            "enum_dict_revision": None,
             "default_value": None,
         },
         {
@@ -357,6 +397,7 @@ def test_assoc_attribute_datatype_and_nullable_survive(
             "datatype": "date",
             "nullable": True,
             "enum_dict_id": None,
+            "enum_dict_revision": None,
             "default_value": None,
         },
     ]
@@ -384,7 +425,8 @@ def test_publish_freezes_prop_constraints_into_revision(
                     DataTypePropCreate(
                         name="level",
                         datatype="enum",
-                        enum_dict_id=7,
+                        enum_dict_id=1,
+                        enum_dict_revision=1,
                         nullable=False,
                         default_value="P3",
                     )
@@ -434,7 +476,16 @@ def test_publish_freezes_prop_constraints_into_revision(
                 "iri": "https://example.org/kg#Employee/level",
                 "label_i18n": None,
                 "datatype": "enum",
-                "enum_dict_id": 7,
+                "enum_dict_id": 1,
+                "enum_dict_revision": 1,
+                "enum_dictionary": {
+                    "id": 1,
+                    "revision": 1,
+                    "name": "EmployeeLevel",
+                    "label_i18n": {"zh-CN": "职级"},
+                    "definition_i18n": {"zh-CN": "员工职级"},
+                    "entries": [{"value": "P3", "label_i18n": {"zh-CN": "三级"}}],
+                },
                 "nullable": False,
                 "default_value": "P3",
             }

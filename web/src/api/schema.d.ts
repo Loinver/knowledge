@@ -391,6 +391,148 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/governance/enum-dictionaries': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Dictionaries */
+    get: operations['list_dictionaries_api_v1_governance_enum_dictionaries_get']
+    put?: never
+    /** Create Dictionary */
+    post: operations['create_dictionary_api_v1_governance_enum_dictionaries_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enum-dictionaries/{dictionary_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Dictionary */
+    get: operations['get_dictionary_api_v1_governance_enum_dictionaries__dictionary_id__get']
+    /** Update Dictionary */
+    put: operations['update_dictionary_api_v1_governance_enum_dictionaries__dictionary_id__put']
+    post?: never
+    /** Delete Dictionary */
+    delete: operations['delete_dictionary_api_v1_governance_enum_dictionaries__dictionary_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enum-dictionaries/{dictionary_id}/revisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Revisions */
+    get: operations['list_revisions_api_v1_governance_enum_dictionaries__dictionary_id__revisions_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enum-dictionaries/{dictionary_id}/references': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List References */
+    get: operations['list_references_api_v1_governance_enum_dictionaries__dictionary_id__references_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enums': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Dictionaries */
+    get: operations['list_dictionaries_api_v1_governance_enums_get']
+    put?: never
+    /** Create Dictionary */
+    post: operations['create_dictionary_api_v1_governance_enums_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enums/{dictionary_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Dictionary */
+    get: operations['get_dictionary_api_v1_governance_enums__dictionary_id__get']
+    /** Update Dictionary */
+    put: operations['update_dictionary_api_v1_governance_enums__dictionary_id__put']
+    post?: never
+    /** Delete Dictionary */
+    delete: operations['delete_dictionary_api_v1_governance_enums__dictionary_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enums/{dictionary_id}/revisions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Revisions */
+    get: operations['list_revisions_api_v1_governance_enums__dictionary_id__revisions_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/governance/enums/{dictionary_id}/references': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List References */
+    get: operations['list_references_api_v1_governance_enums__dictionary_id__references_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/mappings': {
     parameters: {
       query?: never
@@ -1747,6 +1889,40 @@ export interface components {
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['EntityTypeOut'] | null
     }
+    /** ApiResponse[EnumDictionaryOut] */
+    ApiResponse_EnumDictionaryOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EnumDictionaryOut'] | null
+    }
+    /** ApiResponse[EnumDictionaryPage] */
+    ApiResponse_EnumDictionaryPage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EnumDictionaryPage'] | null
+    }
     /** ApiResponse[ExtractionRunOut] */
     ApiResponse_ExtractionRunOut_: {
       /**
@@ -2516,6 +2692,46 @@ export interface components {
        */
       data?: components['schemas']['EntityTypeBrief'][] | null
     }
+    /** ApiResponse[list[EnumDictionaryOut]] */
+    ApiResponse_list_EnumDictionaryOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['EnumDictionaryOut'][] | null
+    }
+    /** ApiResponse[list[EnumReferenceOut]] */
+    ApiResponse_list_EnumReferenceOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['EnumReferenceOut'][] | null
+    }
     /** ApiResponse[list[ExtractionRunOut]] */
     ApiResponse_list_ExtractionRunOut__: {
       /**
@@ -2792,6 +3008,8 @@ export interface components {
       nullable: boolean
       /** Enum Dict Id */
       enum_dict_id?: number | null
+      /** Enum Dict Revision */
+      enum_dict_revision?: number | null
       /** Default Value */
       default_value?: string | null
     }
@@ -2976,6 +3194,8 @@ export interface components {
       datatype: string
       /** Enum Dict Id */
       enum_dict_id?: number | null
+      /** Enum Dict Revision */
+      enum_dict_revision?: number | null
       /**
        * Nullable
        * @default true
@@ -3000,6 +3220,8 @@ export interface components {
       datatype: string
       /** Enum Dict Id */
       enum_dict_id?: number | null
+      /** Enum Dict Revision */
+      enum_dict_revision?: number | null
       /**
        * Nullable
        * @default true
@@ -3313,6 +3535,8 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
       /** Data Props */
       data_props?: components['schemas']['DataTypePropOut'][]
       /** Parent Ids */
@@ -3337,6 +3561,79 @@ export interface components {
       data_props?: components['schemas']['DataTypePropCreate'][] | null
       /** If Match */
       if_match: number
+      /** Edit Revision */
+      edit_revision?: number | null
+    }
+    /** EnumDictionaryInput */
+    EnumDictionaryInput: {
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Definition I18N */
+      definition_i18n: {
+        [key: string]: string
+      }
+      /** Entries */
+      entries: components['schemas']['EnumEntry'][]
+    }
+    /** EnumDictionaryOut */
+    EnumDictionaryOut: {
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+      /** Definition I18N */
+      definition_i18n: {
+        [key: string]: string
+      }
+      /** Entries */
+      entries: components['schemas']['EnumEntry'][]
+      /** Id */
+      id: number
+      /** Revision */
+      revision: number
+    }
+    /** EnumDictionaryPage */
+    EnumDictionaryPage: {
+      /** Items */
+      items: components['schemas']['EnumDictionaryOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /** EnumEntry */
+    EnumEntry: {
+      /** Value */
+      value: string
+      /** Label I18N */
+      label_i18n: {
+        [key: string]: string
+      }
+    }
+    /** EnumReferenceOut */
+    EnumReferenceOut: {
+      /** Resource Id */
+      resource_id: number
+      /** Resource Name */
+      resource_name: string
+      resource_kind: components['schemas']['ResourceKind']
+      resource_status: components['schemas']['ResourceStatus']
+      /** Property Id */
+      property_id: number
+      /** Property Name */
+      property_name: string
+      /** Enum Dict Revision */
+      enum_dict_revision: number
+      /** Latest Revision */
+      latest_revision: number
     }
     /** EvidenceTraceItem */
     EvidenceTraceItem: {
@@ -4222,6 +4519,8 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
       domain_spec: components['schemas']['EndpointSpec']
       range_spec: components['schemas']['EndpointSpec']
       /** Inverse Of */
@@ -4270,6 +4569,8 @@ export interface components {
         | null
       /** If Match */
       if_match: number
+      /** Edit Revision */
+      edit_revision?: number | null
     }
     /**
      * ResourceKind
@@ -5880,6 +6181,466 @@ export interface operations {
           'application/json': {
             [key: string]: unknown
           }
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_dictionaries_api_v1_governance_enum_dictionaries_get: {
+    parameters: {
+      query?: {
+        q?: string
+        page?: number
+        page_size?: number
+        sort?: 'name' | '-name' | 'id' | '-id'
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryPage_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_dictionary_api_v1_governance_enum_dictionaries_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnumDictionaryInput']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_dictionary_api_v1_governance_enum_dictionaries__dictionary_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  update_dictionary_api_v1_governance_enum_dictionaries__dictionary_id__put: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnumDictionaryInput']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_dictionary_api_v1_governance_enum_dictionaries__dictionary_id__delete: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_revisions_api_v1_governance_enum_dictionaries__dictionary_id__revisions_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_EnumDictionaryOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_references_api_v1_governance_enum_dictionaries__dictionary_id__references_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_EnumReferenceOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_dictionaries_api_v1_governance_enums_get: {
+    parameters: {
+      query?: {
+        q?: string
+        page?: number
+        page_size?: number
+        sort?: 'name' | '-name' | 'id' | '-id'
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryPage_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_dictionary_api_v1_governance_enums_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnumDictionaryInput']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_dictionary_api_v1_governance_enums__dictionary_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  update_dictionary_api_v1_governance_enums__dictionary_id__put: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnumDictionaryInput']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EnumDictionaryOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_dictionary_api_v1_governance_enums__dictionary_id__delete: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_revisions_api_v1_governance_enums__dictionary_id__revisions_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_EnumDictionaryOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_references_api_v1_governance_enums__dictionary_id__references_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        dictionary_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_EnumReferenceOut__']
         }
       }
       /** @description Validation Error */

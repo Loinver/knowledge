@@ -14,13 +14,15 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
+from pydantic import ValidationError
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.iri_service import build_resource_iri, validate_name
-from app.domain.status_service import check_revision, publish_resource
+from app.domain.status_service import lock_resource_edit, publish_resource
+from app.domain.type_service import set_data_props
 from app.models.enums import ResourceKind, ResourceStatus
 from app.models.resource import (
     DatatypePropDetail,
@@ -37,6 +39,7 @@ from app.schemas.relation import (
     RelationTypeCreate,
     RelationTypeUpdate,
 )
+from app.schemas.type import DataTypePropCreate
 
 # ---------------------------------------------------------------------------
 # OWL 特征兼容性校验
@@ -206,47 +209,22 @@ def _create_assoc_resource(
     session.add(
         ResourceRef(source_id=relation.id, target_id=assoc.id, role="assoc_resource")
     )
-    # 属性定义存到 ASSOC 的引用（M1 存结构，M4 补完整 OWL 语义）
-    # 简化：属性定义作为 DATATYPE_PROP 子资源挂在 ASSOC 上
-    # 属性定义落正式列（M-07）：此前只存了名字，datatype/nullable 读回时被丢弃
-    for attr in attribute_defs:
-        attr_name = str(attr.get("name", ""))
-        if not attr_name:
-            continue
-        prop_res = ModelResource(
-            kind=ResourceKind.DATATYPE_PROP,
-            name=f"{assoc_name}.{attr_name}",
-            iri=f"{assoc_iri}/{attr_name}",
-            namespace_id=namespace.id,
-            status=ResourceStatus.DRAFT,
-        )
-        session.add(prop_res)
-        session.flush()
-        session.add(
-            ResourceRef(
-                source_id=assoc.id, target_id=prop_res.id, role="assoc_attribute"
-            )
-        )
-        session.add(
-            DatatypePropDetail(
-                resource_id=prop_res.id,
-                prop_name=attr_name,
-                datatype=str(attr.get("datatype", "string")),
-                enum_dict_id=_optional_int(attr.get("enum_dict_id")),
-                nullable=bool(attr.get("nullable", True)),
-                default_value=_optional_str(attr.get("default_value")),
-            )
-        )
+    set_data_props(session, assoc, _attribute_inputs(attribute_defs), "assoc_attribute")
     return assoc
 
 
-def _optional_int(value: object) -> int | None:
-    """关联实体属性定义来自自由 dict，这里做保守的取值收敛。"""
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-
-def _optional_str(value: object) -> str | None:
-    return value if isinstance(value, str) and value else None
+def _attribute_inputs(
+    attribute_defs: list[dict[str, object]],
+) -> list[DataTypePropCreate]:
+    try:
+        return [
+            DataTypePropCreate.model_validate({"datatype": "string", **attr})
+            for attr in attribute_defs
+        ]
+    except ValidationError as exc:
+        raise KGError(
+            ErrorCode.INVALID_REQUEST, {"reason": "invalid_attribute_definition"}
+        ) from exc
 
 
 def _relation_detail(session: Session, relation: ModelResource) -> ObjectPropDetail:
@@ -387,9 +365,20 @@ def update_relation_type(
     端点基数、角色标签、OWL 特征、逆关系与 union/intersection 都会真正落库——
     M1 阶段这些字段被接受后丢弃，等于静默丢用户输入。
     """
-    check_revision(resource, payload.if_match)
-    if resource.status == ResourceStatus.PUBLISHED:
-        raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource": resource.name})
+    resource = lock_resource_edit(
+        session, resource, payload.if_match, payload.edit_revision
+    )
+
+    if payload.attribute_defs is not None:
+        assoc_id = get_relation_meta(session, resource)["assoc_resource_id"]
+        if assoc_id is None:
+            raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "association_required"})
+        assoc = session.get(ModelResource, assoc_id)
+        if assoc is None or assoc.status != ResourceStatus.DRAFT:
+            raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource_id": assoc_id})
+        set_data_props(
+            session, assoc, _attribute_inputs(payload.attribute_defs), "assoc_attribute"
+        )
 
     if payload.label_i18n is not None:
         resource.label_i18n = payload.label_i18n
@@ -565,6 +554,7 @@ def get_assoc_attributes(
                 datatype=detail.datatype if detail else "string",
                 nullable=detail.nullable if detail else True,
                 enum_dict_id=detail.enum_dict_id if detail else None,
+                enum_dict_revision=detail.enum_dict_revision if detail else None,
                 default_value=detail.default_value if detail else None,
             )
         )

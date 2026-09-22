@@ -91,6 +91,7 @@ export function useNavigation() {
         items: [
           { key: 'governance-rules', label: t('page.governanceRules') },
           { key: 'governance-clauses', label: t('page.governanceClauses') },
+          { key: 'enum-dictionaries', label: t('enumDictionaries.title') },
           { key: 'ontology-export', label: t('export.title') },
           { key: 'assembly-templates', label: t('templates.title') },
         ],

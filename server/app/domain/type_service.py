@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.enum_dictionary_service import lock_dictionary, resolve_reference
 from app.domain.iri_service import build_resource_iri, validate_name
-from app.domain.status_service import check_revision, publish_resource
+from app.domain.status_service import lock_resource_edit, publish_resource
 from app.models.enums import ResourceKind, ResourceStatus
 from app.models.resource import (
     DatatypePropDetail,
@@ -54,7 +55,7 @@ def create_entity_type(session: Session, payload: EntityTypeCreate) -> ModelReso
     session.add(resource)
     session.flush()
     _set_parents(session, resource, payload.parent_ids)
-    _set_data_props(session, resource, payload.data_props)
+    set_data_props(session, resource, payload.data_props)
     session.flush()
     return resource
 
@@ -81,8 +82,11 @@ def _set_parents(
         seen.add(pid)
 
 
-def _set_data_props(
-    session: Session, resource: ModelResource, props: list[DataTypePropCreate]
+def set_data_props(
+    session: Session,
+    resource: ModelResource,
+    props: list[DataTypePropCreate],
+    role: str = "data_prop",
 ) -> None:
     """存数据属性：DATATYPE_PROP 子资源 + ResourceRef + 约束明细。
 
@@ -92,11 +96,40 @@ def _set_data_props(
     注：被替换掉的旧属性子资源保留不删——已发布版本的历史 payload 里
     仍以 id 引用它们，删掉会让历史版本指向空。
     """
+    names = [prop.name for prop in props]
+    if len(set(names)) != len(names) or any(not name.strip() for name in names):
+        raise KGError(
+            ErrorCode.INVALID_REQUEST, {"reason": "duplicate_or_empty_property_name"}
+        )
+    existing_details = {
+        detail.prop_name: detail
+        for detail in session.scalars(
+            select(DatatypePropDetail)
+            .join(ResourceRef, ResourceRef.target_id == DatatypePropDetail.resource_id)
+            .where(ResourceRef.source_id == resource.id, ResourceRef.role == role)
+        )
+    }
+    # 多字典按稳定顺序加锁，避免两个属性列表顺序相反时形成死锁。
+    for dictionary_id in sorted(
+        {prop.enum_dict_id for prop in props if prop.enum_dict_id is not None}
+    ):
+        lock_dictionary(session, dictionary_id)
+    pins: list[int | None] = []
+    for prop in props:
+        old = existing_details.get(prop.name)
+        pin = prop.enum_dict_revision
+        if pin is None and old is not None and old.enum_dict_id == prop.enum_dict_id:
+            pin = old.enum_dict_revision
+        pins.append(
+            resolve_reference(
+                session, prop.datatype, prop.enum_dict_id, pin, prop.default_value
+            )
+        )
     old_ids = list(
         session.scalars(
             select(ResourceRef.target_id).where(
                 ResourceRef.source_id == resource.id,
-                ResourceRef.role == "data_prop",
+                ResourceRef.role == role,
             )
         )
     )
@@ -108,25 +141,30 @@ def _set_data_props(
         )
     session.execute(
         delete(ResourceRef).where(
-            ResourceRef.source_id == resource.id, ResourceRef.role == "data_prop"
+            ResourceRef.source_id == resource.id, ResourceRef.role == role
         )
     )
-    for prop in props:
-        prop_resource = ModelResource(
-            kind=ResourceKind.DATATYPE_PROP,
-            name=f"{resource.name}.{prop.name}",
-            iri=f"{resource.iri}/{prop.name}",
-            namespace_id=resource.namespace_id,
-            label_i18n=prop.label_i18n,
-            definition_i18n=prop.definition_i18n,
-            status=ResourceStatus.DRAFT,
-        )
-        session.add(prop_resource)
-        session.flush()
-        session.add(
-            ResourceRef(
-                source_id=resource.id, target_id=prop_resource.id, role="data_prop"
+    for prop, pin in zip(props, pins, strict=True):
+        prop_resource = session.scalar(
+            select(ModelResource).where(
+                ModelResource.name == f"{resource.name}.{prop.name}",
+                ModelResource.kind == ResourceKind.DATATYPE_PROP,
             )
+        )
+        if prop_resource is None:
+            prop_resource = ModelResource(
+                kind=ResourceKind.DATATYPE_PROP,
+                name=f"{resource.name}.{prop.name}",
+                iri=f"{resource.iri}/{prop.name}",
+                namespace_id=resource.namespace_id,
+                status=ResourceStatus.DRAFT,
+            )
+            session.add(prop_resource)
+            session.flush()
+        prop_resource.label_i18n = prop.label_i18n
+        prop_resource.definition_i18n = prop.definition_i18n
+        session.add(
+            ResourceRef(source_id=resource.id, target_id=prop_resource.id, role=role)
         )
         session.add(
             DatatypePropDetail(
@@ -134,6 +172,7 @@ def _set_data_props(
                 prop_name=prop.name,
                 datatype=prop.datatype,
                 enum_dict_id=prop.enum_dict_id,
+                enum_dict_revision=pin,
                 nullable=prop.nullable,
                 default_value=prop.default_value,
             )
@@ -149,7 +188,9 @@ def update_entity_type(
     session: Session, resource: ModelResource, payload: EntityTypeUpdate
 ) -> ModelResource:
     """更新实体类型（草稿态）。带 If-Match 乐观锁。"""
-    check_revision(resource, payload.if_match)
+    resource = lock_resource_edit(
+        session, resource, payload.if_match, payload.edit_revision
+    )
     if payload.label_i18n is not None:
         resource.label_i18n = payload.label_i18n
     if payload.definition_i18n is not None:
@@ -157,7 +198,7 @@ def update_entity_type(
     if payload.parent_ids is not None:
         _set_parents(session, resource, payload.parent_ids)
     if payload.data_props is not None:
-        _set_data_props(session, resource, payload.data_props)
+        set_data_props(session, resource, payload.data_props)
     session.flush()
     return resource
 

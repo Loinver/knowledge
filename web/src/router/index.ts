@@ -122,6 +122,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/StandardClauses.vue'),
       },
       {
+        path: 'governance/enum-dictionaries',
+        name: 'enum-dictionaries',
+        component: () => import('@/views/governance/EnumDictionaries.vue'),
+        meta: {},
+      },
+      {
         path: 'governance/templates',
         name: 'assembly-templates',
         component: () => import('@/views/AssemblyTemplates.vue'),

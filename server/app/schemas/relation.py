@@ -79,6 +79,7 @@ class AttributeDefOut(BaseModel):
     datatype: str
     nullable: bool = True
     enum_dict_id: int | None = None
+    enum_dict_revision: int | None = None
     default_value: str | None = None
 
 
@@ -96,6 +97,7 @@ class RelationTypeUpdate(BaseModel):
     enable_attributes: bool | None = None
     attribute_defs: list[dict[str, object]] | None = None
     if_match: int
+    edit_revision: int | None = Field(default=None, ge=0)
 
 
 class RelationTypeOut(BaseModel):
@@ -109,6 +111,7 @@ class RelationTypeOut(BaseModel):
     definition_i18n: dict[str, str] | None = None
     status: ResourceStatus
     current_revision: int
+    edit_revision: int
     domain_spec: EndpointSpec
     range_spec: EndpointSpec
     inverse_of: int | None = None
