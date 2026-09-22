@@ -125,6 +125,9 @@ class OntologyRevision(Base):
     ref_types: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     rules: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     resource_versions: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    metadata_snapshot: Mapped[dict] = mapped_column(
+        JSON, default=dict, server_default="{}", nullable=False
+    )
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -171,16 +174,22 @@ class CanvasLayout(Base):
 
 
 class AssemblyTemplate(Base):
-    """装配模板（M4 治理层前置占位，供 ontology.template_id 外键）。
+    """装配模板：来源可追溯，引用资源钉住发布版本。
 
     来源与依据必填；内置只读、可复制为自定义。
-    M0 只建表与外键，M4 填业务逻辑。
+    模板更新不回写已经装配的本体。
     """
 
     __tablename__ = "assembly_template"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
+    label_i18n: Mapped[dict] = mapped_column(
+        JSON, default=dict, server_default="{}", nullable=False
+    )
+    revision: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", nullable=False
+    )
     source: Mapped[str] = mapped_column(String(128), nullable=False)
     basis: Mapped[str] = mapped_column(Text, nullable=False)
     builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

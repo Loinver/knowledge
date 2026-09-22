@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,7 +12,12 @@ from sqlalchemy.orm import Session
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.models.enums import ResourceStatus
-from app.models.resource import ModelResource, ResourceRevision
+from app.models.resource import (
+    ModelResource,
+    ResourceParent,
+    ResourceRef,
+    ResourceRevision,
+)
 
 
 def _checksum(payload: dict) -> str:
@@ -51,8 +57,27 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
         "name": resource.name,
         "iri": resource.iri,
         "kind": resource.kind.value,
-        "label_i18n": resource.label_i18n,
-        "definition_i18n": resource.definition_i18n,
+        "label_i18n": deepcopy(resource.label_i18n),
+        "definition_i18n": deepcopy(resource.definition_i18n),
+        "namespace": {
+            "prefix": resource.namespace.prefix,
+            "iri": resource.namespace.iri,
+        },
+        "parent_ids": list(
+            session.scalars(
+                select(ResourceParent.parent_id)
+                .where(ResourceParent.child_id == resource.id)
+                .order_by(ResourceParent.parent_id)
+            )
+        ),
+        "resource_refs": [
+            {"target_id": ref.target_id, "role": ref.role}
+            for ref in session.scalars(
+                select(ResourceRef)
+                .where(ResourceRef.source_id == resource.id)
+                .order_by(ResourceRef.role, ResourceRef.target_id)
+            )
+        ],
     }
     rev = ResourceRevision(
         resource_id=resource.id,

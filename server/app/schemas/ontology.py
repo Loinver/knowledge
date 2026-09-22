@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import ResourceStatus
+from app.schemas.template import TemplateLink
+
+
+class OntologyExportFormat(StrEnum):
+    TURTLE = "turtle"
+    JSON_LD = "json-ld"
 
 
 class OntologyRefAdd(BaseModel):
@@ -39,6 +47,7 @@ class OntologyOut(BaseModel):
     status: ResourceStatus
     current_revision: int
     template_id: int | None = None
+    template: TemplateLink | None = None
 
 
 class OntologyBrief(BaseModel):

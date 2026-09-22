@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.template_service import (
+    lock_template,
+    template_resources,
+    validate_resources,
+)
 from app.models.domain import (
     CanvasLayout,
     Ontology,
@@ -33,6 +40,25 @@ def create_ontology(session: Session, payload: OntologyCreate) -> Ontology:
             ErrorCode.ALREADY_PUBLISHED,
             {"name": payload.name, "reason": "ontology_name_taken"},
         )
+    pins: dict[int, int | None] = {}
+    if payload.template_id is not None:
+        template = lock_template(session, payload.template_id)
+        resources = template_resources(template)
+        validate_resources(session, resources)
+        pins = {ref.resource_id: ref.pinned_revision for ref in resources}
+    for resource_id in payload.ref_resource_ids:
+        if resource_id in pins:
+            resource = session.get(ModelResource, resource_id)
+            if resource is None or resource.current_revision != pins[resource_id]:
+                raise KGError(
+                    ErrorCode.VALIDATION_VIOLATION,
+                    {
+                        "reason": "template_version_conflict",
+                        "resource_id": resource_id,
+                    },
+                )
+        else:
+            pins[resource_id] = None
     onto = Ontology(
         name=payload.name,
         iri=payload.iri,
@@ -43,8 +69,8 @@ def create_ontology(session: Session, payload: OntologyCreate) -> Ontology:
     )
     session.add(onto)
     session.flush()
-    for rid in payload.ref_resource_ids:
-        add_ref(session, onto.id, OntologyRefAdd(resource_id=rid))
+    for rid, pin in pins.items():
+        add_ref(session, onto.id, OntologyRefAdd(resource_id=rid, pinned_revision=pin))
     session.flush()
     return onto
 
@@ -220,6 +246,12 @@ def publish_ontology(session: Session, onto: Ontology) -> int:
         ref_types=ref_types,
         rules=[],
         resource_versions=resource_versions,
+        metadata_snapshot={
+            "name": onto.name,
+            "iri": onto.iri,
+            "label_i18n": deepcopy(onto.label_i18n),
+            "definition_i18n": deepcopy(onto.definition_i18n),
+        },
     )
     session.add(rev)
     onto.current_revision = new_rev
