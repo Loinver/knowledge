@@ -54,7 +54,7 @@ def _collect_columns(insp: Inspector, table_name: str, schema_name: str) -> list
     cols: list[dict] = []
     pk_names: list[str] = (
         insp.get_pk_constraint(table_name, schema=schema_name).get(
-            "constraint_column_names", []
+            "constrained_columns", []
         )
         or []
     )

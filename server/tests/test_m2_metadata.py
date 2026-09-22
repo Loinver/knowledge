@@ -87,6 +87,13 @@ def test_capture_metadata_success(session, source_db):
     table_names = {t["name"] for s in snap.catalog["schemas"] for t in s["tables"]}
     assert "enterprise" in table_names
     assert "hr_employee" in table_names
+    enterprise = next(
+        t
+        for s in snap.catalog["schemas"]
+        for t in s["tables"]
+        if t["name"] == "enterprise"
+    )
+    assert {c["name"] for c in enterprise["columns"] if c["primary_key"]} == {"id"}
 
 
 def test_capture_increments_revision_and_diffs(session, source_db):

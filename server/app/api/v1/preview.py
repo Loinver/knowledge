@@ -28,7 +28,7 @@ def preview(
     return PreviewResponse(
         datasource_id=result["datasource_id"],
         table=result["table"],
-        db_schema=result["schema"],
+        schema=result["schema"],
         columns=[PreviewColumnMeta(**c) for c in result["columns"]],
         rows=result["rows"],
         total_returned=result["total_returned"],

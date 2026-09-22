@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -128,7 +129,7 @@ def _table_in_catalog(table: str, schema: str, table_set: set[str]) -> bool:
 
 def _compile_entity(
     em: dict,
-    engine,
+    engine: Engine,
     kind: str,
     table_set: set[str],
     limit: int,
@@ -332,7 +333,12 @@ def _compile_field(
 
 
 def _apply_transform(
-    transform: str, params: dict, value, target, row_idx, entity_type
+    transform: str,
+    params: dict,
+    value: object,
+    target: str,
+    row_idx: int,
+    entity_type: str,
 ) -> tuple[object | None, dict | None]:
     """A12：日期/枚举/小数/模板转换。"""
     if transform == "IDENTITY":
@@ -398,7 +404,7 @@ def _apply_transform(
 
 def _compile_relation(
     rm: dict,
-    engine,
+    engine: Engine,
     kind: str,
     table_set: set[str],
     limit: int,
