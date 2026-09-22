@@ -5,16 +5,17 @@
 
 ## 目录导航
 
-| 文件                                                                           | 用途                                                                   |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| [AGENTS.md](./AGENTS.md)                                                       | **入口**。给 AI Agent 的总纲：先读什么、硬规则、常用命令、完工自检清单 |
-| [conventions/code-style.md](./conventions/code-style.md)                       | 前后端代码风格、格式化参数、命名与目录约定                             |
-| [conventions/commit.md](./conventions/commit.md)                               | 提交规范：git-cz、类型与 scope、分支与 PR                              |
-| [conventions/i18n.md](./conventions/i18n.md)                                   | 三层国际化：界面文案 / API 消息 / 领域语义内容                         |
-| [conventions/api-contract.md](./conventions/api-contract.md)                   | API 契约：错误码、枚举、版本冻结、OpenAPI 生成                         |
-| [conventions/testing.md](./conventions/testing.md)                             | 测试分层、必测断言、从 demo 迁移的回归基线                             |
-| [conventions/security-and-license.md](./conventions/security-and-license.md)   | 依赖许可、标准文本版权、数据脱敏、凭据隔离                             |
-| [skills/knowledge-code-style/SKILL.md](./skills/knowledge-code-style/SKILL.md) | 可安装的 Agent Skill（同一套约定，供 IDE/助手加载）                    |
+| 文件                                                                                 | 用途                                                                   |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [AGENTS.md](./AGENTS.md)                                                             | **入口**。给 AI Agent 的总纲：先读什么、硬规则、常用命令、完工自检清单 |
+| [conventions/code-style.md](./conventions/code-style.md)                             | 前后端代码风格、格式化参数与命名                                       |
+| [conventions/application-architecture.md](./conventions/application-architecture.md) | 仓库与模块目录、前后端依赖方向、渐进演进和变更验收                     |
+| [conventions/commit.md](./conventions/commit.md)                                     | 提交规范：git-cz、类型与 scope、分支与 PR                              |
+| [conventions/i18n.md](./conventions/i18n.md)                                         | 三层国际化：界面文案 / API 消息 / 领域语义内容                         |
+| [conventions/api-contract.md](./conventions/api-contract.md)                         | API 契约：错误码、枚举、版本冻结、OpenAPI 生成                         |
+| [conventions/testing.md](./conventions/testing.md)                                   | 测试分层、必测断言、从 demo 迁移的回归基线                             |
+| [conventions/security-and-license.md](./conventions/security-and-license.md)         | 依赖许可、标准文本版权、数据脱敏、凭据隔离                             |
+| [skills/knowledge-code-style/SKILL.md](./skills/knowledge-code-style/SKILL.md)       | 可安装的 Agent Skill（同一套约定，供 IDE/助手加载）                    |
 
 ## 使用方式
 

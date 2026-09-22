@@ -4,15 +4,16 @@
 
 ## 先读这些
 
-| 你要做什么        | 读                                                                                           |
-| ----------------- | -------------------------------------------------------------------------------------------- |
-| 第一次贡献        | [.agents/AGENTS.md](./.agents/AGENTS.md)（骨架、硬规则、自检清单）                           |
-| 写代码            | [.agents/conventions/code-style.md](./.agents/conventions/code-style.md)                     |
-| 提交 / 开 PR      | [.agents/conventions/commit.md](./.agents/conventions/commit.md)                             |
-| 涉及多语言        | [.agents/conventions/i18n.md](./.agents/conventions/i18n.md)                                 |
-| 改后端接口        | [.agents/conventions/api-contract.md](./.agents/conventions/api-contract.md)                 |
-| 补测试            | [.agents/conventions/testing.md](./.agents/conventions/testing.md)                           |
-| 加依赖 / 引用标准 | [.agents/conventions/security-and-license.md](./.agents/conventions/security-and-license.md) |
+| 你要做什么          | 读                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------- |
+| 第一次贡献          | [.agents/AGENTS.md](./.agents/AGENTS.md)（骨架、硬规则、自检清单）                                   |
+| 写代码              | [.agents/conventions/code-style.md](./.agents/conventions/code-style.md)                             |
+| 新增模块 / 调整目录 | [.agents/conventions/application-architecture.md](./.agents/conventions/application-architecture.md) |
+| 提交 / 开 PR        | [.agents/conventions/commit.md](./.agents/conventions/commit.md)                                     |
+| 涉及多语言          | [.agents/conventions/i18n.md](./.agents/conventions/i18n.md)                                         |
+| 改后端接口          | [.agents/conventions/api-contract.md](./.agents/conventions/api-contract.md)                         |
+| 补测试              | [.agents/conventions/testing.md](./.agents/conventions/testing.md)                                   |
+| 加依赖 / 引用标准   | [.agents/conventions/security-and-license.md](./.agents/conventions/security-and-license.md)         |
 
 AI Agent 协作者另见根目录 [AGENTS.md](./AGENTS.md)。
 

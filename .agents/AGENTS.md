@@ -28,6 +28,7 @@ docs/           开发计划与 ADR
 | --------------------- | ----------------------------------------------------------- |
 | 写前端页面 / 组件     | `conventions/code-style.md` + `conventions/i18n.md`         |
 | 写后端接口 / 领域逻辑 | `conventions/code-style.md` + `conventions/api-contract.md` |
+| 新增模块 / 调整目录   | `conventions/application-architecture.md`                   |
 | 补测试                | `conventions/testing.md`                                    |
 | 提交 / 开 PR          | `conventions/commit.md`                                     |
 | 引入新依赖            | `conventions/security-and-license.md`                       |
@@ -43,6 +44,7 @@ docs/           开发计划与 ADR
 6. **demo 不入库**：`demo/`（含 GB/T 标准 PDF、xlsx）是本地素材，已在 `.gitignore` 排除，不得提交或复制到仓库。
 7. **依赖许可**：只允许 MIT / BSD / Apache-2.0 / PSF，禁止 GPL/AGPL/LGPL。
 8. **Python 必写类型注解**：`disallow_untyped_defs` 已开启，缺注解即失败。
+9. **模块边界必须清晰**：新增或实质修改的代码遵循 `conventions/application-architecture.md`；不以空目录、占位文件或大规模搬迁代替真实设计。
 
 ## 4. 常用命令
 
@@ -64,6 +66,7 @@ npm run commit    # 交互式提交（禁止手写 git commit -m）
 - [ ] 新增前端文案已进 `web/src/locales/zh-CN.json` 与 `en-US.json`，两份 key 集合一致。
 - [ ] 新增后端返回值是错误码与枚举，不是中文句子；新状态码已同步前端 i18n 码表。
 - [ ] 新增行为有对应测试；涉及抽取/图谱的改动不影响幂等性与失败保护断言。
+- [ ] 新模块位于复用范围相符的目录，前后端依赖方向符合 `conventions/application-architecture.md`。
 - [ ] `git status` 中无 `demo/`、`.workbuddy/`、`node_modules/`、`.venv/`、`dist/`。
 - [ ] 提交信息由 git-cz 生成，类型与 scope 正确。
 
