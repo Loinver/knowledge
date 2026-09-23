@@ -6,6 +6,7 @@ export interface DashboardStats {
   domains: number
   ontologies: number
   datasources: number
+  mappings: number
   runs: number
   currentGraphId: number | null
   resultSetCount: number
@@ -32,23 +33,33 @@ async function countAndUnpublished(
 
 export const dashboardApi = {
   async stats(signal: AbortSignal): Promise<DashboardStats> {
-    const [entityTypes, relationTypes, domains, ontologies, datasources, runs, current, revisions] =
-      await Promise.all([
-        countAndUnpublished('/entity-types', signal),
-        countAndUnpublished('/relations', signal),
-        countAndUnpublished('/domains', signal),
-        countAndUnpublished('/ontologies', signal),
-        countAndUnpublished('/datasources', signal),
-        countAndUnpublished('/extraction/runs', signal),
-        http
-          .get('/extraction/graph/current', { signal })
-          .then((r) => r.data)
-          .catch(() => null),
-        http
-          .get('/extraction/graph/revisions', { signal })
-          .then((r) => r.data)
-          .catch(() => []),
-      ])
+    const [
+      entityTypes,
+      relationTypes,
+      domains,
+      ontologies,
+      datasources,
+      mappings,
+      runs,
+      current,
+      revisions,
+    ] = await Promise.all([
+      countAndUnpublished('/entity-types', signal),
+      countAndUnpublished('/relations', signal),
+      countAndUnpublished('/domains', signal),
+      countAndUnpublished('/ontologies', signal),
+      countAndUnpublished('/datasources', signal),
+      countAndUnpublished('/mappings?page_size=200', signal),
+      countAndUnpublished('/extraction/runs', signal),
+      http
+        .get('/extraction/graph/current', { signal })
+        .then((r) => r.data)
+        .catch(() => null),
+      http
+        .get('/extraction/graph/revisions', { signal })
+        .then((r) => r.data)
+        .catch(() => []),
+    ])
     let quarantineCount = 0
     if (current && current.id && current.run_id) {
       const runId = current.run_id
@@ -63,6 +74,7 @@ export const dashboardApi = {
       domains: domains.count,
       ontologies: ontologies.count,
       datasources: datasources.count,
+      mappings: mappings.count,
       runs: runs.count,
       currentGraphId: current && current.id ? current.id : null,
       resultSetCount: Array.isArray(revisions) ? revisions.length : 0,

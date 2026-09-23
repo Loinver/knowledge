@@ -35,8 +35,7 @@ const pipeline = computed(() => [
   {
     key: 'mapping',
     step: t('dashboard.step3'),
-    // 映射方案没有独立计数接口，用抽取运行数间接反映「是否配过映射」
-    count: stats.value?.runs ?? 0,
+    count: stats.value?.mappings ?? 0,
     link: 'mapping-wizard',
     hint: t('dashboard.goMappingWizard'),
   },
