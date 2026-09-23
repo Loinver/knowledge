@@ -6,6 +6,9 @@
   "description": "知识中台：本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯",
   "license": "MIT",
   "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "prepare": "husky",
     "commit": "git-cz",
@@ -18,7 +21,11 @@
     "test:web": "pnpm -C web test",
     "test:server": "cd server && .venv/bin/pytest",
     "test:e2e": "playwright test",
-    "lint": "pnpm run lint:web && pnpm run lint:server",
+    "check:api": "pnpm -C web check:api",
+    "check:architecture": "cd server && .venv/bin/pytest tests/test_architecture.py",
+    "check:licenses:web": "node scripts/check-web-licenses.mjs",
+    "check:licenses:server": "sh scripts/check-python-licenses.sh",
+    "lint": "pnpm run lint:web && pnpm run lint:server && pnpm run check:architecture",
     "lint:web": "eslint web",
     "lint:server": "cd server && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy app",
     "fix:server": "cd server && .venv/bin/ruff check . --fix && .venv/bin/ruff format .",
