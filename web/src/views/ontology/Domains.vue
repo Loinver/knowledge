@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  NAlert,
   NButton,
   NDrawer,
   NDrawerContent,
@@ -10,7 +11,7 @@ import {
   NSelect,
   NSpin,
 } from 'naive-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { DomainBrief, DomainMember, PublishCheckResult } from '@/api/domains'
@@ -18,21 +19,54 @@ import { domainsApi } from '@/api/domains'
 import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
+const { toMessage } = useApiError()
 
-const loading = ref(false)
+const loading = ref(true)
 const items = ref<DomainBrief[]>([])
 const typeList = ref<EntityTypeBrief[]>([])
 const selected = ref<DomainBrief | null>(null)
 const members = ref<DomainMember[]>([])
 const membersLoading = ref(false)
+const checking = ref(false)
+const working = ref(false)
 const addTypeId = ref<number | null>(null)
 const checkResult = ref<PublishCheckResult | null>(null)
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const actionError = ref('')
+const listError = ref('')
+const membersError = ref('')
+const needsRefresh = ref(false)
+
+type DomainSelection = { id: number; controller: AbortController }
+let selection: DomainSelection | undefined
+let listController: AbortController | undefined
+let alive = true
+const pendingWrites = new Map<number, Promise<unknown>>()
+const canEdit = computed(
+  () =>
+    !!selected.value &&
+    !loading.value &&
+    !listError.value &&
+    !membersLoading.value &&
+    !membersError.value &&
+    !working.value &&
+    !checking.value &&
+    !needsRefresh.value,
+)
+
+function isCurrentSelection(context: DomainSelection) {
+  return (
+    alive &&
+    selection === context &&
+    selected.value?.id === context.id &&
+    !context.controller.signal.aborted
+  )
+}
 
 const STATUS_VAR: Record<ResourceStatus, string> = {
   PUBLISHED: 'var(--s-pass)',
@@ -67,86 +101,173 @@ const checkItems = computed(() => {
 })
 
 async function load() {
+  if (!alive) return null
+  listController?.abort()
+  const controller = new AbortController()
+  listController = controller
   loading.value = true
+  listError.value = ''
   try {
-    items.value = await domainsApi.list()
-    // 列表刷新后保持选中项指向新对象，避免详情区显示过期状态
-    if (selected.value) {
-      selected.value = items.value.find((d) => d.id === selected.value?.id) ?? null
-    }
-  } catch {
-    items.value = []
+    const [next, types] = await Promise.all([
+      domainsApi.list({}, controller.signal),
+      entityTypesApi.list({}, controller.signal),
+    ])
+    if (!alive || controller.signal.aborted) return null
+    items.value = next
+    typeList.value = types
+    // 选中对象的编辑版本只与随后重新读取的成员一起更新。
+    return next
+  } catch (err) {
+    if (alive && !controller.signal.aborted) listError.value = toMessage(err)
+    return null
   } finally {
-    loading.value = false
+    if (alive && !controller.signal.aborted) loading.value = false
   }
 }
 
-async function select(domain: DomainBrief) {
+async function select(domain: DomainBrief | null) {
+  if (!alive) return false
+  selection?.controller.abort()
+  selection = domain ? { id: domain.id, controller: new AbortController() } : undefined
   selected.value = domain
+  members.value = []
+  membersLoading.value = false
+  checking.value = false
+  working.value = false
   checkResult.value = null
   actionError.value = ''
+  membersError.value = ''
+  needsRefresh.value = false
   addTypeId.value = null
+  return selection ? loadMembers(selection) : false
+}
+
+async function loadMembers(context: DomainSelection) {
+  if (!isCurrentSelection(context)) return false
   membersLoading.value = true
+  membersError.value = ''
+  members.value = []
+  checkResult.value = null
   try {
-    members.value = await domainsApi.members(domain.id)
-  } catch {
-    members.value = []
+    const pending = pendingWrites.get(context.id)
+    if (pending) {
+      await pending.catch(() => undefined)
+      if (!isCurrentSelection(context)) return false
+      const next = await load()
+      if (!next || !isCurrentSelection(context)) return false
+      const fresh = next.find((domain) => domain.id === context.id)
+      if (!fresh) {
+        await select(null)
+        return false
+      }
+      selected.value = fresh
+    }
+    if (!isCurrentSelection(context)) return false
+    const next = await domainsApi.members(context.id, context.controller.signal)
+    if (!isCurrentSelection(context)) return false
+    members.value = next
+    return true
+  } catch (err) {
+    if (isCurrentSelection(context)) membersError.value = toMessage(err)
+    return false
   } finally {
-    membersLoading.value = false
+    if (isCurrentSelection(context)) membersLoading.value = false
+  }
+}
+
+async function refreshSelection() {
+  const context = selection
+  const next = await load()
+  if (next && context && isCurrentSelection(context)) {
+    await select(next.find((domain) => domain.id === context.id) ?? null)
+  }
+}
+
+async function updateDomain(write: (id: number, revision: number) => Promise<unknown>) {
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value || !selected.value) return false
+  const revision = selected.value.edit_revision
+  working.value = true
+  actionError.value = ''
+  checkResult.value = null
+  try {
+    const pending = write(context.id, revision)
+    pendingWrites.set(context.id, pending)
+    try {
+      await pending
+    } finally {
+      if (pendingWrites.get(context.id) === pending) pendingWrites.delete(context.id)
+    }
+    if (!isCurrentSelection(context)) return false
+    const next = await load()
+    if (!isCurrentSelection(context)) return false
+    if (!next) {
+      needsRefresh.value = true
+      return false
+    }
+    const fresh = next.find((domain) => domain.id === context.id)
+    if (!fresh) {
+      await select(null)
+      return false
+    }
+    selected.value = fresh
+    return await loadMembers(context)
+  } catch (err) {
+    if (isCurrentSelection(context)) {
+      actionError.value = toMessage(err)
+      needsRefresh.value = (err as { code?: string })?.code === 'KG.REVISION_CONFLICT'
+    }
+    return false
+  } finally {
+    if (isCurrentSelection(context)) working.value = false
   }
 }
 
 async function addMember() {
-  actionError.value = ''
-  if (!selected.value || !addTypeId.value) {
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value) return
+  const resourceId = addTypeId.value
+  if (!resourceId) {
     actionError.value = t('domain.addMemberIncomplete')
     return
   }
-  try {
-    await domainsApi.addMember(selected.value.id, addTypeId.value)
+  const updated = await updateDomain((id, revision) =>
+    domainsApi.addMember(id, resourceId, false, revision),
+  )
+  if (updated && isCurrentSelection(context)) {
     addTypeId.value = null
-    members.value = await domainsApi.members(selected.value.id)
-  } catch (err) {
-    actionError.value = (err as { code?: string }).code || t('common.save')
   }
 }
 
 async function removeMember(memberId: number) {
-  if (!selected.value) return
-  actionError.value = ''
-  try {
-    await domainsApi.removeMember(selected.value.id, memberId)
-    members.value = await domainsApi.members(selected.value.id)
-  } catch (err) {
-    actionError.value = (err as { code?: string }).code || t('common.delete')
-  }
+  if (!members.value.some((member) => member.id === memberId)) return
+  await updateDomain((id, revision) => domainsApi.removeMember(id, memberId, revision))
 }
 
 async function publishCheck() {
-  if (!selected.value) return
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value) return
+  checking.value = true
   actionError.value = ''
+  checkResult.value = null
   try {
-    checkResult.value = await domainsApi.publishCheck(selected.value.id)
+    const result = await domainsApi.publishCheck(context.id, context.controller.signal)
+    if (isCurrentSelection(context)) checkResult.value = result
   } catch (err) {
-    actionError.value = (err as { code?: string }).code || t('domain.publishCheck')
+    if (isCurrentSelection(context)) actionError.value = toMessage(err)
+  } finally {
+    if (isCurrentSelection(context)) checking.value = false
   }
 }
 
 async function publish() {
-  if (!selected.value) return
-  actionError.value = ''
-  try {
-    await domainsApi.publish(selected.value.id)
-    await load()
-    if (selected.value) await select(selected.value)
-  } catch (err) {
-    actionError.value = (err as { code?: string }).code || t('common.publish')
-  }
+  await updateDomain((id, revision) => domainsApi.publish(id, revision))
 }
 
 const formData = ref({ name: '', iri: '', labelZh: '', labelEn: '' })
 
 async function handleCreate() {
+  if (!alive || creating.value) return
   createError.value = ''
   const f = formData.value
   if (!f.name || !f.iri || !f.labelZh) {
@@ -160,26 +281,22 @@ async function handleCreate() {
       iri: f.iri,
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
     })
+    if (!alive) return
     showCreate.value = false
     formData.value = { name: '', iri: '', labelZh: '', labelEn: '' }
     await load()
   } catch (err) {
-    createError.value = (err as { code?: string }).code || t('common.save')
+    if (alive) createError.value = toMessage(err)
   } finally {
-    creating.value = false
+    if (alive) creating.value = false
   }
 }
 
-onMounted(async () => {
-  await Promise.all([
-    load(),
-    entityTypesApi
-      .list()
-      .then((r) => {
-        typeList.value = r
-      })
-      .catch(() => undefined),
-  ])
+onMounted(() => void load())
+onBeforeUnmount(() => {
+  alive = false
+  listController?.abort()
+  selection?.controller.abort()
 })
 </script>
 
@@ -191,6 +308,10 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
+    <NAlert v-if="listError" type="error" role="alert">
+      {{ listError }}
+      <NButton :loading="loading" @click="refreshSelection">{{ t('graph.refresh') }}</NButton>
+    </NAlert>
     <NSpin :show="loading">
       <div class="split">
         <!-- 左：域列表。业务域当前是平铺的（无父子），所以用列表而非树 -->
@@ -213,7 +334,7 @@ onMounted(async () => {
               <span class="mono rev">{{ `v${d.current_revision}` }}</span>
             </button>
           </div>
-          <div v-else class="list-empty">
+          <div v-else-if="!loading && !listError" class="list-empty">
             <NEmpty :description="t('common.empty')" />
           </div>
         </aside>
@@ -231,8 +352,10 @@ onMounted(async () => {
             </div>
             <span class="iri">{{ selected.iri }}</span>
             <div class="detail-actions">
-              <NButton size="small" @click="publishCheck">{{ t('domain.publishCheck') }}</NButton>
-              <NButton size="small" type="primary" @click="publish">
+              <NButton size="small" :disabled="!canEdit" :loading="checking" @click="publishCheck">
+                {{ t('domain.publishCheck') }}
+              </NButton>
+              <NButton size="small" type="primary" :disabled="!canEdit" @click="publish">
                 {{ t('common.publish') }}
               </NButton>
             </div>
@@ -266,14 +389,20 @@ onMounted(async () => {
               filterable
               clearable
               :placeholder="t('domain.addMember')"
+              :disabled="!canEdit"
               class="member-select"
             />
-            <NButton @click="addMember">{{ t('domain.addMember') }}</NButton>
+            <NButton :disabled="!canEdit" @click="addMember">{{ t('domain.addMember') }}</NButton>
           </div>
 
-          <p v-if="actionError" class="action-error">{{ actionError }}</p>
+          <NAlert v-if="actionError || membersError" type="error" role="alert">
+            {{ actionError || membersError }}
+            <NButton :loading="loading || membersLoading" @click="refreshSelection">
+              {{ t('graph.refresh') }}
+            </NButton>
+          </NAlert>
 
-          <NSpin :show="membersLoading">
+          <NSpin :show="membersLoading || working">
             <div class="member-card">
               <table v-if="members.length" class="member-table">
                 <thead>
@@ -305,14 +434,20 @@ onMounted(async () => {
                       </span>
                     </td>
                     <td>
-                      <NButton size="tiny" quaternary type="error" @click="removeMember(m.id)">
+                      <NButton
+                        size="tiny"
+                        quaternary
+                        type="error"
+                        :disabled="!canEdit"
+                        @click="removeMember(m.id)"
+                      >
                         {{ t('common.delete') }}
                       </NButton>
                     </td>
                   </tr>
                 </tbody>
               </table>
-              <div v-else class="member-empty">
+              <div v-else-if="!membersLoading && !membersError" class="member-empty">
                 <NEmpty :description="t('domain.noMembers')" />
               </div>
             </div>
@@ -325,9 +460,14 @@ onMounted(async () => {
       </div>
     </NSpin>
 
-    <NDrawer v-model:show="showCreate" :width="480">
-      <NDrawerContent :title="t('domain.create')" closable>
-        <NForm label-placement="top">
+    <NDrawer
+      v-model:show="showCreate"
+      :width="480"
+      :mask-closable="!creating"
+      :close-on-esc="!creating"
+    >
+      <NDrawerContent :title="t('domain.create')" :closable="!creating">
+        <NForm label-placement="top" :disabled="creating">
           <NFormItem :label="t('common.name')">
             <NInput v-model:value="formData.name" placeholder="HumanResources" />
           </NFormItem>
@@ -347,7 +487,9 @@ onMounted(async () => {
             <NButton type="primary" :loading="creating" @click="handleCreate">
               {{ t('common.save') }}
             </NButton>
-            <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
+            <NButton :disabled="creating" @click="showCreate = false">{{
+              t('common.cancel')
+            }}</NButton>
           </div>
         </template>
       </NDrawerContent>
