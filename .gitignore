@@ -31,6 +31,8 @@ demo/
 # 日志与临时产物
 *.log
 coverage/
+playwright-report/
+test-results/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
