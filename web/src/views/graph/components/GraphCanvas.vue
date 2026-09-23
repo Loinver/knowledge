@@ -4,7 +4,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { GraphView } from '@/api/graph'
-import { graphPaths, layoutGraph } from '@/components/graphLayout'
+
+import { graphPaths, layoutGraph } from './graphLayout'
 
 const props = defineProps<{ graph: GraphView; neighborhood: boolean }>()
 const emit = defineEmits<{ select: [iri: string] }>()

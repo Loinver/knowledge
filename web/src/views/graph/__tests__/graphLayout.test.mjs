@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { graphPaths, layoutGraph } from '../graphLayout.ts'
+import { graphPaths, layoutGraph } from '../components/graphLayout.ts'
 
 const node = (iri, type, distance = 0) => ({
   id: iri.charCodeAt(0),

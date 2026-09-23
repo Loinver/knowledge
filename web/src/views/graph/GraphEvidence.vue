@@ -6,9 +6,9 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import type { EvidenceTrace } from '@/api/graph'
 import { graphApi } from '@/api/graph'
-import EvidenceTable from '@/components/EvidenceTable.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
+import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
 
 const { t } = useI18n()
 const route = useRoute()

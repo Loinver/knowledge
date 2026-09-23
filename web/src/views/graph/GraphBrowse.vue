@@ -15,10 +15,10 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { graphApi } from '@/api/graph'
-import GraphCanvas from '@/components/GraphCanvas.vue'
-import GraphFactTable from '@/components/GraphFactTable.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
+import GraphCanvas from '@/views/graph/components/GraphCanvas.vue'
+import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 
 const { t } = useI18n()
 const route = useRoute()

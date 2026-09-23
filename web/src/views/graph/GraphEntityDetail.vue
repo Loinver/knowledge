@@ -5,10 +5,10 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { graphApi } from '@/api/graph'
-import EvidenceTable from '@/components/EvidenceTable.vue'
-import GraphFactTable from '@/components/GraphFactTable.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
+import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
+import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 
 const { t } = useI18n()
 const route = useRoute()

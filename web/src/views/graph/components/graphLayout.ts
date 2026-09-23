@@ -1,4 +1,4 @@
-import type { GraphView } from '../api/graph'
+import type { GraphView } from '@/api/graph'
 
 export function layoutGraph(nodes: GraphView['nodes'], neighborhood: boolean) {
   if (!neighborhood) {
