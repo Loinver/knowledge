@@ -645,5 +645,32 @@
       "FAILED": "Failed",
       "CANCELLED": "Cancelled"
     }
+  },
+  "designer": {
+    "selectOntology": "Select ontology",
+    "saving": "Saving…",
+    "autoLayout": "Auto layout",
+    "fitView": "Fit view",
+    "resourcePool": "Resources",
+    "inCanvas": "On canvas",
+    "notInCanvas": "Not on canvas",
+    "inspector": "Inspector",
+    "selectNode": "Click a node on the canvas to inspect it",
+    "nodePosition": "Canvas position",
+    "removeFromCanvas": "Remove from canvas",
+    "layoutHint": "Dragging only changes the canvas layout and never creates a semantic revision.",
+    "emptyCanvas": "The canvas is empty",
+    "emptyCanvasHint": "Add entity types from the resource panel on the left",
+    "noOntologyHint": "No ontology yet. Pick a template in Assembly templates, or create one directly.",
+    "legendRelation": "Object property",
+    "legendDraft": "Not published",
+    "saveFailed": "Failed to save the layout",
+    "addFailed": "Failed to add to canvas",
+    "removeFailed": "Failed to remove from canvas",
+    "addToCanvas": "Add to canvas",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomLevel": "Zoom {percent}%",
+    "positionValue": "{x}, {y}"
   }
 }

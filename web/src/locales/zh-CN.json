@@ -645,5 +645,32 @@
       "FAILED": "失败",
       "CANCELLED": "已取消"
     }
+  },
+  "designer": {
+    "selectOntology": "选择本体",
+    "saving": "保存中…",
+    "autoLayout": "自动布局",
+    "fitView": "适应窗口",
+    "resourcePool": "资源",
+    "inCanvas": "已入画布",
+    "notInCanvas": "未入画布",
+    "inspector": "属性检查器",
+    "selectNode": "点击画布上的节点查看详情",
+    "nodePosition": "画布坐标",
+    "removeFromCanvas": "移出画布",
+    "layoutHint": "拖动节点只改画布布局，不产生语义版本。",
+    "emptyCanvas": "画布还是空的",
+    "emptyCanvasHint": "从左侧资源面板把实体类型放进来",
+    "noOntologyHint": "还没有本体。先在「装配模板」里选一个模板，或直接创建一个本体。",
+    "legendRelation": "对象属性",
+    "legendDraft": "未发布",
+    "saveFailed": "布局保存失败",
+    "addFailed": "加入画布失败",
+    "removeFailed": "移出画布失败",
+    "addToCanvas": "加入画布",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "zoomLevel": "缩放 {percent}%",
+    "positionValue": "{x}, {y}"
   }
 }

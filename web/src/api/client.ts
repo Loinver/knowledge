@@ -81,6 +81,9 @@ export interface EntityTypeBrief {
 export type EntityTypeCreate = components['schemas']['EntityTypeCreate']
 export type EntityTypeUpdate = components['schemas']['EntityTypeUpdate']
 
+/** 关系详情：比列表多出定义域/值域、OWL 特征与关联实体属性定义。 */
+export type RelationTypeDetail = components['schemas']['RelationTypeOut']
+
 export interface RelationTypeBrief {
   id: number
   name: string
@@ -88,6 +91,9 @@ export interface RelationTypeBrief {
   label_i18n: Record<string, string> | null
   status: ResourceStatus
   current_revision: number
+  /** 启用关系属性后会生成关联实体，列表里就要能标出来。 */
+  enable_attributes: boolean
+  inverse_of: number | null
 }
 
 export interface CardinalitySpec {
@@ -272,6 +278,7 @@ export const api = {
   relations: {
     list: (params?: { q?: string; page?: number; page_size?: number }) =>
       http.get<RelationTypeBrief[]>('/relations', { params }).then((r) => r.data),
+    get: (id: number) => http.get<RelationTypeDetail>(`/relations/${id}`).then((r) => r.data),
     create: (payload: RelationTypeCreate) => http.post('/relations', payload).then((r) => r.data),
   },
   domains: {
