@@ -1,5 +1,5 @@
 import { http } from '@/api/client'
-import type { components } from '@/api/schema'
+import type { components, operations } from '@/api/schema'
 import { getRefreshToken } from '@/api/tokens'
 
 /**
@@ -30,20 +30,12 @@ export type AuditLog = Schemas['AuditLogOut']
 export type AuditLogPage = Schemas['AuditLogPage']
 export type ForgotPasswordResult = Schemas['ForgotPasswordResult']
 
-export interface UserListQuery {
-  q?: string
-  role?: Role
-  status?: UserStatus
-  page?: number
-  page_size?: number
-}
-
-export interface AuditLogQuery {
-  q?: string
-  action?: AuditAction
-  page?: number
-  page_size?: number
-}
+export type UserListQuery = NonNullable<
+  operations['list_users_api_v1_users_get']['parameters']['query']
+>
+export type AuditLogQuery = NonNullable<
+  operations['list_audit_logs_api_v1_audit_logs_get']['parameters']['query']
+>
 
 export const authApi = {
   /** 公开配置：是否开放注册、口令长度下限。登录页与注册页据此决定展示内容。 */

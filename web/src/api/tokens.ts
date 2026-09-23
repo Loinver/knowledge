@@ -1,3 +1,5 @@
+import type { components } from '@/api/schema'
+
 /**
  * token 的本地存取。
  *
@@ -8,12 +10,7 @@
 export const ACCESS_KEY = 'kg-access-token'
 export const REFRESH_KEY = 'kg-refresh-token'
 
-export interface TokenPair {
-  access_token: string
-  refresh_token: string
-  /** access token 剩余有效秒数 */
-  expires_in: number
-}
+export type TokenPair = components['schemas']['TokenPair']
 
 function store(): Storage | null {
   return typeof localStorage === 'undefined' ? null : localStorage
