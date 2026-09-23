@@ -8,7 +8,9 @@ from unittest.mock import Mock
 
 import pytest
 from app import main
-from fastapi import FastAPI
+from app.api.errors import install_error_handler
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 
 @pytest.mark.parametrize("create_tables", [False, True])
@@ -59,3 +61,21 @@ def test_lifespan_disposes_on_startup_or_application_failure(
     ):
         asyncio.run(run())
     engine.dispose.assert_called_once_with()
+
+
+def test_http_error_adapter_preserves_headers_and_envelope() -> None:
+    application = FastAPI()
+    install_error_handler(application)
+
+    @application.get("/protected")
+    def protected() -> None:
+        raise HTTPException(
+            401, "Not authenticated", headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    with TestClient(application) as client:
+        response = client.get("/protected")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json()["code"] == "AUTH.TOKEN_EXPIRED"
+    assert response.json()["data"] is None

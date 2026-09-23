@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.clauses import router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain import clause_service
 from app.models.governance import StandardClause
 from app.schemas.governance import StandardClauseCreate

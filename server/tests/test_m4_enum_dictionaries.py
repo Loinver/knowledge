@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.enum_dictionaries import legacy_router, router
 from app.core.db import Base, get_session
-from app.core.errors import KGError, install_error_handler
+from app.core.errors import KGError
 from app.domain.enum_dictionary_service import (
     get_snapshot,
     list_references,

@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.accounts import router as accounts_router
 from app.api.v1.auth import router as auth_router
 from app.core.config import get_settings
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain import account_service
 from app.models.account import AuditLog, AuthToken, User
 from app.models.enums import AuditAction, AuditResult, UserRole, UserStatus

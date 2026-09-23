@@ -6,9 +6,9 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.ontologies import router as ontology_router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain.ontology_service import create_ontology, publish_ontology
 from app.models.domain import OntologyRevision, OntologyRuleRef
 from app.models.governance import Rule

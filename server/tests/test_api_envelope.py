@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.namespaces import router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.schemas.response import OK_CODE
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

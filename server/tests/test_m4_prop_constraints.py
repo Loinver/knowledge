@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.relations import router as relations_router
 from app.api.v1.types import router as types_router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain.enum_dictionary_service import create_dictionary
 from app.domain.relation_service import create_relation_type, get_relation_meta
 from app.domain.status_service import publish_resource

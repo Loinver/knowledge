@@ -12,10 +12,10 @@ from threading import Barrier
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.ontologies import router as ontology_router
 from app.api.v1.templates import router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain import template_service as service
 from app.domain.iri_service import register_namespace
 from app.domain.status_service import publish_resource

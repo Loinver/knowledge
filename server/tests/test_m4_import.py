@@ -6,11 +6,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.ontologies import router as ontologies_router
 from app.api.v1.types import router as types_router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain.iri_service import register_namespace
 from app.domain.ontology_service import create_ontology
 from app.domain.status_service import publish_resource

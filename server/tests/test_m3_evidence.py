@@ -11,10 +11,11 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.extraction import router
 from app.core.db import Base, get_session
 from app.core.error_codes import ErrorCode
-from app.core.errors import KGError, install_error_handler
+from app.core.errors import KGError
 from app.domain.evidence_service import trace_entity_evidence, trace_fact
 from app.domain.extraction_service import (
     get_current_graph,

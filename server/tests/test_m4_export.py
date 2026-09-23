@@ -9,10 +9,10 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.ontologies import router
 from app.core.db import Base, get_session
 from app.core.error_codes import ErrorCode
-from app.core.errors import install_error_handler
 from app.domain.iri_service import register_namespace
 from app.domain.ontology_service import create_ontology, publish_ontology
 from app.domain.relation_service import create_relation_type

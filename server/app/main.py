@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.api.errors import install_error_handler
 from app.api.v1.accounts import router as accounts_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.clauses import router as clauses_router
@@ -40,7 +41,6 @@ from app.api.v1.types import router as types_router
 from app.api.v1.validation import router as validation_router
 from app.core.config import get_settings
 from app.core.db import Base, get_engine
-from app.core.errors import install_error_handler
 from app.schemas.response import ApiResponse
 
 API_PREFIX = "/api/v1"

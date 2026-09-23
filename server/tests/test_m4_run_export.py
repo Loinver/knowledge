@@ -8,9 +8,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.extraction import router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain.extraction_service import switch_current
 from app.models.data_access import Mapping, MappingRevision
 from app.models.domain import Ontology

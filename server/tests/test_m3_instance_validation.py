@@ -8,9 +8,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.validation import router
 from app.core.db import Base, get_session
-from app.core.errors import install_error_handler
 from app.domain.instance_validation_service import run_instance_validation
 from app.models.data_access import Mapping, MappingRevision
 from app.models.domain import Ontology, OntologyResourceRef

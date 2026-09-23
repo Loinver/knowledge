@@ -12,10 +12,11 @@ from threading import Barrier
 from typing import Any
 
 import pytest
+from app.api.errors import install_error_handler
 from app.api.v1.governance import router
 from app.core.db import Base, get_session
 from app.core.error_codes import ErrorCode
-from app.core.errors import KGError, install_error_handler
+from app.core.errors import KGError
 from app.domain import rule_service
 from app.models.governance import Rule
 from app.schemas.governance import RuleCreate
