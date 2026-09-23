@@ -19,6 +19,30 @@ function store(): Storage | null {
   return typeof localStorage === 'undefined' ? null : localStorage
 }
 
+type TokenListener = () => void
+
+const listeners = new Set<TokenListener>()
+
+/**
+ * 订阅 token 的写入/清空。
+ *
+ * localStorage 不是响应式数据源，而登录态又必须跟着它走：
+ * 401 拦截器（`client.ts`）会直接 `clearTokens()`，Pinia 那边的
+ * `user` 可能本来就是 `null`（赋同样的值不会触发更新），
+ * 于是 `isAuthenticated` 这类 computed 会一直返回旧值。
+ * 由这里显式通知，让依赖它的 computed 重新求值。
+ */
+export function subscribeTokens(listener: TokenListener): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function emitTokensChanged(): void {
+  for (const listener of [...listeners]) listener()
+}
+
 export function getAccessToken(): string | null {
   return store()?.getItem(ACCESS_KEY) ?? null
 }
@@ -32,6 +56,7 @@ export function storeTokens(tokens: TokenPair): void {
   if (!target) return
   target.setItem(ACCESS_KEY, tokens.access_token)
   target.setItem(REFRESH_KEY, tokens.refresh_token)
+  emitTokensChanged()
 }
 
 export function clearTokens(): void {
@@ -39,6 +64,7 @@ export function clearTokens(): void {
   if (!target) return
   target.removeItem(ACCESS_KEY)
   target.removeItem(REFRESH_KEY)
+  emitTokensChanged()
 }
 
 export function hasSession(): boolean {

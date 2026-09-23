@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 
 import type { AuthUser, LoginInput, RegisterInput } from '@/api/auth'
 import { authApi } from '@/api/auth'
-import { clearTokens, getAccessToken, hasSession, storeTokens } from '@/api/tokens'
+import { clearTokens, getAccessToken, hasSession, storeTokens, subscribeTokens } from '@/api/tokens'
 
 /**
  * 登录态。
@@ -15,7 +15,19 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<AuthUser | null>(null)
   const loading = ref(false)
 
-  const isAuthenticated = computed(() => user.value !== null || hasSession())
+  // token 存在 localStorage 里、不是响应式数据；用 epoch 承接订阅通知，
+  // 使 isAuthenticated 在 token 被写入或清空后重新求值。
+  // 否则：401 拦截器 clearTokens() 时 user 本就为 null（赋同值不触发更新），
+  // computed 会一直返回清空前的旧值 true，登出后仍被判成"已登录"。
+  const tokenEpoch = ref(0)
+  subscribeTokens(() => {
+    tokenEpoch.value += 1
+  })
+
+  const isAuthenticated = computed(() => {
+    void tokenEpoch.value
+    return user.value !== null || hasSession()
+  })
   const isAdmin = computed(() => user.value?.role === 'ADMIN')
   const displayName = computed(
     () => user.value?.display_name || user.value?.username || user.value?.email || '',
