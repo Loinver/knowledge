@@ -5,13 +5,9 @@ import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
+import type { DatasourceBrief, MetadataSnapshot, PreviewResponse } from '@/api/datasources'
+import { datasourcesApi, metadataApi } from '@/api/datasources'
 import PageHeader from '@/components/PageHeader.vue'
-import type {
-  Datasource,
-  MetadataSnapshot,
-  PreviewResult,
-} from '@/views/datasources/samplePreviewApi'
-import { samplePreviewApi } from '@/views/datasources/samplePreviewApi'
 
 interface CatalogColumn {
   name: string
@@ -35,14 +31,14 @@ interface PreviewRow extends Record<string, unknown> {
 
 const { t, locale } = useI18n()
 const route = useRoute()
-const datasources = ref<Datasource[]>([])
+const datasources = ref<DatasourceBrief[]>([])
 const datasourceId = ref<number | null>(null)
 const snapshot = ref<MetadataSnapshot | null>(null)
 const selectedSchema = ref('')
 const selectedTable = ref('')
 const limit = ref(20)
 const offset = ref(0)
-const result = ref<PreviewResult | null>(null)
+const result = ref<PreviewResponse | null>(null)
 const datasourcesLoading = ref(false)
 const metadataLoading = ref(false)
 const previewLoading = ref(false)
@@ -201,7 +197,7 @@ async function loadLatestMetadata() {
   selectedTable.value = ''
   resetPreview()
   try {
-    const current = await samplePreviewApi.latestMetadata(datasourceId.value)
+    const current = await metadataApi.latest(datasourceId.value)
     if (!active || requestId !== metadataRequest) return
     snapshot.value = current
     chooseInitialTable(queryString('schema'), queryString('table'))
@@ -225,7 +221,7 @@ async function captureMetadata() {
   selectedTable.value = ''
   resetPreview()
   try {
-    const current = await samplePreviewApi.captureMetadata(datasourceId.value)
+    const current = await metadataApi.capture(datasourceId.value)
     if (!active || requestId !== metadataRequest) return
     snapshot.value = current
     chooseInitialTable(queryString('schema'), queryString('table'))
@@ -245,7 +241,7 @@ async function loadDatasources() {
   datasourcesLoading.value = true
   datasourcesError.value = ''
   try {
-    const sources = await samplePreviewApi.listDatasources()
+    const sources = await datasourcesApi.list()
     if (!active) return
     datasources.value = sources
     const routeId = Number(queryString('datasourceId'))
@@ -269,7 +265,7 @@ async function runPreview(nextOffset = 0) {
   result.value = null
   offset.value = nextOffset
   try {
-    const current = await samplePreviewApi.preview(
+    const current = await datasourcesApi.preview(
       {
         datasource_id: datasourceId.value,
         schema: selectedSchema.value,
