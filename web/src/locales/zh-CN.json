@@ -699,5 +699,41 @@
     "zoomIn": "放大",
     "zoomLevel": "缩放 {percent}%",
     "positionValue": "{x}, {y}"
+  },
+  "dataAccess": {
+    "preview": {
+      "title": "样例预览",
+      "description": "按已采集的元数据选择表，只读查看有限行样例。预览不写入图谱，也不改变数据源配置。",
+      "securityTitle": "只读边界",
+      "securityNote": "预览只返回选定表的有限行，不展示连接凭据，也不执行写入。",
+      "datasource": "数据源",
+      "chooseDatasource": "选择数据源",
+      "schema": "模式",
+      "chooseSchema": "选择模式",
+      "table": "表",
+      "chooseTable": "选择表",
+      "limit": "行数上限",
+      "loadLatest": "读取最新元数据",
+      "captureMetadata": "重新采集元数据",
+      "fetch": "预览",
+      "snapshotInfo": "元数据版本 {revision}，采集于 {capturedAt}",
+      "metadataHint": "先读取元数据，再选择要预览的表。",
+      "limitNote": "单次最多返回 {limit} 行。",
+      "loadFailed": "加载失败，请重试。",
+      "previewFailed": "预览失败，请重试。",
+      "errorCode": "错误码：{code}",
+      "noMetadata": "还没有元数据快照。",
+      "noDatasources": "还没有数据源。",
+      "noTables": "当前模式下没有可预览的表。",
+      "resultTitle": "预览结果",
+      "resultRows": "{count} 行",
+      "truncated": "结果已按行数上限截断。",
+      "readOnly": "只读",
+      "emptyResult": "没有返回样例行。",
+      "previous": "上一页",
+      "next": "下一页",
+      "rowRange": "第 {start}–{end} 行",
+      "nullValue": "空"
+    }
   }
 }

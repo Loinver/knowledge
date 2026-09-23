@@ -699,5 +699,41 @@
     "zoomIn": "Zoom in",
     "zoomLevel": "Zoom {percent}%",
     "positionValue": "{x}, {y}"
+  },
+  "dataAccess": {
+    "preview": {
+      "title": "Sample preview",
+      "description": "Choose a table from captured metadata and inspect a limited read-only sample. Preview does not write to the graph or change the data source.",
+      "securityTitle": "Read-only boundary",
+      "securityNote": "Preview returns a limited sample from the selected table. It does not reveal credentials or perform writes.",
+      "datasource": "Data source",
+      "chooseDatasource": "Choose a data source",
+      "schema": "Schema",
+      "chooseSchema": "Choose a schema",
+      "table": "Table",
+      "chooseTable": "Choose a table",
+      "limit": "Row limit",
+      "loadLatest": "Load latest metadata",
+      "captureMetadata": "Capture metadata again",
+      "fetch": "Preview",
+      "snapshotInfo": "Metadata revision {revision}, captured at {capturedAt}",
+      "metadataHint": "Load metadata before choosing a table to preview.",
+      "limitNote": "Each request returns at most {limit} rows.",
+      "loadFailed": "Loading failed. Please retry.",
+      "previewFailed": "Preview failed. Please retry.",
+      "errorCode": "Error code: {code}",
+      "noMetadata": "No metadata snapshot yet.",
+      "noDatasources": "No data sources yet.",
+      "noTables": "No previewable tables in the current schema.",
+      "resultTitle": "Preview result",
+      "resultRows": "{count} rows",
+      "truncated": "The result was truncated at the row limit.",
+      "readOnly": "Read-only",
+      "emptyResult": "No sample rows were returned.",
+      "previous": "Previous",
+      "next": "Next",
+      "rowRange": "Rows {start}–{end}",
+      "nullValue": "Empty"
+    }
   }
 }
