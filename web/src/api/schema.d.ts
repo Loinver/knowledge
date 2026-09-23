@@ -147,6 +147,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ontologies/{ontology_id}/rules': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Rules Endpoint */
+    get: operations['list_rules_endpoint_api_v1_ontologies__ontology_id__rules_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/ontologies/{ontology_id}/refs/{ref_id}': {
     parameters: {
       query?: never
@@ -932,6 +949,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/governance/templates/{template_id}/core-check': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Core Check */
+    post: operations['core_check_api_v1_governance_templates__template_id__core_check_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/relations': {
     parameters: {
       query?: never
@@ -1123,6 +1157,26 @@ export interface paths {
     }
     /** Get One Run */
     get: operations['get_one_run_api_v1_extraction_runs__run_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/runs/{run_id}/export': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Download Run Report
+     * @description 下载运行报告与图谱发布清单；文件响应不套 API 外壳。
+     */
+    get: operations['download_run_report_api_v1_extraction_runs__run_id__export_get']
     put?: never
     post?: never
     delete?: never
@@ -1820,6 +1874,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['CanvasLayoutOut'] | null
+    }
+    /** ApiResponse[CoreCheckOut] */
+    ApiResponse_CoreCheckOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['CoreCheckOut'] | null
     }
     /** ApiResponse[DatasourceOut] */
     ApiResponse_DatasourceOut_: {
@@ -2997,6 +3068,26 @@ export interface components {
        */
       data?: components['schemas']['OntologyRefOut'][] | null
     }
+    /** ApiResponse[list[OntologyRuleOut]] */
+    ApiResponse_list_OntologyRuleOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['OntologyRuleOut'][] | null
+    }
     /** ApiResponse[list[QuarantineOut]] */
     ApiResponse_list_QuarantineOut__: {
       /**
@@ -3259,6 +3350,51 @@ export interface components {
       existing_revision: number
       /** New Revision */
       new_revision: number
+    }
+    /** CoreCheckItem */
+    CoreCheckItem: {
+      /** Name */
+      name: string
+      kind: components['schemas']['ResourceKind'] | null
+      /**
+       * State
+       * @enum {string}
+       */
+      state: 'PRESENT' | 'MISSING' | 'KIND_MISMATCH' | 'ENTERPRISE_EXTENSION'
+      /** Resource Id */
+      resource_id?: number | null
+      /** Pinned Revision */
+      pinned_revision?: number | null
+      /** Standard Clause Id */
+      standard_clause_id?: number | null
+      /** Reason */
+      reason?: string | null
+    }
+    /** CoreCheckOut */
+    CoreCheckOut: {
+      /** Template Id */
+      template_id: number
+      /** Template Revision */
+      template_revision: number
+      /** Items */
+      items: components['schemas']['CoreCheckItem'][]
+      /** All Core Present */
+      all_core_present: boolean
+      /** Enterprise Extension Count */
+      enterprise_extension_count: number
+    }
+    /** CoreCheckRequest */
+    CoreCheckRequest: {
+      /** Requirements */
+      requirements: components['schemas']['CoreResourceRequirement'][]
+    }
+    /** CoreResourceRequirement */
+    CoreResourceRequirement: {
+      /** Name */
+      name: string
+      kind: components['schemas']['ResourceKind']
+      /** Standard Clause Id */
+      standard_clause_id: number
     }
     /**
      * DataTypePropCreate
@@ -3749,6 +3885,41 @@ export interface components {
       /** Quarantined */
       quarantined: boolean
     }
+    /**
+     * ExtractionRunExport
+     * @description 下载专用白名单；不包含连接配置、样例行或异常原文。
+     */
+    ExtractionRunExport: {
+      /**
+       * Schema Version
+       * @default 1
+       * @constant
+       */
+      schema_version: 1
+      /** Run Id */
+      run_id: number
+      /** Mapping Revision Id */
+      mapping_revision_id: number
+      /** Datasource Id */
+      datasource_id: number | null
+      /** Ontology Revision */
+      ontology_revision: number | null
+      status: components['schemas']['RunResult']
+      /** Counts */
+      counts: {
+        [key: string]: number
+      }
+      /** Fingerprint */
+      fingerprint: string | null
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string
+      /** Finished At */
+      finished_at: string | null
+      publication: components['schemas']['RunPublicationManifest'] | null
+    }
     /** ExtractionRunOut */
     ExtractionRunOut: {
       /** Id */
@@ -4229,6 +4400,8 @@ export interface components {
       template_id?: number | null
       /** Ref Resource Ids */
       ref_resource_ids?: number[]
+      /** Rule Ids */
+      rule_ids?: number[]
     }
     /**
      * OntologyExportFormat
@@ -4359,6 +4532,19 @@ export interface components {
       /** Pinned Revision */
       pinned_revision?: number | null
     }
+    /** OntologyRuleOut */
+    OntologyRuleOut: {
+      /** Rule Id */
+      rule_id: number
+      /** Identifier */
+      identifier: string
+      /** Revision */
+      revision: number
+      /** Source Kind */
+      source_kind: string
+      /** Source Reference */
+      source_reference: string
+    }
     /** OntologyUpdate */
     OntologyUpdate: {
       /** Label I18N */
@@ -4371,6 +4557,8 @@ export interface components {
       } | null
       /** If Match */
       if_match: number
+      /** Rule Ids */
+      rule_ids?: number[] | null
     }
     /**
      * OwlFeatures
@@ -4897,6 +5085,25 @@ export interface components {
       positive?: components['schemas']['RuleExampleOut'] | null
       negative?: components['schemas']['RuleExampleOut'] | null
     }
+    /**
+     * RunPublicationManifest
+     * @description 已生成的图谱结果集，不包含会随切换改变的 is_current。
+     */
+    RunPublicationManifest: {
+      /** Graph Revision Id */
+      graph_revision_id: number
+      /**
+       * Published At
+       * Format: date-time
+       */
+      published_at: string
+    }
+    /**
+     * RunResult
+     * @description 抽取运行结果。
+     * @enum {string}
+     */
+    RunResult: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED'
     /** RunStartRequest */
     RunStartRequest: {
       /** Mapping Revision Id */
@@ -5714,6 +5921,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_OntologyRefOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_rules_endpoint_api_v1_ontologies__ontology_id__rules_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_OntologyRuleOut__']
         }
       }
       /** @description Validation Error */
@@ -7864,6 +8102,41 @@ export interface operations {
       }
     }
   }
+  core_check_api_v1_governance_templates__template_id__core_check_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CoreCheckRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_CoreCheckOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   list_relations_api_v1_relations_get: {
     parameters: {
       query?: {
@@ -8304,6 +8577,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_ExtractionRunOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  download_run_report_api_v1_extraction_runs__run_id__export_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        run_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExtractionRunExport']
         }
       }
       /** @description Validation Error */
