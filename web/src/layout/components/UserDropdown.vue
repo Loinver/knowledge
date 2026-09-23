@@ -97,4 +97,15 @@ function confirmLogout() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 767px) {
+  .user-trigger {
+    padding: 0 var(--space-1);
+  }
+
+  .name,
+  .user-trigger > :deep(svg) {
+    display: none;
+  }
+}
 </style>

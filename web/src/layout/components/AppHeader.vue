@@ -71,6 +71,20 @@ const { breadcrumb } = useNavigation()
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
+}
+.left {
+  overflow: hidden;
+}
+.left :deep(.n-breadcrumb) {
+  min-width: 0;
+  overflow: hidden;
+}
+.left :deep(.n-breadcrumb-item) {
+  max-width: min(42vw, 260px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .crumb-link {
   color: var(--text-secondary);
@@ -83,5 +97,19 @@ const { breadcrumb } = useNavigation()
 .btn-text {
   margin-left: var(--space-1);
   font-size: var(--font-small);
+}
+
+@media (max-width: 767px) {
+  .app-header {
+    padding: 0 var(--space-3);
+  }
+
+  .right {
+    gap: var(--space-1);
+  }
+
+  .btn-text {
+    display: none;
+  }
 }
 </style>

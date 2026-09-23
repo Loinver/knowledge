@@ -56,6 +56,10 @@ function updateExpanded(keys: string[]) {
   flex-direction: column;
 }
 
+.app-sider :deep(.n-layout-sider-scroll-container) {
+  min-width: 0;
+}
+
 /* 品牌行与顶栏等高，两者底边对齐形成一条贯通的分隔线 */
 .brand {
   display: flex;
@@ -76,5 +80,22 @@ function updateExpanded(keys: string[]) {
   font-weight: 500;
   letter-spacing: 0.3px;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 767px) {
+  .app-sider {
+    position: fixed;
+    z-index: 1000;
+    inset: 0 auto 0 0;
+    width: var(--sider-width) !important;
+    max-width: calc(100vw - 32px);
+    transform: translateX(0);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .app-sider.n-layout-sider--collapsed {
+    width: var(--sider-width) !important;
+    transform: translateX(-100%);
+  }
 }
 </style>
