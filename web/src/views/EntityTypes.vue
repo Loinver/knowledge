@@ -16,8 +16,10 @@ import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import type { EntityTypeBrief, Namespace, ResourceStatus } from '@/api/client'
-import { api } from '@/api/client'
+import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
+import type { Namespace } from '@/api/namespaces'
+import { namespacesApi } from '@/api/namespaces'
 import PageHeader from '@/components/PageHeader.vue'
 
 const { t, locale } = useI18n()
@@ -120,7 +122,7 @@ function goToDetail(id: number) {
 async function loadList() {
   loading.value = true
   try {
-    items.value = await api.entityTypes.list({ q: searchQuery.value })
+    items.value = await entityTypesApi.list({ q: searchQuery.value })
   } catch {
     items.value = []
   } finally {
@@ -130,7 +132,7 @@ async function loadList() {
 
 async function loadNamespaces() {
   try {
-    namespaces.value = await api.namespaces.list()
+    namespaces.value = await namespacesApi.list()
   } catch {
     namespaces.value = []
   }
@@ -144,7 +146,7 @@ async function handleCreate() {
   }
   creating.value = true
   try {
-    await api.entityTypes.create({
+    await entityTypesApi.create({
       name: formData.value.name,
       namespace_id: formData.value.namespace_id,
       label_i18n: {

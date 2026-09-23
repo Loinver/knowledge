@@ -21,7 +21,7 @@
 
 - **人**：提 PR 前按 [AGENTS.md](./AGENTS.md) 的自检清单过一遍，`make lint` 与 `make test` 必须通过。
 - **AI Agent**：会话开始时读取 [AGENTS.md](./AGENTS.md)，按其指引加载 `conventions/` 下相应文件。
-- **安装 Konwledge skill**：把 `skills/knowledge-code-style/` 复制到你的 agent skills 目录，或让助手直接加载其中的 `SKILL.md`。
+- **安装 Knowledge skill**：把 `skills/knowledge-code-style/` 复制到你的 agent skills 目录，或让助手直接加载其中的 `SKILL.md`。
 
 ## 维护原则
 

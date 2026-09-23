@@ -86,15 +86,15 @@ async function compileView(name, state, ssr = false) {
           name: 'vue-enum-test',
           setup(bundler) {
             bundler.onResolve(
-              { filter: /^(vue-router|@\/api\/(client|enum-dictionaries))$/ },
+              { filter: /^(vue-router|@\/api\/(entity-types|enum-dictionaries))$/ },
               ({ path }) => ({ path, namespace: 'stub' }),
             )
             bundler.onLoad({ filter: /.*/, namespace: 'stub' }, ({ path: module }) => ({
               contents:
                 module === 'vue-router'
                   ? `export const useRoute = () => globalThis[${JSON.stringify(key)}].route; export const useRouter = () => ({push: () => {}})`
-                  : module.endsWith('client')
-                    ? `export const api = globalThis[${JSON.stringify(key)}].api`
+                  : module.endsWith('entity-types')
+                    ? `export const entityTypesApi = globalThis[${JSON.stringify(key)}].api.entityTypes`
                     : `export const enumDictionariesApi = globalThis[${JSON.stringify(key)}].dictionaries`,
             }))
             bundler.onResolve({ filter: /^@\// }, ({ path: module }) => ({

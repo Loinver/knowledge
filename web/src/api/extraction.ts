@@ -2,6 +2,7 @@ import { http } from '@/api/client'
 import type { components } from '@/api/schema'
 
 export type ExtractionRun = components['schemas']['ExtractionRunOut']
+export type RunStartResponse = components['schemas']['RunStartResponse']
 
 export const extractionApi = {
   list: (page: number, signal: AbortSignal) =>
@@ -15,4 +16,6 @@ export const extractionApi = {
       })
       // JSON-only export: retain the client's normal JSON error-code handling.
       .then((r) => new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' })),
+  start: (payload: { mapping_revision_id: number; datasource_id: number; namespace: string }) =>
+    http.post<RunStartResponse>('/extraction/runs', payload).then((r) => r.data),
 }

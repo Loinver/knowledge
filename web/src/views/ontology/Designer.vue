@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { NButton, NEmpty, NSelect, NSpin, useMessage } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type {
-  EntityTypeBrief,
-  RelationTypeBrief,
-  RelationTypeDetail,
-  ResourceStatus,
-} from '@/api/client'
-import { api } from '@/api/client'
+import type { DomainBrief, DomainMember } from '@/api/domains'
+import { domainsApi } from '@/api/domains'
+import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
 import type { CanvasPositions, Ontology, OntologyDetail, OntologyRef } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
+import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
+import { relationsApi } from '@/api/relations'
 
 const { t, locale } = useI18n()
 const message = useMessage()
@@ -36,7 +35,10 @@ const pan = ref({ x: 0, y: 0 })
 const entityTypes = ref<EntityTypeBrief[]>([])
 const relations = ref<RelationTypeBrief[]>([])
 const relationDetails = ref<Record<number, RelationTypeDetail>>({})
+const domains = ref<DomainBrief[]>([])
+const domainMembers = ref<Record<number, DomainMember[]>>({})
 
+const canvasEl = ref<HTMLElement | null>(null)
 const worldEl = ref<HTMLElement | null>(null)
 const dragging = ref<{ key: string; offsetX: number; offsetY: number } | null>(null)
 
@@ -62,12 +64,21 @@ const relationById = computed(() => {
   return map
 })
 
+const domainById = computed(() => {
+  const map: Record<number, DomainBrief> = {}
+  for (const domain of domains.value) map[domain.id] = domain
+  return map
+})
+
 /** 引用里哪些是实体类型（画布节点）、哪些是对象属性（画布连线）。 */
 const canvasTypeIds = computed(() =>
   refs.value.map((r) => r.resource_id).filter((id) => typeById.value[id] !== undefined),
 )
 const canvasRelationIds = computed(() =>
   refs.value.map((r) => r.resource_id).filter((id) => relationById.value[id] !== undefined),
+)
+const canvasDomainIds = computed(() =>
+  refs.value.map((r) => r.resource_id).filter((id) => domainById.value[id] !== undefined),
 )
 
 const nodes = computed(() =>
@@ -91,6 +102,7 @@ const nodes = computed(() =>
 const edges = computed(() => {
   const out: {
     key: string
+    id: number
     d: string
     lx: number
     ly: number
@@ -117,6 +129,7 @@ const edges = computed(() => {
     const cy = (y1 + y2) / 2 + (dx / len) * off
     out.push({
       key: `rel-${rid}`,
+      id: rid,
       d: `M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`,
       // 二次贝塞尔 t=0.5 处即标签落点
       lx: 0.25 * x1 + 0.5 * cx + 0.25 * x2,
@@ -134,8 +147,102 @@ const availableTypes = computed(() =>
 const availableRelations = computed(() =>
   relations.value.filter((r) => !canvasRelationIds.value.includes(r.id)),
 )
+const availableDomains = computed(() =>
+  domains.value.filter((domain) => !canvasDomainIds.value.includes(domain.id)),
+)
 
-const selected = computed(() => nodes.value.find((n) => n.key === selectedKey.value) ?? null)
+type SelectedInspector =
+  | {
+      kind: 'entity'
+      key: string
+      id: number
+      label: string
+      name: string
+      iri: string
+      status: ResourceStatus
+      x: number
+      y: number
+      domainLabels: string[]
+    }
+  | {
+      kind: 'relation'
+      key: string
+      id: number
+      label: string
+      name: string
+      iri: string
+      status: ResourceStatus
+      domainLabel: string
+      rangeLabel: string
+    }
+  | {
+      kind: 'domain'
+      key: string
+      id: number
+      label: string
+      name: string
+      iri: string
+      status: ResourceStatus
+      memberCount: number
+    }
+
+const selected = computed<SelectedInspector | null>(() => {
+  const key = selectedKey.value
+  if (!key) return null
+
+  if (key.startsWith('rel-')) {
+    const id = Number(key.slice(4))
+    const relation = relationById.value[id]
+    const detail = relationDetails.value[id]
+    if (!relation) return null
+    return {
+      kind: 'relation',
+      key,
+      id,
+      label: pickLabel(relation.label_i18n, relation.name),
+      name: relation.name,
+      iri: relation.iri,
+      status: relation.status,
+      domainLabel: detail
+        ? pickLabel(
+            typeById.value[detail.domain_spec.type_id]?.label_i18n,
+            typeById.value[detail.domain_spec.type_id]?.name ?? '',
+          )
+        : '',
+      rangeLabel: detail
+        ? pickLabel(
+            typeById.value[detail.range_spec.type_id]?.label_i18n,
+            typeById.value[detail.range_spec.type_id]?.name ?? '',
+          )
+        : '',
+    }
+  }
+
+  if (key.startsWith('domain-')) {
+    const id = Number(key.slice(7))
+    const domain = domainById.value[id]
+    if (!domain) return null
+    return {
+      kind: 'domain',
+      key,
+      id,
+      label: pickLabel(domain.label_i18n, domain.name),
+      name: domain.name,
+      iri: domain.iri,
+      status: domain.status,
+      memberCount: domainMembers.value[id]?.length ?? 0,
+    }
+  }
+
+  const node = nodes.value.find((item) => item.key === key)
+  if (!node) return null
+  const domainLabels = domains.value
+    .filter((domain) =>
+      domainMembers.value[domain.id]?.some((member) => member.resource_id === node.id),
+    )
+    .map((domain) => pickLabel(domain.label_i18n, domain.name))
+  return { kind: 'entity', ...node, domainLabels }
+})
 
 const worldStyle = computed(() => ({
   width: `${WORLD_W}px`,
@@ -146,12 +253,20 @@ const worldStyle = computed(() => ({
 // ── 加载 ───────────────────────────────────────────────────
 
 async function loadCatalog() {
-  const [types, rels] = await Promise.all([
-    api.entityTypes.list().catch(() => [] as EntityTypeBrief[]),
-    api.relations.list().catch(() => [] as RelationTypeBrief[]),
+  const [types, rels, domainList] = await Promise.all([
+    entityTypesApi.list().catch(() => [] as EntityTypeBrief[]),
+    relationsApi.list().catch(() => [] as RelationTypeBrief[]),
+    domainsApi.list().catch(() => [] as DomainBrief[]),
   ])
   entityTypes.value = types
   relations.value = rels
+  domains.value = domainList
+  const members = await Promise.all(
+    domainList.map((domain) => domainsApi.members(domain.id).catch(() => [] as DomainMember[])),
+  )
+  domainMembers.value = Object.fromEntries(
+    domainList.map((domain, index) => [domain.id, members[index]]),
+  )
 }
 
 async function loadOntologies() {
@@ -197,24 +312,23 @@ async function selectOntology(id: number) {
     const relIds = refList
       .map((r) => r.resource_id)
       .filter((rid) => relations.value.some((r) => r.id === rid))
-    if (relIds.length) {
-      const list = await Promise.all(
-        relIds.map((rid) =>
-          api.relations
-            .get(rid)
-            .then((d) => d)
-            .catch(() => null),
-        ),
-      )
-      const next = { ...relationDetails.value }
-      for (const d of list) if (d) next[d.id] = d
-      relationDetails.value = next
-    }
+    await loadRelationDetails(relIds)
 
     ensurePositions()
+    await nextTick()
+    fitView()
   } finally {
     loading.value = false
   }
+}
+
+async function loadRelationDetails(ids: number[]) {
+  const missing = ids.filter((id) => relationDetails.value[id] === undefined)
+  if (!missing.length) return
+  const results = await Promise.all(missing.map((id) => relationsApi.get(id).catch(() => null)))
+  const next = { ...relationDetails.value }
+  for (const item of results) if (item) next[item.id] = item
+  relationDetails.value = next
 }
 
 // ── 布局持久化 ─────────────────────────────────────────────
@@ -244,16 +358,43 @@ function autoLayout() {
     }
   })
   positions.value = next
+  fitView()
   void persist()
 }
 
 function fitView() {
-  zoom.value = 1
-  pan.value = { x: 0, y: 0 }
+  const viewportWidth = canvasEl.value?.clientWidth || 800
+  const viewportHeight = canvasEl.value?.clientHeight || 520
+  const list = nodes.value
+  if (!list.length) {
+    zoom.value = 0.55
+    pan.value = {
+      x: viewportWidth / 2 - (WORLD_W / 2) * zoom.value,
+      y: viewportHeight / 2 - (WORLD_H / 2) * zoom.value,
+    }
+    return
+  }
+
+  const minX = Math.min(...list.map((node) => node.x))
+  const minY = Math.min(...list.map((node) => node.y))
+  const maxX = Math.max(...list.map((node) => node.x + NODE_W))
+  const maxY = Math.max(...list.map((node) => node.y + NODE_H))
+  const boundsWidth = Math.max(1, maxX - minX)
+  const boundsHeight = Math.max(1, maxY - minY)
+  const scale = Math.min(
+    1.5,
+    (viewportWidth - 64) / boundsWidth,
+    (viewportHeight - 64) / boundsHeight,
+  )
+  zoom.value = Math.max(0.2, scale)
+  pan.value = {
+    x: (viewportWidth - boundsWidth * zoom.value) / 2 - minX * zoom.value,
+    y: (viewportHeight - boundsHeight * zoom.value) / 2 - minY * zoom.value,
+  }
 }
 
 function stepZoom(delta: number) {
-  zoom.value = Math.min(2, Math.max(0.4, Math.round((zoom.value + delta) * 100) / 100))
+  zoom.value = Math.min(2, Math.max(0.2, Math.round((zoom.value + delta) * 100) / 100))
 }
 
 // ── 拖拽 ───────────────────────────────────────────────────
@@ -301,6 +442,10 @@ function onWheel(event: WheelEvent) {
   stepZoom(event.deltaY > 0 ? -0.1 : 0.1)
 }
 
+function selectRelation(id: number) {
+  selectedKey.value = `rel-${id}`
+}
+
 // ── 装配 ───────────────────────────────────────────────────
 
 async function addToCanvas(resourceId: number) {
@@ -308,7 +453,11 @@ async function addToCanvas(resourceId: number) {
   try {
     await ontologyApi.addRef(ontologyId.value, resourceId)
     refs.value = await ontologyApi.refs(ontologyId.value)
+    if (relations.value.some((item) => item.id === resourceId)) {
+      await loadRelationDetails([resourceId])
+    }
     ensurePositions()
+    fitView()
     void persist()
   } catch (err) {
     message.error((err as { code?: string }).code || t('designer.addFailed'))
@@ -322,7 +471,14 @@ async function removeFromCanvas(resourceId: number) {
   try {
     await ontologyApi.removeRef(ontologyId.value, ref.id)
     refs.value = await ontologyApi.refs(ontologyId.value)
-    if (selectedKey.value === String(resourceId)) selectedKey.value = null
+    if (
+      selectedKey.value === String(resourceId) ||
+      selectedKey.value === `rel-${resourceId}` ||
+      selectedKey.value === `domain-${resourceId}`
+    ) {
+      selectedKey.value = null
+    }
+    fitView()
   } catch (err) {
     message.error((err as { code?: string }).code || t('designer.removeFailed'))
   }
@@ -395,11 +551,32 @@ onBeforeUnmount(() => {
             <i class="dot" style="background: var(--g-entity)" />
             <span class="pool-name">{{ pickLabel(typeById[id]?.label_i18n, String(id)) }}</span>
           </button>
-          <button v-for="id in canvasRelationIds" :key="`cr-${id}`" type="button" class="pool-item">
+          <button
+            v-for="id in canvasRelationIds"
+            :key="`cr-${id}`"
+            type="button"
+            class="pool-item"
+            :class="{ on: selectedKey === `rel-${id}` }"
+            @click="selectRelation(id)"
+          >
             <i class="dot" style="background: var(--g-relation)" />
             <span class="pool-name">{{ pickLabel(relationById[id]?.label_i18n, String(id)) }}</span>
           </button>
-          <div v-if="!canvasTypeIds.length && !canvasRelationIds.length" class="pool-empty">
+          <button
+            v-for="id in canvasDomainIds"
+            :key="`cd-${id}`"
+            type="button"
+            class="pool-item"
+            :class="{ on: selectedKey === `domain-${id}` }"
+            @click="selectedKey = `domain-${id}`"
+          >
+            <i class="dot" style="background: var(--text-secondary)" />
+            <span class="pool-name">{{ pickLabel(domainById[id]?.label_i18n, String(id)) }}</span>
+          </button>
+          <div
+            v-if="!canvasTypeIds.length && !canvasRelationIds.length && !canvasDomainIds.length"
+            class="pool-empty"
+          >
             {{ t('common.empty') }}
           </div>
 
@@ -426,12 +603,23 @@ onBeforeUnmount(() => {
             <span class="pool-name">{{ pickLabel(r.label_i18n, r.name) }}</span>
             <span class="plus" :aria-label="t('designer.addToCanvas')" />
           </button>
+          <button
+            v-for="domain in availableDomains"
+            :key="`ad-${domain.id}`"
+            type="button"
+            class="pool-item addable"
+            @click="addToCanvas(domain.id)"
+          >
+            <i class="dot" :style="{ background: STATUS_VAR[domain.status] }" />
+            <span class="pool-name">{{ pickLabel(domain.label_i18n, domain.name) }}</span>
+            <span class="plus" :aria-label="t('designer.addToCanvas')" />
+          </button>
         </div>
         <div class="pool-foot">{{ t('designer.layoutHint') }}</div>
       </aside>
 
       <!-- 中：画布 -->
-      <div class="canvas" @wheel="onWheel">
+      <div ref="canvasEl" class="canvas" @wheel="onWheel">
         <NSpin :show="loading" class="canvas-spin">
           <div ref="worldEl" class="world" :style="worldStyle">
             <svg class="edges" :width="WORLD_W" :height="WORLD_H">
@@ -456,12 +644,30 @@ onBeforeUnmount(() => {
               </defs>
               <g v-for="edge in edges" :key="edge.key">
                 <path
+                  class="edge-hit"
+                  :d="edge.d"
+                  fill="none"
+                  stroke="transparent"
+                  stroke-width="18"
+                  pointer-events="stroke"
+                  tabindex="0"
+                  role="button"
+                  :aria-label="t('designer.selectRelation', { name: edge.label })"
+                  @click.stop="selectRelation(edge.id)"
+                  @keydown.enter.stop="selectRelation(edge.id)"
+                  @keydown.space.prevent.stop="selectRelation(edge.id)"
+                />
+                <path
                   :d="edge.d"
                   fill="none"
                   :stroke="
-                    edge.status === 'PUBLISHED' ? 'var(--g-relation)' : 'var(--border-strong)'
+                    selectedKey === edge.key
+                      ? 'var(--accent)'
+                      : edge.status === 'PUBLISHED'
+                        ? 'var(--g-relation)'
+                        : 'var(--border-strong)'
                   "
-                  stroke-width="1.6"
+                  :stroke-width="selectedKey === edge.key ? 2.6 : 1.6"
                   :stroke-dasharray="edge.status === 'PUBLISHED' ? undefined : '5 5'"
                   marker-end="url(#edge-arrow)"
                 />
@@ -520,7 +726,19 @@ onBeforeUnmount(() => {
         <div class="panel-head">{{ t('designer.inspector') }}</div>
         <div v-if="selected" class="inspect-body">
           <div class="inspect-title">
-            <i class="dot" style="background: var(--g-entity); width: 8px; height: 8px" />
+            <i
+              class="dot"
+              :style="{
+                background:
+                  selected.kind === 'entity'
+                    ? 'var(--g-entity)'
+                    : selected.kind === 'relation'
+                      ? 'var(--g-relation)'
+                      : 'var(--text-secondary)',
+                width: '8px',
+                height: '8px',
+              }"
+            />
             <b>{{ selected.label }}</b>
             <span class="status-tag" :style="{ '--dot': STATUS_VAR[selected.status] }">
               <i class="status-dot" />
@@ -532,10 +750,30 @@ onBeforeUnmount(() => {
           <dl class="inspect-kv">
             <dt>{{ t('common.name') }}</dt>
             <dd class="mono">{{ selected.name }}</dd>
-            <dt>{{ t('designer.nodePosition') }}</dt>
-            <dd class="mono">
-              {{ t('designer.positionValue', { x: selected.x, y: selected.y }) }}
-            </dd>
+            <template v-if="selected.kind === 'entity'">
+              <dt>{{ t('designer.nodePosition') }}</dt>
+              <dd class="mono">
+                {{ t('designer.positionValue', { x: selected.x, y: selected.y }) }}
+              </dd>
+              <dt>{{ t('designer.domainMembership') }}</dt>
+              <dd>
+                {{
+                  selected.domainLabels.length
+                    ? selected.domainLabels.join(' · ')
+                    : t('common.noneValue')
+                }}
+              </dd>
+            </template>
+            <template v-else-if="selected.kind === 'relation'">
+              <dt>{{ t('designer.relationDomain') }}</dt>
+              <dd>{{ selected.domainLabel || t('common.noneValue') }}</dd>
+              <dt>{{ t('designer.relationRange') }}</dt>
+              <dd>{{ selected.rangeLabel || t('common.noneValue') }}</dd>
+            </template>
+            <template v-else>
+              <dt>{{ t('designer.domainMembers') }}</dt>
+              <dd class="mono">{{ selected.memberCount }}</dd>
+            </template>
           </dl>
 
           <NButton size="small" block @click="removeFromCanvas(selected.id)">
@@ -727,6 +965,16 @@ onBeforeUnmount(() => {
 .edge-label {
   font-size: 10.5px;
   fill: var(--g-relation);
+  pointer-events: none;
+}
+.edge-hit {
+  cursor: pointer;
+}
+.edge-hit:focus-visible {
+  stroke: var(--accent);
+  stroke-opacity: 0.35;
+  stroke-width: 18;
+  outline: none;
 }
 
 .node {

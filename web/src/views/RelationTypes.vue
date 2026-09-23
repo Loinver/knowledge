@@ -16,14 +16,12 @@ import {
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type {
-  EntityTypeBrief,
-  Namespace,
-  RelationTypeBrief,
-  RelationTypeDetail,
-  ResourceStatus,
-} from '@/api/client'
-import { api } from '@/api/client'
+import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
+import type { Namespace } from '@/api/namespaces'
+import { namespacesApi } from '@/api/namespaces'
+import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
+import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
 
 const { t, locale } = useI18n()
@@ -163,7 +161,7 @@ const typeOptions = computed(() =>
 async function load() {
   loading.value = true
   try {
-    items.value = await api.relations.list()
+    items.value = await relationsApi.list()
   } catch {
     items.value = []
   } finally {
@@ -185,7 +183,7 @@ async function loadDetails() {
   try {
     const results = await Promise.all(
       missing.map((id) =>
-        api.relations
+        relationsApi
           .get(id)
           .then((d) => d)
           .catch(() => null),
@@ -212,7 +210,7 @@ async function handleCreate() {
   }
   creating.value = true
   try {
-    await api.relations.create({
+    await relationsApi.create({
       name: f.name,
       namespace_id: f.namespace_id,
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
@@ -242,13 +240,13 @@ async function handleCreate() {
 onMounted(async () => {
   await Promise.all([
     load(),
-    api.namespaces
+    namespacesApi
       .list()
       .then((r) => {
         namespaces.value = r
       })
       .catch(() => undefined),
-    api.entityTypes
+    entityTypesApi
       .list()
       .then((r) => {
         typeList.value = r

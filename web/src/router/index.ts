@@ -59,7 +59,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'ontology/designer',
         name: 'designer',
-        component: () => import('@/views/Designer.vue'),
+        component: () => import('@/views/ontology/Designer.vue'),
       },
 
       {
@@ -70,7 +70,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'datasources/catalog',
         name: 'data-catalog',
-        component: () => import('@/views/DataCatalog.vue'),
+        component: () => import('@/views/datasources/DataCatalog.vue'),
       },
       {
         path: 'datasources/preview',
@@ -81,7 +81,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'extraction',
         name: 'mapping-wizard',
-        component: () => import('@/views/MappingWizard.vue'),
+        component: () => import('@/views/extraction/MappingWizard.vue'),
       },
       {
         path: 'extraction/runs',

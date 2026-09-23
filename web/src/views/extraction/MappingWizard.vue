@@ -14,25 +14,30 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import { http } from '@/api/client'
+import { datasourcesApi, metadataApi } from '@/api/datasources'
+import type { EntityType, EntityTypeBrief } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
+import type { RunStartResponse } from '@/api/extraction'
+import { extractionApi } from '@/api/extraction'
+import type { Mapping, MappingPreview, MappingRevision } from '@/api/mappings'
+import { mappingsApi } from '@/api/mappings'
+import type { Ontology } from '@/api/ontology'
+import { ontologyApi } from '@/api/ontology'
+import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
+import { relationsApi } from '@/api/relations'
 import type { components } from '@/api/schema'
 import PageHeader from '@/components/PageHeader.vue'
 
 type S = components['schemas']
-type Mapping = S['MappingBrief']
-type Datasource = S['DatasourceBrief']
-type Ontology = S['OntologyBrief']
-type EntityBrief = S['EntityTypeBrief']
-type EntityDetail = S['EntityTypeOut']
-type RelationBrief = S['RelationTypeBrief']
-type RelationDetail = S['RelationTypeOut']
-type MappingRevision = S['MappingRevisionOut']
-type MappingPreview = S['MappingPreviewResult']
+type Datasource = components['schemas']['DatasourceBrief']
+type EntityBrief = EntityTypeBrief
+type EntityDetail = EntityType
+type RelationBrief = RelationTypeBrief
+type RelationDetail = RelationTypeDetail
 type FieldMap = S['FieldMap']
 type TransformKind = S['TransformKind']
 type NullPolicy = S['NullPolicy']
 type RelationMode = S['RelMode']
-type RunResponse = S['RunStartResponse']
 
 interface CatalogColumn {
   name: string
@@ -110,7 +115,7 @@ const relationMaps = ref<RelationDraft[]>([])
 const preview = ref<MappingPreview | null>(null)
 const draftRevision = ref<MappingRevision | null>(null)
 const publishedRevision = ref<MappingRevision | null>(null)
-const runResult = ref<RunResponse | null>(null)
+const runResult = ref<RunStartResponse | null>(null)
 const samplePreview = ref<S['PreviewResponse'] | null>(null)
 const selectedSampleTable = ref<string | null>(null)
 const sampleLimit = ref<number>(20)
@@ -449,24 +454,19 @@ async function loadInitial(): Promise<void> {
   loadError.value = ''
   const signal = lifecycleController.signal
   try {
-    const [
-      mappingResponse,
-      datasourceResponse,
-      ontologyResponse,
-      entityResponse,
-      relationResponse,
-    ] = await Promise.all([
-      http.get<Mapping[]>('/mappings', { params: { page: 1, page_size: 200 }, signal }),
-      http.get<Datasource[]>('/datasources', { signal }),
-      http.get<Ontology[]>('/ontologies', { params: { page: 1, page_size: 200 }, signal }),
-      http.get<EntityBrief[]>('/entity-types', { params: { page: 1, page_size: 200 }, signal }),
-      http.get<RelationBrief[]>('/relations', { params: { page: 1, page_size: 200 }, signal }),
-    ])
-    mappings.value = mappingResponse.data
-    datasources.value = datasourceResponse.data
-    ontologies.value = ontologyResponse.data
-    entityBriefs.value = entityResponse.data
-    relationBriefs.value = relationResponse.data
+    const [mappingItems, datasourceItems, ontologyItems, entityItems, relationItems] =
+      await Promise.all([
+        mappingsApi.list(signal),
+        datasourcesApi.list({}, signal),
+        ontologyApi.list({ page: 1, page_size: 200 }, signal),
+        entityTypesApi.list({ page: 1, page_size: 200 }, signal),
+        relationsApi.list({ page: 1, page_size: 200 }, signal),
+      ])
+    mappings.value = mappingItems
+    datasources.value = datasourceItems
+    ontologies.value = ontologyItems
+    entityBriefs.value = entityItems
+    relationBriefs.value = relationItems
   } catch (error: unknown) {
     if (!isCanceled(error)) loadError.value = describeError(error)
   } finally {
@@ -480,28 +480,14 @@ async function loadOntologyAssets(ontologyId: number, signal: AbortSignal): Prom
   const abortListener = () => controller.abort()
   signal.addEventListener('abort', abortListener, { once: true })
   try {
-    const { data: refs } = await http.get<S['OntologyRefOut'][]>(`/ontologies/${ontologyId}/refs`, {
-      signal: controller.signal,
-    })
+    const refs = await ontologyApi.refs(ontologyId, controller.signal)
     ontologyRefs.value = refs
     const ids = new Set(refs.map((item) => item.resource_id))
     const entityRefs = entityBriefs.value.filter((item) => ids.has(item.id))
     const relationRefs = relationBriefs.value.filter((item) => ids.has(item.id))
     const [entities, relations] = await Promise.all([
-      Promise.all(
-        entityRefs.map((item) =>
-          http
-            .get<EntityDetail>(`/entity-types/${item.id}`, { signal: controller.signal })
-            .then((response) => response.data),
-        ),
-      ),
-      Promise.all(
-        relationRefs.map((item) =>
-          http
-            .get<RelationDetail>(`/relations/${item.id}`, { signal: controller.signal })
-            .then((response) => response.data),
-        ),
-      ),
+      Promise.all(entityRefs.map((item) => entityTypesApi.get(item.id, controller.signal))),
+      Promise.all(relationRefs.map((item) => relationsApi.get(item.id, controller.signal))),
     ])
     entityTypes.value = entities
     relationTypes.value = relations
@@ -571,11 +557,10 @@ async function selectMapping(value: number | null): Promise<void> {
   selectedOntologyId.value = item.ontology_id
   try {
     await loadOntologyAssets(item.ontology_id, controller.signal)
-    const endpoint = item.status === 'PUBLISHED' ? 'published' : 'draft'
-    const { data: revision } = await http.get<MappingRevision | null>(
-      `/mappings/${item.id}/${endpoint}`,
-      { signal: controller.signal },
-    )
+    const revision =
+      item.status === 'PUBLISHED'
+        ? await mappingsApi.published(item.id, controller.signal)
+        : await mappingsApi.draft(item.id, controller.signal)
     if (item.status === 'PUBLISHED') publishedRevision.value = revision
     else draftRevision.value = revision
     if (revision) {
@@ -630,21 +615,23 @@ async function saveDraft(): Promise<MappingRevision | null> {
   const draft = serializeDraft()
   let mapping = selectedMapping.value
   if (!mapping) {
-    const { data } = await http.post<Mapping>('/mappings', {
+    const ontologyId = selectedOntologyId.value
+    if (ontologyId === null) return null
+    const data = await mappingsApi.create({
       name: mappingName.value.trim(),
-      ontology_id: selectedOntologyId.value,
+      ontology_id: ontologyId,
       draft,
     })
     mapping = data
     mappings.value = [data, ...mappings.value.filter((item) => item.id !== data.id)]
     selectedMappingId.value = data.id
   } else {
-    await http.put<MappingRevision>(`/mappings/${mapping.id}/draft`, {
+    await mappingsApi.saveDraft(mapping.id, {
       draft,
       if_match: mapping.current_revision,
     })
   }
-  const { data: revision } = await http.get<MappingRevision>(`/mappings/${mapping.id}/draft`)
+  const revision = await mappingsApi.draft(mapping.id)
   draftRevision.value = revision
   notice.value = t('dataAccess.mapping.draftSaved')
   return revision
@@ -663,10 +650,7 @@ async function handleSaveDraft(): Promise<void> {
   }
 }
 async function loadLatestMetadata(datasourceId: number): Promise<void> {
-  const { data } = await http.get<S['MetadataSnapshotOut']>(
-    `/datasources/${datasourceId}/metadata/latest`,
-    { signal: lifecycleController?.signal },
-  )
+  const data = await metadataApi.latest(datasourceId, lifecycleController?.signal)
   catalog.value = loadCatalog(data.catalog)
   metadataRevision.value = data.revision
   selectedSampleTable.value = null
@@ -678,11 +662,7 @@ async function captureMetadata(): Promise<void> {
   actionError.value = ''
   notice.value = ''
   try {
-    await http.post<S['MetadataSnapshotOut']>(
-      `/datasources/${selectedDatasourceId.value}/metadata/capture`,
-      undefined,
-      { signal: lifecycleController?.signal },
-    )
+    await metadataApi.capture(selectedDatasourceId.value)
     await loadLatestMetadata(selectedDatasourceId.value)
     notice.value = t('dataAccess.mapping.metadataCaptured')
   } catch (error: unknown) {
@@ -736,8 +716,7 @@ async function fetchSamplePreview(): Promise<void> {
   actionError.value = ''
   try {
     const parsed = tableParts(selectedSampleTable.value)
-    const { data } = await http.post<S['PreviewResponse']>(
-      '/datasources/preview',
+    samplePreview.value = await datasourcesApi.preview(
       {
         datasource_id: selectedDatasourceId.value,
         table: parsed.table,
@@ -745,9 +724,8 @@ async function fetchSamplePreview(): Promise<void> {
         limit: 20,
         offset: 0,
       },
-      { signal: lifecycleController?.signal },
+      lifecycleController?.signal,
     )
-    samplePreview.value = data
   } catch (error: unknown) {
     if (!isCanceled(error)) actionError.value = describeError(error)
   } finally {
@@ -763,15 +741,11 @@ async function runCompile(): Promise<void> {
   try {
     if (selectedMapping.value?.status !== 'PUBLISHED') await saveDraft()
     if (!selectedMapping.value) return
-    const { data } = await http.post<MappingPreview>(
-      `/mappings/${selectedMapping.value.id}/compile`,
-      {
-        datasource_id: selectedDatasourceId.value,
-        limit: Math.max(1, Math.min(100, sampleLimit.value ?? 20)),
-        use_draft: selectedMapping.value.status !== 'PUBLISHED',
-      },
-    )
-    preview.value = data
+    preview.value = await mappingsApi.compile(selectedMapping.value.id, {
+      datasource_id: selectedDatasourceId.value,
+      limit: Math.max(1, Math.min(100, sampleLimit.value ?? 20)),
+      use_draft: selectedMapping.value.status !== 'PUBLISHED',
+    })
     step.value = 4
   } catch (error: unknown) {
     if (!isCanceled(error)) actionError.value = describeError(error)
@@ -787,10 +761,9 @@ async function publishMapping(): Promise<void> {
   try {
     const saved = await saveDraft()
     if (!saved || !selectedMapping.value) return
-    const { data } = await http.post<MappingRevision>(
-      `/mappings/${selectedMapping.value.id}/publish`,
-      { if_match: selectedMapping.value.current_revision },
-    )
+    const data = await mappingsApi.publish(selectedMapping.value.id, {
+      if_match: selectedMapping.value.current_revision,
+    })
     publishedRevision.value = data
     const published: Mapping = {
       ...selectedMapping.value,
@@ -813,13 +786,12 @@ async function startRun(): Promise<void> {
   actionError.value = ''
   notice.value = ''
   try {
-    const { data } = await http.post<RunResponse>('/extraction/runs', {
+    runResult.value = await extractionApi.start({
       mapping_revision_id: publishedRevision.value.id,
       datasource_id: selectedDatasourceId.value,
       namespace: namespace.value.trim() || selectedOntology.value?.iri || 'https://example.org/kg/',
     })
-    runResult.value = data
-    notice.value = t('dataAccess.mapping.runStarted', { id: data.run.id })
+    notice.value = t('dataAccess.mapping.runStarted', { id: runResult.value.run.id })
   } catch (error: unknown) {
     if (!isCanceled(error)) actionError.value = describeError(error)
   } finally {
@@ -911,7 +883,7 @@ onBeforeUnmount(() => {
           :value="selectedMappingId"
           :options="[
             ...mappings.map(mappingOption),
-            { label: t('dataAccess.mapping.newMapping'), value: null },
+            { label: t('dataAccess.mapping.newMapping'), value: 0 },
           ]"
           :placeholder="t('dataAccess.mapping.selectMapping')"
           clearable

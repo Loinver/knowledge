@@ -16,6 +16,8 @@ export type MetadataSnapshot = MetadataSnapshotOut
 export type MetadataSnapshotBrief = S['MetadataSnapshotBrief']
 export type TableReferenceResponse = S['TableReferenceResponse']
 export type TableReferences = TableReferenceResponse
+export type PreviewRequest = S['PreviewRequest']
+export type PreviewResponse = S['PreviewResponse']
 
 export const datasourcesApi = {
   list: (params: { q?: string } = {}, signal?: AbortSignal) =>
@@ -29,6 +31,8 @@ export const datasourcesApi = {
       .post<DatasourceTestResult>('/datasources/test-connection', payload, { signal })
       .then((r) => r.data),
   remove: (id: number) => http.delete(`/datasources/${id}`).then(() => undefined),
+  preview: (payload: PreviewRequest, signal?: AbortSignal) =>
+    http.post<PreviewResponse>('/datasources/preview', payload, { signal }).then((r) => r.data),
 }
 
 export const metadataApi = {

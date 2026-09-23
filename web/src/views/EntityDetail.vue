@@ -24,8 +24,8 @@ import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 
-import type { DataTypeProp, DataTypePropInput, EntityType } from '@/api/client'
-import { api } from '@/api/client'
+import type { DataTypeProp, DataTypePropInput, EntityType } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
 import type { EnumDictionary } from '@/api/enum-dictionaries'
 import { enumDictionariesApi } from '@/api/enum-dictionaries'
 import { useApiError } from '@/composables/useApiError'
@@ -93,7 +93,7 @@ async function loadDetail() {
   }
   loading.value = true
   try {
-    const result = await api.entityTypes.get(id)
+    const result = await entityTypesApi.get(id)
     if (alive && generation === loadGeneration) data.value = result
   } catch (err) {
     if (alive && generation === loadGeneration) error.value = failure(err)
@@ -108,7 +108,7 @@ async function handlePublish() {
   busy.value = true
   error.value = ''
   try {
-    await api.entityTypes.publish(data.value.id)
+    await entityTypesApi.publish(data.value.id)
     if (alive && generation === loadGeneration) await loadDetail()
   } catch (err) {
     if (alive && generation === loadGeneration) error.value = failure(err)
@@ -224,7 +224,7 @@ async function saveProperties(props: DataTypePropInput[], editor = false) {
   editorError.value = ''
   notice.value = ''
   try {
-    const result = await api.entityTypes.update(entity.id, {
+    const result = await entityTypesApi.update(entity.id, {
       data_props: props,
       if_match: entity.current_revision,
       edit_revision: entity.edit_revision,

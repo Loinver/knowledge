@@ -13,14 +13,10 @@ import {
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type {
-  DomainBrief,
-  DomainMember,
-  EntityTypeBrief,
-  PublishCheckResult,
-  ResourceStatus,
-} from '@/api/client'
-import { api } from '@/api/client'
+import type { DomainBrief, DomainMember, PublishCheckResult } from '@/api/domains'
+import { domainsApi } from '@/api/domains'
+import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
 import PageHeader from '@/components/PageHeader.vue'
 
 const { t, locale } = useI18n()
@@ -73,7 +69,7 @@ const checkItems = computed(() => {
 async function load() {
   loading.value = true
   try {
-    items.value = await api.domains.list()
+    items.value = await domainsApi.list()
     // 列表刷新后保持选中项指向新对象，避免详情区显示过期状态
     if (selected.value) {
       selected.value = items.value.find((d) => d.id === selected.value?.id) ?? null
@@ -92,7 +88,7 @@ async function select(domain: DomainBrief) {
   addTypeId.value = null
   membersLoading.value = true
   try {
-    members.value = await api.domains.members(domain.id)
+    members.value = await domainsApi.members(domain.id)
   } catch {
     members.value = []
   } finally {
@@ -107,9 +103,9 @@ async function addMember() {
     return
   }
   try {
-    await api.domains.addMember(selected.value.id, addTypeId.value)
+    await domainsApi.addMember(selected.value.id, addTypeId.value)
     addTypeId.value = null
-    members.value = await api.domains.members(selected.value.id)
+    members.value = await domainsApi.members(selected.value.id)
   } catch (err) {
     actionError.value = (err as { code?: string }).code || t('common.save')
   }
@@ -119,8 +115,8 @@ async function removeMember(memberId: number) {
   if (!selected.value) return
   actionError.value = ''
   try {
-    await api.domains.removeMember(selected.value.id, memberId)
-    members.value = await api.domains.members(selected.value.id)
+    await domainsApi.removeMember(selected.value.id, memberId)
+    members.value = await domainsApi.members(selected.value.id)
   } catch (err) {
     actionError.value = (err as { code?: string }).code || t('common.delete')
   }
@@ -130,7 +126,7 @@ async function publishCheck() {
   if (!selected.value) return
   actionError.value = ''
   try {
-    checkResult.value = await api.domains.publishCheck(selected.value.id)
+    checkResult.value = await domainsApi.publishCheck(selected.value.id)
   } catch (err) {
     actionError.value = (err as { code?: string }).code || t('domain.publishCheck')
   }
@@ -140,7 +136,7 @@ async function publish() {
   if (!selected.value) return
   actionError.value = ''
   try {
-    await api.domains.publish(selected.value.id)
+    await domainsApi.publish(selected.value.id)
     await load()
     if (selected.value) await select(selected.value)
   } catch (err) {
@@ -159,7 +155,7 @@ async function handleCreate() {
   }
   creating.value = true
   try {
-    await api.domains.create({
+    await domainsApi.create({
       name: f.name,
       iri: f.iri,
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
@@ -177,7 +173,7 @@ async function handleCreate() {
 onMounted(async () => {
   await Promise.all([
     load(),
-    api.entityTypes
+    entityTypesApi
       .list()
       .then((r) => {
         typeList.value = r
@@ -258,7 +254,7 @@ onMounted(async () => {
                 {{ t(`domain.${c.key}`) }}
               </li>
             </ul>
-            <ul v-if="checkResult.issues.length" class="issue-list">
+            <ul v-if="checkResult.issues?.length" class="issue-list">
               <li v-for="issue in checkResult.issues" :key="issue">{{ issue }}</li>
             </ul>
           </div>
