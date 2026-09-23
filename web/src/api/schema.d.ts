@@ -3573,6 +3573,8 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
     }
     /** DomainCreate */
     DomainCreate: {
@@ -3605,6 +3607,8 @@ export interface components {
       as_ref: boolean
       /** Owner Domain Id */
       owner_domain_id?: number | null
+      /** If Edit Match */
+      if_edit_match?: number | null
     }
     /** DomainMemberOut */
     DomainMemberOut: {
@@ -3638,6 +3642,8 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
     }
     /** DomainUpdate */
     DomainUpdate: {
@@ -3651,6 +3657,8 @@ export interface components {
       } | null
       /** If Match */
       if_match: number
+      /** If Edit Match */
+      if_edit_match?: number | null
     }
     /**
      * EndpointSpec
@@ -4281,6 +4289,8 @@ export interface components {
       status: string
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
     }
     /** MappingCreate */
     MappingCreate: {
@@ -4302,6 +4312,8 @@ export interface components {
       status: string
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
     }
     /**
      * MappingPreviewResult
@@ -4347,6 +4359,8 @@ export interface components {
       mapping_id: number
       /** Revision */
       revision: number
+      /** Edit Revision */
+      edit_revision: number
       /** Onto Version */
       onto_version: number
       /** Entity Maps */
@@ -4449,6 +4463,8 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
     }
     /** OntologyCreate */
     OntologyCreate: {
@@ -4575,6 +4591,8 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /** Edit Revision */
+      edit_revision: number
       /** Template Id */
       template_id?: number | null
       template?: components['schemas']['TemplateLink'] | null
@@ -4588,6 +4606,8 @@ export interface components {
       resource_id: number
       /** Pinned Revision */
       pinned_revision?: number | null
+      /** If Edit Match */
+      if_edit_match?: number | null
     }
     /** OntologyRefOut */
     OntologyRefOut: {
@@ -4625,6 +4645,8 @@ export interface components {
       } | null
       /** If Match */
       if_match: number
+      /** If Edit Match */
+      if_edit_match?: number | null
       /** Rule Ids */
       rule_ids?: number[] | null
     }
@@ -4756,6 +4778,8 @@ export interface components {
     PublishRequest: {
       /** If Match */
       if_match: number
+      /** If Edit Match */
+      if_edit_match?: number | null
     }
     /** QuarantineOut */
     QuarantineOut: {
@@ -5194,6 +5218,8 @@ export interface components {
       draft: components['schemas']['MappingRevisionCreate']
       /** If Match */
       if_match: number
+      /** If Edit Match */
+      if_edit_match?: number | null
     }
     /** StandardClauseBrief */
     StandardClauseBrief: {
@@ -6056,7 +6082,9 @@ export interface operations {
   remove_ref_endpoint_api_v1_ontologies__ontology_id__refs__ref_id__delete: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        'if-edit-match'?: number | null
+      }
       path: {
         ontology_id: number
         ref_id: number
@@ -6185,7 +6213,9 @@ export interface operations {
   publish_onto_endpoint_api_v1_ontologies__ontology_id__publish_post: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        'if-edit-match'?: number | null
+      }
       path: {
         ontology_id: number
       }
@@ -6287,6 +6317,7 @@ export interface operations {
     parameters: {
       query?: never
       header?: {
+        'if-edit-match'?: number | null
         'if-match'?: string | null
       }
       path: {
@@ -6680,7 +6711,9 @@ export interface operations {
   remove_member_endpoint_api_v1_domains__domain_id__members__member_id__delete: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        'if-edit-match'?: number | null
+      }
       path: {
         domain_id: number
         member_id: number
@@ -6743,7 +6776,9 @@ export interface operations {
   publish_domain_endpoint_api_v1_domains__domain_id__publish_post: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        'if-edit-match'?: number | null
+      }
       path: {
         domain_id: number
       }
@@ -7333,7 +7368,9 @@ export interface operations {
   remove_m_api_v1_mappings__mapping_id__delete: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        'if-edit-match'?: number | null
+      }
       path: {
         mapping_id: number
       }
