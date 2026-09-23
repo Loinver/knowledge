@@ -8,6 +8,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
+import AuthHeading from '@/views/auth/AuthHeading.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -61,7 +62,7 @@ async function submit() {
 
 <template>
   <NForm ref="formRef" :model="model" :rules="rules" label-placement="top" @submit.prevent="submit">
-    <h2 class="form-title">{{ t('auth.loginTitle') }}</h2>
+    <AuthHeading :title="t('auth.loginTitle')" :subtitle="t('auth.loginSubtitle')" />
     <NAlert v-if="error" type="error" role="alert" class="form-alert">{{ error }}</NAlert>
     <NFormItem :label="t('auth.account')" path="account">
       <NInput
@@ -93,10 +94,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.form-title {
-  margin: 0 0 var(--space-4);
-  font-size: 16px;
-}
 .form-alert {
   margin-bottom: var(--space-3);
 }

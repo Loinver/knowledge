@@ -271,7 +271,9 @@
     "quarantine": "隔离",
     "status": "状态",
     "resultSets": "结果集版本",
-    "totalRuns": "共 {n} 次运行"
+    "totalRuns": "共 {n} 次运行",
+    "assets": "资产总览",
+    "description": "从本体建模到证据追溯的全流程概览。每一步的产出都会成为下一步的输入。"
   },
   "report": {
     "title": "实例校验报告",
@@ -501,7 +503,8 @@
     "switchLocale": "切换语言",
     "toDark": "切换到暗色模式",
     "toLight": "切换到浅色模式",
-    "authFooter": "开源知识中台 · 本体建模与证据追溯"
+    "authFooter": "开源知识中台 · 本体建模与证据追溯",
+    "authTagline": "把散落的数据，连成可追溯的知识"
   },
   "auth": {
     "login": "登录",
@@ -537,7 +540,10 @@
       "usernamePattern": "用户名需为 3 到 32 位字母、数字或下划线",
       "emailRequired": "请输入邮箱",
       "emailPattern": "邮箱格式不正确"
-    }
+    },
+    "loginSubtitle": "使用账号或邮箱登录知识中台",
+    "registerSubtitle": "创建你的知识中台账号",
+    "resetSubtitle": "为你的账号设置新密码"
   },
   "account": {
     "profile": "个人中心",

@@ -271,7 +271,9 @@
     "quarantine": "Quarantine",
     "status": "Status",
     "resultSets": "Result Set Versions",
-    "totalRuns": "{n} runs total"
+    "totalRuns": "{n} runs total",
+    "assets": "Asset overview",
+    "description": "End-to-end overview from ontology modelling to evidence tracing. Each step feeds the next."
   },
   "report": {
     "title": "Instance Validation Report",
@@ -501,7 +503,8 @@
     "switchLocale": "Switch language",
     "toDark": "Switch to dark theme",
     "toLight": "Switch to light theme",
-    "authFooter": "Open-source knowledge platform · ontology modelling and evidence tracing"
+    "authFooter": "Open-source knowledge platform · ontology modelling and evidence tracing",
+    "authTagline": "Connect scattered data into traceable knowledge"
   },
   "auth": {
     "login": "Sign in",
@@ -537,7 +540,10 @@
       "usernamePattern": "Use 3 to 32 letters, digits or underscores",
       "emailRequired": "Email is required",
       "emailPattern": "Invalid email format"
-    }
+    },
+    "loginSubtitle": "Sign in to Knowledge Platform with your account or email",
+    "registerSubtitle": "Create your Knowledge Platform account",
+    "resetSubtitle": "Set a new password for your account"
   },
   "account": {
     "profile": "Profile",

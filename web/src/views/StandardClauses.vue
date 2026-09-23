@@ -321,7 +321,7 @@ const columns = computed(() => [
 <style scoped>
 .clauses-page .intro {
   margin: 0 0 16px;
-  color: var(--text-color-2);
+  color: var(--text-secondary);
 }
 .clauses-page .toolbar {
   margin-bottom: 16px;

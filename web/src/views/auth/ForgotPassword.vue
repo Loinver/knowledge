@@ -7,6 +7,7 @@ import { RouterLink, useRouter } from 'vue-router'
 
 import { authApi } from '@/api/auth'
 import { useApiError } from '@/composables/useApiError'
+import AuthHeading from '@/views/auth/AuthHeading.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -55,8 +56,7 @@ async function submit() {
 
 <template>
   <NForm ref="formRef" :model="model" :rules="rules" label-placement="top" @submit.prevent="submit">
-    <h2 class="form-title">{{ t('auth.forgotTitle') }}</h2>
-    <p class="form-hint">{{ t('auth.forgotHint') }}</p>
+    <AuthHeading :title="t('auth.forgotTitle')" :subtitle="t('auth.forgotHint')" />
     <NAlert v-if="error" type="error" role="alert" class="form-alert">{{ error }}</NAlert>
     <NAlert v-if="sent" type="success" role="status" class="form-alert">
       {{ t('auth.forgotSent') }}
@@ -74,15 +74,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.form-title {
-  margin: 0 0 var(--space-2);
-  font-size: 16px;
-}
-.form-hint {
-  margin: 0 0 var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--font-small);
-}
 .form-alert {
   margin-bottom: var(--space-3);
 }

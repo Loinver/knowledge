@@ -15,10 +15,13 @@ function read(key: string): string | null {
  *
  * 两项都持久化到 localStorage，并在 store 创建时立刻应用到 `<html>`，
  * 避免刷新后先渲染浅色再跳暗色的闪烁。
+ *
+ * 默认主题是**深色**——设计语言「星图」以深空为基调，浅色是它的亮色变体。
+ * 只有用户显式切到浅色（localStorage 里存了 `light`）才会离开深色。
  */
 export const useUiStore = defineStore('ui', () => {
   const collapsed = ref(read(SIDER_KEY) === '1')
-  const themeMode = ref<ThemeMode>(read(THEME_KEY) === 'dark' ? 'dark' : 'light')
+  const themeMode = ref<ThemeMode>(read(THEME_KEY) === 'light' ? 'light' : 'dark')
 
   const isDark = computed(() => themeMode.value === 'dark')
 

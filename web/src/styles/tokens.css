@@ -1,26 +1,87 @@
-:root {
-  --pri: #315ee7;
-  --pri-hover: #2a54d1;
-  --pri-pressed: #2349b8;
-  --bg: #ffffff;
-  --bg-subtle: #f7f8fa;
-  --bg-elevated: #ffffff;
-  --text: #1f2329;
-  --text-secondary: #646a73;
-  --text-tertiary: #8f959a;
-  --border: #e5e6eb;
-  --border-strong: #c9cdd4;
-  --success: #00a870;
-  --warning: #ff9a00;
-  --danger: #f53f3f;
-  --graph-derived: #8753c7;
-  --radius-small: 4px;
-  --radius-medium: 6px;
-  --radius-large: 8px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+/**
+ * 设计令牌 —— 全站唯一真值源。
+ *
+ * 设计语言「星图」：节点是知识资产，连线是语义关系，深空是尚未被建模的原始世界。
+ * 深色是主基调（默认主题），浅色是同一语言的亮色变体，两者共用同一套变量名。
+ *
+ * 变量名向后兼容：`--pri` / `--bg` / `--radius-medium` 等旧名保留，
+ * 新代码优先使用语义化的 `--accent` / `--bg-surface` / `--r-md`。
+ */
 
-  /* 间距：4px 基准 */
+:root {
+  /* ── 底色阶（浅色变体） ───────────────────────────────── */
+  --bg-base: #f7f8fb;
+  --bg: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-inset: #f2f4f8;
+  --bg-subtle: #f7f8fa;
+  --bg-hover: #f0f3f9;
+  --bg-active: #e4eaf6;
+
+  /* ── 描边 ─────────────────────────────────────────────── */
+  --border-subtle: rgba(20, 26, 36, 0.06);
+  --border: #e3e7ee;
+  --border-strong: #cbd2de;
+
+  /* ── 文字 ─────────────────────────────────────────────── */
+  --text: #141a24;
+  --text-secondary: #5a6478;
+  --text-tertiary: #8a93a6;
+  --text-disabled: #b4bac7;
+
+  /* ── 品牌双轴：青蓝=操作，紫罗兰=AI ───────────────────── */
+  --accent: #2f6fe4;
+  --accent-hover: #2861cd;
+  --accent-pressed: #2153b4;
+  --accent-soft: rgba(47, 111, 228, 0.1);
+  --violet: #7c3aed;
+  --violet-soft: rgba(124, 58, 237, 0.1);
+  --cyan: #0891b2;
+  --pri: #2f6fe4;
+  --pri-hover: #2861cd;
+  --pri-pressed: #2153b4;
+
+  /* ── 图谱语义色：固定绑定语义，全站不得挪用 ───────────── */
+  --g-entity: #2f6fe4;
+  --g-relation: #0891b2;
+  --g-derived: #7c3aed;
+  --g-evidence: #059669;
+  --g-quarantine: #d97706;
+  --g-current: #db2777;
+  --graph-derived: #7c3aed;
+
+  /* ── 校验四态：未执行绝不用成功色 ─────────────────────── */
+  --s-pass: #059669;
+  --s-violation: #dc2626;
+  --s-na: #6b7280;
+  --s-notrun: #d97706;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #2f6fe4;
+
+  /* ── 圆角 ─────────────────────────────────────────────── */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+  --radius-small: 4px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+
+  /* ── 层次：深色靠描边，浅色靠阴影 ─────────────────────── */
+  --elev-1: 0 0 0 1px var(--border-subtle);
+  --elev-2: 0 0 0 1px var(--border-subtle), 0 4px 16px rgba(20, 26, 36, 0.08);
+  --elev-3: 0 0 0 1px var(--border-subtle), 0 12px 32px rgba(20, 26, 36, 0.14);
+  --glow: 0 0 0 1px rgba(47, 111, 228, 0.45), 0 0 14px rgba(47, 111, 228, 0.18);
+  --glow-warn: 0 0 0 1px rgba(217, 119, 6, 0.45), 0 0 14px rgba(217, 119, 6, 0.16);
+  --shadow-sm: 0 1px 2px rgba(20, 26, 36, 0.06);
+  --shadow-md: 0 2px 8px rgba(20, 26, 36, 0.08);
+
+  /* ── 间距：4px 基准 ───────────────────────────────────── */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -28,34 +89,91 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  /* 排版 */
+  /* ── 排版：深色下浅字显粗，标题最高 500 字重 ──────────── */
+  --font-display: 28px;
+  --font-h1: 20px;
+  --font-h2: 16px;
+  --font-h3: 14px;
   --font-body: 14px;
   --font-small: 13px;
   --font-caption: 12px;
   --line-height: 1.6;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* 控件与骨架尺寸 */
+  /* ── 控件与骨架尺寸 ───────────────────────────────────── */
   --control-height: 34px;
   --sider-width: 220px;
   --sider-collapsed-width: 64px;
   --header-height: 56px;
-  --transition-base: 200ms;
+
+  /* ── 动效：只表达因果，不装饰 ─────────────────────────── */
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
+  --dur-graph: 400ms;
+  --transition-base: 160ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-/* 暗色：由 <html data-theme="dark"> 启用，与 Naive UI darkTheme 同步切换 */
+/* 深色为主基调：由 <html data-theme="dark"> 启用，与 Naive UI darkTheme 同步 */
 [data-theme='dark'] {
-  --pri: #5b83f0;
-  --pri-hover: #729af5;
-  --pri-pressed: #4a70d8;
-  --bg: #0f172a;
-  --bg-subtle: #151d31;
-  --bg-elevated: #1b2336;
-  --text: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --border: #334155;
-  --border-strong: #475569;
+  color-scheme: dark;
+
+  --bg-base: #080b14;
+  --bg: #080b14;
+  --bg-surface: #0e1320;
+  --bg-raised: #141b2d;
+  --bg-elevated: #141b2d;
+  --bg-inset: #0a0f1a;
+  --bg-subtle: #0b0f1b;
+  --bg-hover: #1a2338;
+  --bg-active: #22304a;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --text: #e9eef9;
+  --text-secondary: #9aa6bf;
+  --text-tertiary: #626e88;
+  --text-disabled: #414b61;
+
+  --accent: #4f8df7;
+  --accent-hover: #6ba0ff;
+  --accent-pressed: #3d78de;
+  --accent-soft: rgba(79, 141, 247, 0.14);
+  --violet: #8b5cf6;
+  --violet-soft: rgba(139, 92, 246, 0.16);
+  --cyan: #22d3ee;
+  --pri: #4f8df7;
+  --pri-hover: #6ba0ff;
+  --pri-pressed: #3d78de;
+
+  --g-entity: #4f8df7;
+  --g-relation: #22d3ee;
+  --g-derived: #a78bfa;
+  --g-evidence: #34d399;
+  --g-quarantine: #fbbf24;
+  --g-current: #f472b6;
+  --graph-derived: #a78bfa;
+
+  --s-pass: #34d399;
+  --s-violation: #f87171;
+  --s-na: #8b95ac;
+  --s-notrun: #fbbf24;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #4f8df7;
+
+  /* 深色下阴影几乎不可见，层次改由描边承担 */
+  --elev-1: 0 0 0 1px var(--border-subtle);
+  --elev-2: 0 0 0 1px var(--border-subtle), 0 4px 16px rgba(0, 0, 0, 0.4);
+  --elev-3: 0 0 0 1px var(--border), 0 12px 32px rgba(0, 0, 0, 0.55);
+  --glow: 0 0 0 1px rgba(79, 141, 247, 0.5), 0 0 16px rgba(79, 141, 247, 0.25);
+  --glow-warn: 0 0 0 1px rgba(251, 191, 36, 0.45), 0 0 14px rgba(251, 191, 36, 0.2);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
@@ -71,11 +189,9 @@ body {
 }
 
 body {
-  background: var(--bg);
+  background: var(--bg-base);
   color: var(--text);
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--font-body);
   line-height: var(--line-height);
   transition:
@@ -83,12 +199,60 @@ body {
     color var(--transition-base);
 }
 
-a {
-  color: var(--pri);
+/* 深空网格底纹：页面背景的极淡坐标感，是「星图」的签名元素之一 */
+[data-theme='dark'] body {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  /* 深色下浅色文字视觉更粗，标题一律不超过 500 */
+  font-weight: 500;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* ── 工具类 ─────────────────────────────────────────────── */
+
+/** 等宽：IRI、ID、代码、计数 */
 .mono {
   font-family: var(--font-mono);
+}
+
+/** IRI 身份标识：知识中台里每个资源的「身份证」 */
+.iri {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+}
+
+/** 深空网格：画布、空态、错误页复用 */
+.kg-grid {
+  background-image:
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/** 节点光晕：激活态、当前节点 */
+.kg-glow {
+  box-shadow: var(--glow);
 }
 
 @media (prefers-reduced-motion: reduce) {

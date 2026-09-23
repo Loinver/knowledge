@@ -3,6 +3,7 @@ import { NLayoutSider, NMenu } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import StarMark from '@/components/StarMark.vue'
 import { useNavigation } from '@/layout/useNavigation'
 import { useUiStore } from '@/stores/ui'
 
@@ -26,8 +27,13 @@ function updateExpanded(keys: string[]) {
     :native-scrollbar="false"
     class="app-sider"
   >
-    <RouterLink class="brand" :to="{ name: 'dashboard' }">
-      <span class="brand-mark">{{ t('app.shortName') }}</span>
+    <RouterLink
+      class="brand"
+      :to="{ name: 'dashboard' }"
+      :aria-label="t('app.title')"
+      :title="ui.collapsed ? t('app.title') : undefined"
+    >
+      <StarMark :size="22" />
       <span v-show="!ui.collapsed" class="brand-text">{{ t('app.title') }}</span>
     </RouterLink>
     <NMenu
@@ -49,33 +55,26 @@ function updateExpanded(keys: string[]) {
   display: flex;
   flex-direction: column;
 }
+
+/* 品牌行与顶栏等高，两者底边对齐形成一条贯通的分隔线 */
 .brand {
   display: flex;
+  gap: 9px;
   align-items: center;
-  gap: var(--space-2);
   height: var(--header-height);
   padding: 0 var(--space-4);
   overflow: hidden;
   color: var(--text);
   text-decoration: none;
   white-space: nowrap;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
-.brand-mark {
-  display: inline-flex;
-  flex: 0 0 28px;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  color: #fff;
-  font-size: var(--font-caption);
-  font-weight: 700;
-  background: var(--pri);
-  border-radius: var(--radius-medium);
-}
+
 .brand-text {
-  font-size: 16px;
-  font-weight: 600;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-overflow: ellipsis;
 }
 </style>

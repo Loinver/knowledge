@@ -75,9 +75,10 @@ const { breadcrumb } = useNavigation()
 .crumb-link {
   color: var(--text-secondary);
   text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .crumb-link:hover {
-  color: var(--pri);
+  color: var(--accent);
 }
 .btn-text {
   margin-left: var(--space-1);

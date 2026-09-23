@@ -7,6 +7,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { authApi } from '@/api/auth'
 import { useApiError } from '@/composables/useApiError'
+import AuthHeading from '@/views/auth/AuthHeading.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -55,8 +56,7 @@ async function submit() {
 
 <template>
   <NForm ref="formRef" :model="model" :rules="rules" label-placement="top" @submit.prevent="submit">
-    <h2 class="form-title">{{ t('auth.resetTitle') }}</h2>
-    <p class="form-hint">{{ t('auth.resetHint') }}</p>
+    <AuthHeading :title="t('auth.resetTitle')" :subtitle="t('auth.resetHint')" />
     <NAlert v-if="!token" type="warning" role="alert" class="form-alert">
       {{ t('auth.resetTokenMissing') }}
     </NAlert>
@@ -88,15 +88,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.form-title {
-  margin: 0 0 var(--space-2);
-  font-size: 16px;
-}
-.form-hint {
-  margin: 0 0 var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--font-small);
-}
 .form-alert {
   margin-bottom: var(--space-3);
 }

@@ -8,6 +8,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { authApi } from '@/api/auth'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
+import AuthHeading from '@/views/auth/AuthHeading.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -83,7 +84,7 @@ async function submit() {
 
 <template>
   <div v-if="registrationEnabled === false" class="closed">
-    <h2 class="form-title">{{ t('auth.registerTitle') }}</h2>
+    <AuthHeading :title="t('auth.registerTitle')" :subtitle="t('auth.registerSubtitle')" />
     <NAlert type="warning" role="alert" class="form-alert">
       {{ t('auth.registrationClosed') }}
     </NAlert>
@@ -100,7 +101,7 @@ async function submit() {
     label-placement="top"
     @submit.prevent="submit"
   >
-    <h2 class="form-title">{{ t('auth.registerTitle') }}</h2>
+    <AuthHeading :title="t('auth.registerTitle')" :subtitle="t('auth.registerSubtitle')" />
     <NAlert v-if="error" type="error" role="alert" class="form-alert">{{ error }}</NAlert>
     <NFormItem :label="t('auth.username')" path="username">
       <NInput v-model:value="model.username" autocomplete="username" />
@@ -135,10 +136,6 @@ async function submit() {
 </template>
 
 <style scoped>
-.form-title {
-  margin: 0 0 var(--space-4);
-  font-size: 16px;
-}
 .form-alert {
   margin-bottom: var(--space-3);
 }

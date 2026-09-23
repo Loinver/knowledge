@@ -69,7 +69,7 @@ function confirmLogout() {
   transition: background-color var(--transition-base);
 }
 .user-trigger:hover {
-  background: var(--bg-subtle);
+  background: var(--bg-hover);
 }
 .avatar {
   display: inline-flex;
@@ -80,8 +80,9 @@ function confirmLogout() {
   overflow: hidden;
   color: #fff;
   font-size: var(--font-caption);
-  font-weight: 600;
-  background: var(--pri);
+  font-weight: 500;
+  /* 品牌双轴渐变：与认证页品牌栏、头像占位同一套视觉 */
+  background: linear-gradient(135deg, var(--accent), var(--violet));
   border-radius: 50%;
 }
 .avatar img {
