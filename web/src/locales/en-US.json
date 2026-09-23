@@ -625,5 +625,25 @@
     "conflict": "The clause was updated elsewhere. Reopen to edit.",
     "deleteConfirm": "Delete this standard clause?",
     "failed": "Operation failed. Reason: {reason}"
+  },
+  "runs": {
+    "unfinished": "Not finished",
+    "exportNote": "Download the JSON run report and graph result-set publication manifest. Includes run identifiers, counts and version snapshots only, without credentials, source data or raw errors. This is not a standards-compliance conclusion.",
+    "mappingRevision": "Mapping revision ID",
+    "startedAt": "Started at",
+    "finishedAt": "Finished at",
+    "report": "Run report",
+    "download": "Download report and manifest",
+    "downloadFailed": "Download failed. Please retry. Error code: {code}",
+    "empty": "No extraction runs yet",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "statuses": {
+      "SUCCESS": "Success",
+      "PARTIAL": "Partial success",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    }
   }
 }

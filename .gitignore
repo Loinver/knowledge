@@ -38,3 +38,6 @@ coverage/
 # （样例源库在 samples/ 下，用 .sqlite 后缀，不受此规则影响）
 *.db
 *.db-journal
+# 迁移前的回滚副本（alembic upgrade 前手动留档用）
+*.db.bak*
+*.db.pre-*

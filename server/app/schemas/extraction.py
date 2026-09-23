@@ -7,6 +7,31 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.models.enums import RunResult
+
+
+class RunPublicationManifest(BaseModel):
+    """已生成的图谱结果集，不包含会随切换改变的 is_current。"""
+
+    graph_revision_id: int
+    published_at: datetime
+
+
+class ExtractionRunExport(BaseModel):
+    """下载专用白名单；不包含连接配置、样例行或异常原文。"""
+
+    schema_version: Literal[1] = 1
+    run_id: int
+    mapping_revision_id: int
+    datasource_id: int | None
+    ontology_revision: int | None
+    status: RunResult
+    counts: dict[str, int]
+    fingerprint: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    publication: RunPublicationManifest | None
+
 
 class ExtractionRunOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

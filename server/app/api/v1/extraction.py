@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -26,11 +26,13 @@ from app.domain.extraction_service import (
     switch_current,
 )
 from app.domain.graph_view_service import graph_view
+from app.domain.run_export_service import export_run
 from app.schemas.extraction import (
     EntityDetailOut,
     EntityIdentityOut,
     EntityPage,
     EntityTraceOut,
+    ExtractionRunExport,
     ExtractionRunOut,
     FactEvidenceOut,
     FactTraceOut,
@@ -108,6 +110,22 @@ def get_one_run(
     run_id: int, session: Session = Depends(get_session)
 ) -> ExtractionRunOut:
     return ExtractionRunOut.model_validate(get_run(session, run_id))
+
+
+@router.get("/runs/{run_id}/export", response_model=ExtractionRunExport)
+def download_run_report(
+    run_id: int, session: Session = Depends(get_session)
+) -> Response:
+    """下载运行报告与图谱发布清单；文件响应不套 API 外壳。"""
+    report = export_run(session, run_id)
+    return Response(
+        content=report.model_dump_json(),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="run-{run_id}.json"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get(
