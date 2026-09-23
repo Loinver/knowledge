@@ -1059,6 +1059,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/validation/reports/{report_id}/export': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Export Report */
+    get: operations['export_report_api_v1_validation_reports__report_id__export_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/extraction/graph-view': {
     parameters: {
       query?: never
@@ -5290,6 +5307,8 @@ export interface components {
       scope: string
       /** Target Id */
       target_id: number
+      /** Target Revision */
+      target_revision: number
       /** Summary */
       summary?: {
         [key: string]: unknown
@@ -8119,6 +8138,39 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_list_ValidationResultOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  export_report_api_v1_validation_reports__report_id__export_get: {
+    parameters: {
+      query?: {
+        format?: string
+      }
+      header?: never
+      path: {
+        report_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': unknown
         }
       }
       /** @description Validation Error */

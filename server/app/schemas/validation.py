@@ -13,6 +13,7 @@ class ValidationReportOut(BaseModel):
     report_id: int
     scope: str
     target_id: int
+    target_revision: int
     summary: dict[str, Any] = Field(default_factory=dict)
 
 

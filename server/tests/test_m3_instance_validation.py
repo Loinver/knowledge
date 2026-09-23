@@ -304,3 +304,23 @@ def test_api_validate_graph_and_results(session: Session) -> None:
             assert r["state"] in ("PASS", "VIOLATION", "NA", "NOT_RUN")
         not_found = client.post("/api/v1/validation/graph/99999")
         assert not_found.status_code == 404
+
+        exported = client.get(f"/api/v1/validation/reports/{rid}/export?format=json")
+        assert exported.status_code == 200
+        assert exported.headers["content-type"].startswith("application/json")
+        payload = exported.json()
+        assert payload["report_id"] == rid
+        assert payload["target_revision"] == gr.id
+        assert {item["state"] for item in payload["results"]} <= {
+            "PASS",
+            "VIOLATION",
+            "NA",
+            "NOT_RUN",
+        }
+
+        turtle = client.get(f"/api/v1/validation/reports/{rid}/export?format=turtle")
+        assert turtle.status_code == 200
+        from rdflib import Graph
+
+        graph = Graph().parse(data=turtle.text, format="turtle")
+        assert len(graph) >= 6
