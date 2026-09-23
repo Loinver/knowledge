@@ -84,12 +84,24 @@ importers:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.43(typescript@5.7.3))
     devDependencies:
+      '@css-render/vue3-ssr':
+        specifier: 0.15.14
+        version: 0.15.14(vue@3.5.43(typescript@5.7.3))
       '@types/node':
         specifier: ^22.10.5
         version: 22.20.4
       '@vitejs/plugin-vue':
         specifier: ^5.2.1
         version: 5.2.4(vite@6.4.3(@types/node@22.20.4)(jiti@2.6.1)(yaml@2.9.1))(vue@3.5.43(typescript@5.7.3))
+      '@vue/compiler-sfc':
+        specifier: 3.5.43
+        version: 3.5.43
+      '@vue/server-renderer':
+        specifier: 3.5.43
+        version: 3.5.43
+      esbuild:
+        specifier: 0.25.12
+        version: 0.25.12
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.7.3)

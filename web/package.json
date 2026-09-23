@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
+    "test": "node --test",
     "preview": "vite preview",
     "typecheck": "vue-tsc --build --force",
     "gen:api": "openapi-typescript http://127.0.0.1:8000/openapi.json -o src/api/schema.d.ts && prettier --write src/api/schema.d.ts"
@@ -24,6 +25,10 @@
     "openapi-typescript": "^7.13.0",
     "typescript": "~5.7.3",
     "vite": "^6.0.7",
-    "vue-tsc": "^2.2.0"
+    "vue-tsc": "^2.2.0",
+    "@css-render/vue3-ssr": "0.15.14",
+    "@vue/compiler-sfc": "3.5.43",
+    "@vue/server-renderer": "3.5.43",
+    "esbuild": "0.25.12"
   }
 }
