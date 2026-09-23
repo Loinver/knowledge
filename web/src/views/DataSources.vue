@@ -326,8 +326,8 @@ onBeforeUnmount(() => {
         <NAlert v-if="testResult" :type="testResult.ok ? 'success' : 'warning'">
           {{ testResult.message }}
           <span v-if="testResult.table_count != null">
-            · {{ t('dataAccess.sources.testTables', { count: testResult.table_count }) }}</span
-          >
+            · {{ t('dataAccess.sources.testTables', { count: testResult.table_count }) }}
+          </span>
         </NAlert>
         <NSpace justify="end">
           <NButton :loading="testing" :disabled="saving" @click="testConnection">{{

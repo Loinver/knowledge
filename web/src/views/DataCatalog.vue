@@ -845,7 +845,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  padding: 24px;
   color: var(--text);
 }
 
