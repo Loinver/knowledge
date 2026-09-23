@@ -7,40 +7,70 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.ontology_snapshot import (
+    ResourceSnapshot,
+    load_ontology_snapshot,
+    load_resource_snapshot,
+    relation_endpoints,
+)
 from app.models.domain import Ontology, OntologyResourceRef
-from app.models.enums import ResourceKind, ValidationState
+from app.models.enums import ResourceKind, ResourceStatus, ValidationState
 from app.models.resource import ModelResource, Namespace
 from app.models.validation import ValidationReport, ValidationResult
-from app.semantics.rdflib_backend import RdflibBackend
+from app.semantics.backend import SemanticBackend
+
+type ValidationResource = ModelResource | ResourceSnapshot
 
 
-def run_ontology_validation(session: Session, ontology_id: int) -> ValidationReport:
+def get_validation_report(session: Session, report_id: int) -> ValidationReport:
+    report = session.get(ValidationReport, report_id)
+    if report is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"report_id": report_id})
+    return report
+
+
+def run_ontology_validation(
+    session: Session, ontology_id: int, *, backend: SemanticBackend | None = None
+) -> ValidationReport:
     """对本体执行 8 项资产层校验，四态输出。"""
     onto = session.get(Ontology, ontology_id)
     if onto is None:
         raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"ontology_id": ontology_id})
-    refs = list(
-        session.execute(
-            select(OntologyResourceRef).where(
-                OntologyResourceRef.ontology_id == ontology_id
+    resources: list[ValidationResource] = []
+    if onto.status == ResourceStatus.PUBLISHED:
+        frozen = load_ontology_snapshot(session, onto.id, onto.current_revision)
+        resources.extend(frozen.values())
+        referenced_ids = list(frozen)
+    else:
+        refs = list(
+            session.scalars(
+                select(OntologyResourceRef).where(
+                    OntologyResourceRef.ontology_id == ontology_id
+                )
             )
-        ).scalars()
-    )
-    resources: list[ModelResource] = []
-    for ref in refs:
-        res = session.get(ModelResource, ref.resource_id)
-        if res is not None:
-            resources.append(res)
+        )
+        referenced_ids = [ref.resource_id for ref in refs]
+        for ref in refs:
+            if ref.pinned_revision is not None:
+                resources.append(
+                    load_resource_snapshot(
+                        session, ref.resource_id, ref.pinned_revision
+                    )
+                )
+            else:
+                res = session.get(ModelResource, ref.resource_id)
+                if res is not None:
+                    resources.append(res)
 
     checks = [
-        _check_a01_closure(session, resources, onto, refs),
+        _check_a01_closure(resources, referenced_ids),
         _check_a02_type_metadata(session, resources),
         _check_a03_property_range(session, resources),
         _check_a04_relation_endpoints(session, resources),
         _check_a05_rule_set(session, onto),
         _check_a06_core_template(session, onto),
         _check_a07_namespace(session, resources),
-        _check_a08_owl_consistency(session, resources),
+        _check_a08_owl_consistency(backend),
     ]
 
     summary = {
@@ -65,14 +95,11 @@ def run_ontology_validation(session: Session, ontology_id: int) -> ValidationRep
 
 
 def _check_a01_closure(
-    session: Session,
-    resources: list[ModelResource],
-    onto: Ontology,
-    refs: list[OntologyResourceRef],
+    resources: list[ValidationResource], referenced_ids: list[int]
 ) -> ValidationResult:
     """A01 资源闭包：引用的资源全部存在。"""
     res_ids = {res.id for res in resources}
-    missing = [r.resource_id for r in refs if r.resource_id not in res_ids]
+    missing = [rid for rid in referenced_ids if rid not in res_ids]
     if missing:
         return ValidationResult(
             check_code="A01",
@@ -84,11 +111,11 @@ def _check_a01_closure(
 
 
 def _check_a02_type_metadata(
-    session: Session, resources: list[ModelResource]
+    session: Session, resources: list[ValidationResource]
 ) -> ValidationResult:
     """A02 类型元数据：实体类型 label_i18n 非空且含 zh-CN。"""
     for res in resources:
-        if res.kind != ResourceKind.ENTITY:
+        if res.kind not in {ResourceKind.ENTITY, ResourceKind.ASSOC}:
             continue
         if not res.label_i18n or "zh-CN" not in res.label_i18n:
             return ValidationResult(
@@ -102,11 +129,21 @@ def _check_a02_type_metadata(
 
 
 def _check_a03_property_range(
-    session: Session, resources: list[ModelResource]
+    session: Session, resources: list[ValidationResource]
 ) -> ValidationResult:
     """A03 属性值域：数据属性 datatype 合法。"""
     valid_types = {"string", "integer", "decimal", "boolean", "date", "enum"}
     for res in resources:
+        if isinstance(res, ResourceSnapshot):
+            for prop in res.datatype_props:
+                if prop.datatype not in valid_types:
+                    return ValidationResult(
+                        check_code="A03",
+                        state=ValidationState.VIOLATION,
+                        focus_node=res.iri,
+                        detail={"resource": prop.name, "datatype": prop.datatype},
+                        message="invalid datatype",
+                    )
         if res.kind != ResourceKind.DATATYPE_PROP:
             continue
         datatype = (res.definition_i18n or {}).get("datatype", "string")
@@ -122,16 +159,19 @@ def _check_a03_property_range(
 
 
 def _check_a04_relation_endpoints(
-    session: Session, resources: list[ModelResource]
+    session: Session, resources: list[ValidationResource]
 ) -> ValidationResult:
     """A04 关系端点与关联实体：关系端点类型存在于引用中。"""
     resource_iris = {r.iri for r in resources}
+    resource_iri_by_id = {res.id: res.iri for res in resources}
     for res in resources:
         if res.kind != ResourceKind.OBJECT_PROP:
             continue
         meta = res.definition_i18n or {}
         domain_iri = meta.get("domain_iri")
         range_iri = meta.get("range_iri")
+        if isinstance(res, ResourceSnapshot):
+            domain_iri, range_iri = relation_endpoints(res, resource_iri_by_id)
         if domain_iri and domain_iri not in resource_iris:
             return ValidationResult(
                 check_code="A04",
@@ -170,10 +210,20 @@ def _check_a06_core_template(session: Session, onto: Ontology) -> ValidationResu
 
 
 def _check_a07_namespace(
-    session: Session, resources: list[ModelResource]
+    session: Session, resources: list[ValidationResource]
 ) -> ValidationResult:
     """A07 命名空间与核心包锁定：引用资源的命名空间已注册。"""
-    ns_ids = {r.namespace_id for r in resources}
+    for res in resources:
+        if isinstance(res, ResourceSnapshot) and (
+            not res.namespace.get("prefix") or not res.namespace.get("iri")
+        ):
+            return ValidationResult(
+                check_code="A07",
+                state=ValidationState.VIOLATION,
+                detail={"resource_id": res.id},
+                message="namespace missing from resource snapshot",
+            )
+    ns_ids = {r.namespace_id for r in resources if isinstance(r, ModelResource)}
     for ns_id in ns_ids:
         ns = session.get(Namespace, ns_id)
         if ns is None:
@@ -187,11 +237,10 @@ def _check_a07_namespace(
 
 
 def _check_a08_owl_consistency(
-    session: Session, resources: list[ModelResource]
+    backend: SemanticBackend | None,
 ) -> ValidationResult:
     """A08 OWL 一致性：未接完整推理器 → NOT_RUN，绝不能显示成 PASS。"""
-    backend = RdflibBackend()
-    if not backend.has_full_reasoner():
+    if backend is None or not backend.has_full_reasoner():
         return ValidationResult(
             check_code="A08",
             state=ValidationState.NOT_RUN,
@@ -200,5 +249,5 @@ def _check_a08_owl_consistency(
     return ValidationResult(
         check_code="A08",
         state=ValidationState.NOT_RUN,
-        message="full OWL-DL reasoner not available",
+        message="full OWL-DL consistency check not implemented",
     )

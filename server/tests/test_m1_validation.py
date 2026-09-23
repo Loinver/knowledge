@@ -2,18 +2,30 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import pytest
 from app.core.db import Base
+from app.core.error_codes import ErrorCode
+from app.core.errors import KGError
 from app.domain.iri_service import register_namespace
-from app.domain.ontology_service import add_ref, create_ontology
-from app.domain.status_service import publish_resource
+from app.domain.ontology_service import (
+    add_ref,
+    create_ontology,
+    publish_ontology,
+    remove_ref,
+)
+from app.domain.status_service import get_revision, publish_resource
 from app.domain.type_service import create_entity_type
 from app.domain.validation_service import run_ontology_validation
-from app.models.enums import ValidationState
-from app.models.validation import ValidationResult
+from app.models.domain import OntologyRevision
+from app.models.enums import ResourceStatus, ValidationState
+from app.models.resource import ModelResource
+from app.models.validation import ValidationReport, ValidationResult
 from app.schemas.ontology import OntologyCreate, OntologyRefAdd
 from app.schemas.type import EntityTypeCreate
-from sqlalchemy import create_engine, select
+from app.semantics.backend import SemanticBackend
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -105,6 +117,19 @@ def test_a08_not_run_never_pass(session, published_type):
     assert a08.state is not ValidationState.PASS
 
 
+def test_a08_capability_without_execution_is_still_not_run(
+    session: Session, published_type: ModelResource
+) -> None:
+    onto = _make_ontology(session)
+    add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    backend = Mock(spec=SemanticBackend)
+    backend.has_full_reasoner.return_value = True
+    report = run_ontology_validation(session, onto.id, backend=backend)
+    a08 = next(result for result in report.results if result.check_code == "A08")
+    assert a08.state == ValidationState.NOT_RUN
+    assert a08.message == "full OWL-DL consistency check not implemented"
+
+
 def test_a02_violation_missing_zh_label(session, ns):
     """实体类型缺中文标签 → A02 VIOLATION。"""
     res = create_entity_type(
@@ -169,3 +194,119 @@ def test_four_states_distinct_in_report(session, published_type):
     session.commit()
     states_seen = set(report.summary.keys())
     assert states_seen == {"pass", "violation", "na", "not_run"}
+
+
+def _report_content(report: ValidationReport) -> tuple[dict, list[tuple]]:
+    return report.summary, [
+        (r.check_code, r.state, r.focus_node, r.rule_id, r.detail, r.message)
+        for r in report.results
+    ]
+
+
+def test_published_validation_ignores_resource_edits_and_live_membership(
+    session: Session, published_type: ModelResource
+) -> None:
+    onto = _make_ontology(session)
+    ref = add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    publish_ontology(session, onto)
+    before = _report_content(run_ontology_validation(session, onto.id))
+
+    published_type.status = ResourceStatus.DRAFT
+    published_type.label_i18n = {"en-US": "Employee"}
+    publish_resource(session, published_type)
+    assert _report_content(run_ontology_validation(session, onto.id)) == before
+    remove_ref(session, onto.id, ref.id)
+    assert _report_content(run_ontology_validation(session, onto.id)) == before
+
+    add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    assert publish_ontology(session, onto) == 2
+    report = run_ontology_validation(session, onto.id)
+    assert report.target_revision == 2
+    assert next(r.state for r in report.results if r.check_code == "A02") == (
+        ValidationState.VIOLATION
+    )
+
+
+def test_draft_validation_tracks_live_resources_but_honors_explicit_pins(
+    session: Session, published_type: ModelResource
+) -> None:
+    draft = _make_ontology(session, "Draft")
+    pinned = _make_ontology(session, "Pinned")
+    add_ref(session, draft.id, OntologyRefAdd(resource_id=published_type.id))
+    add_ref(
+        session,
+        pinned.id,
+        OntologyRefAdd(resource_id=published_type.id, pinned_revision=1),
+    )
+    before = _report_content(run_ontology_validation(session, pinned.id))
+    published_type.status = ResourceStatus.DRAFT
+    published_type.label_i18n = {"en-US": "Employee"}
+    session.flush()
+    report = run_ontology_validation(session, draft.id)
+    assert next(r.state for r in report.results if r.check_code == "A02") == (
+        ValidationState.VIOLATION
+    )
+    assert _report_content(run_ontology_validation(session, pinned.id)) == before
+    publish_resource(session, published_type)
+    assert _report_content(run_ontology_validation(session, pinned.id)) == before
+
+
+def test_reopened_ontology_draft_uses_current_definitions(
+    session: Session, published_type: ModelResource
+) -> None:
+    onto = _make_ontology(session)
+    add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    publish_ontology(session, onto)
+    onto.status = ResourceStatus.DRAFT
+    published_type.label_i18n = {"en-US": "Employee"}
+    session.flush()
+    report = run_ontology_validation(session, onto.id)
+    assert next(r.state for r in report.results if r.check_code == "A02") == (
+        ValidationState.VIOLATION
+    )
+
+
+@pytest.mark.parametrize("missing", ["ontology", "resource", "structure"])
+def test_published_validation_requires_its_frozen_snapshot(
+    session: Session, published_type: ModelResource, missing: str
+) -> None:
+    onto = _make_ontology(session)
+    add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    publish_ontology(session, onto)
+    if missing == "ontology":
+        revision = session.scalar(select(OntologyRevision))
+        assert revision is not None
+        session.delete(revision)
+    elif missing == "resource":
+        session.delete(get_revision(session, published_type.id, 1))
+    else:
+        resource_revision = get_revision(session, published_type.id, 1)
+        resource_revision.payload = {
+            key: value
+            for key, value in resource_revision.payload.items()
+            if key != "namespace"
+        }
+    session.flush()
+    with pytest.raises(KGError) as exc:
+        run_ontology_validation(session, onto.id)
+    assert exc.value.code == (
+        ErrorCode.VALIDATION_VIOLATION
+        if missing == "structure"
+        else ErrorCode.REVISION_NOT_FOUND
+    )
+    assert session.scalar(select(func.count()).select_from(ValidationReport)) == 0
+
+
+def test_missing_draft_pin_does_not_use_current_resource(
+    session: Session, published_type: ModelResource
+) -> None:
+    onto = _make_ontology(session)
+    add_ref(
+        session,
+        onto.id,
+        OntologyRefAdd(resource_id=published_type.id, pinned_revision=999),
+    )
+    with pytest.raises(KGError) as exc:
+        run_ontology_validation(session, onto.id)
+    assert exc.value.code == ErrorCode.REVISION_NOT_FOUND
+    assert session.scalar(select(func.count()).select_from(ValidationReport)) == 0

@@ -26,9 +26,14 @@ from app.models.resource import (
     ResourceParent,
     ResourceRef,
 )
-from app.schemas.ontology import OntologyCreate
+from app.schemas.ontology import OntologyCreate, OntologyExportFormat
 from app.schemas.relation import EndpointSpec, RelationTypeCreate
 from app.schemas.type import EntityTypeCreate
+from app.semantics.ontology_rdf import (
+    OntologyRdfMetadata,
+    OntologyRdfResource,
+    serialize_ontology_rdf,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from rdflib import OWL, RDF, RDFS, SH, XSD, Graph, Literal, URIRef
@@ -205,6 +210,74 @@ def test_formats_roundtrip_and_preserve_semantics(
         URIRef("urn:knowledge:semantics:resourceKind"),
         Literal("ASSOC"),
     ) in graph
+
+
+@pytest.mark.parametrize("rdf_format", list(OntologyExportFormat))
+def test_rdf_adapter_serializes_frozen_enum_without_database(
+    rdf_format: OntologyExportFormat,
+) -> None:
+    metadata = OntologyRdfMetadata(
+        name="HumanResources",
+        iri="https://example.org/ontology/hr",
+        label_i18n={"zh-CN": "人力资源", "en-US": "Human resources"},
+        definition_i18n=None,
+    )
+    resource = OntologyRdfResource(
+        iri="https://example.org/kg#Employee",
+        kind=ResourceKind.ENTITY,
+        namespace={"prefix": "ex", "iri": "https://example.org/kg#"},
+        parent_ids=[],
+        resource_refs=[],
+        datatype_props=[
+            {
+                "iri": "https://example.org/kg#status",
+                "datatype": "enum",
+                "nullable": False,
+                "default_value": "OPEN",
+                "enum_dict_id": 7,
+                "enum_dict_revision": 2,
+                "enum_dictionary": {
+                    "entries": [
+                        {"value": "OPEN", "label_i18n": {"en-US": "Open"}},
+                        {"value": "CLOSED", "label_i18n": {"zh-CN": "关闭"}},
+                    ]
+                },
+            }
+        ],
+    )
+    content = serialize_ontology_rdf(
+        metadata, {1: resource}, revision=3, rdf_format=rdf_format
+    )
+    graph = Graph().parse(data=content, format=rdf_format.value)
+    assert (URIRef(metadata.iri), OWL.versionInfo, Literal("3")) in graph
+    prop = URIRef("https://example.org/kg#status")
+    shape = URIRef(f"{prop}#shape")
+    assert (URIRef(resource.iri), SH.property, shape) in graph
+    assert (shape, SH.path, prop) in graph
+    assert (shape, SH.minCount, Literal(1)) in graph
+    assert (shape, SH.defaultValue, Literal("OPEN")) in graph
+    allowed_values = graph.value(shape, SH["in"])
+    assert allowed_values is not None
+    assert list(graph.items(allowed_values)) == [Literal("OPEN"), Literal("CLOSED")]
+    dictionary = URIRef("urn:knowledge:enum:7:r2")
+    assert (
+        prop,
+        URIRef("urn:knowledge:semantics:enumDictionary"),
+        dictionary,
+    ) in graph
+    assert (
+        dictionary,
+        URIRef("urn:knowledge:semantics:revision"),
+        Literal(2),
+    ) in graph
+    entries = set(graph.objects(dictionary, URIRef("urn:knowledge:semantics:entry")))
+    assert len(entries) == 2
+    assert {
+        str(graph.value(entry, URIRef("urn:knowledge:semantics:value")))
+        for entry in entries
+    } == {"OPEN", "CLOSED"}
+    assert (None, RDFS.label, Literal("Open", lang="en")) in graph
+    assert (None, RDFS.label, Literal("关闭", lang="zh-Hans")) in graph
 
 
 def test_export_includes_frozen_property_and_relation_constraints(
@@ -555,6 +628,8 @@ def test_metadata_migration_preserves_old_rows_and_replays(tmp_path: Path) -> No
         for column in inspect(engine).get_columns("ontology_revision")
     }
     assert columns["metadata_snapshot"]["nullable"] is False
+    # 当前 ORM 依赖后续列；保留上面的历史迁移断言，再用完整结构验证发布。
+    migrate("upgrade", "head")
     with Session(engine) as db:
         revision = db.get(OntologyRevision, 1)
         assert revision is not None

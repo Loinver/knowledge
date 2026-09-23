@@ -16,9 +16,16 @@ from app.core.errors import KGError
 from app.domain.account_service import resolve_session
 from app.models.account import User
 from app.models.enums import UserRole
+from app.semantics.backend import SemanticBackend
+from app.semantics.rdflib_backend import RdflibBackend
 
 # auto_error=False：缺令牌时自己抛统一错误码，而不是 FastAPI 默认的 403 裸响应。
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def semantic_backend() -> SemanticBackend:
+    """在应用边界选择语义实现，领域服务只接收协议。"""
+    return RdflibBackend()
 
 
 def client_ip(request: Request) -> str | None:

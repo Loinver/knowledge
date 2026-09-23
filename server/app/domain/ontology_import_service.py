@@ -1,12 +1,7 @@
-"""M-06 安全 RDF 预解析、冲突预览和显式解决后的草稿装配。"""
+"""M-06 导入资源匹配、冲突预览和显式解决后的草稿装配。"""
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
-from typing import Any
-
-from rdflib import OWL, RDF, RDFS, SKOS, Graph, URIRef
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,9 +9,8 @@ from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.ontology_service import get_ontology, lock_ontology_edit
 from app.models.domain import OntologyResourceRef
-from app.models.enums import ResourceKind, ResourceStatus
+from app.models.enums import ResourceStatus
 from app.models.resource import ModelResource
-from app.schemas.ontology import OntologyExportFormat
 from app.schemas.ontology_import import (
     ImportFormat,
     ImportResourcePreview,
@@ -25,127 +19,7 @@ from app.schemas.ontology_import import (
     OntologyImportPreview,
     OntologyImportResult,
 )
-
-_MAX_BYTES = 64 * 1024
-_MAX_TRIPLES = 2_000
-_KG_KIND = URIRef("urn:knowledge:semantics:resourceKind")
-_KIND_BY_RDF_TYPE = {
-    OWL.Class: ResourceKind.ENTITY,
-    OWL.DatatypeProperty: ResourceKind.DATATYPE_PROP,
-    OWL.ObjectProperty: ResourceKind.OBJECT_PROP,
-    SKOS.Collection: ResourceKind.DOMAIN,
-}
-
-
-@dataclass(frozen=True)
-class ParsedImport:
-    format: str
-    graph: Graph
-    root_iri: str | None
-    resources: tuple[ImportResourcePreview, ...]
-    conflicts: tuple[OntologyImportConflict, ...]
-
-
-def _invalid(reason: str, **params: object) -> KGError:
-    return KGError(ErrorCode.VALIDATION_VIOLATION, {"reason": reason, **params})
-
-
-def _validate_jsonld_context(content: str) -> None:
-    try:
-        document = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise _invalid("invalid_json_ld") from exc
-
-    def inspect_context(value: Any) -> None:
-        if isinstance(value, str):
-            raise _invalid("external_json_ld_context")
-        if isinstance(value, list):
-            for item in value:
-                inspect_context(item)
-        elif isinstance(value, dict) and value.get("@context") is not None:
-            inspect_context(value["@context"])
-
-    if isinstance(document, list):
-        for item in document:
-            if isinstance(item, dict) and "@context" in item:
-                inspect_context(item["@context"])
-    elif isinstance(document, dict) and "@context" in document:
-        inspect_context(document["@context"])
-
-
-def _parse(rdf_format: str, content: str) -> Graph:
-    if len(content.encode("utf-8")) > _MAX_BYTES:
-        raise _invalid("import_too_large", max_bytes=_MAX_BYTES)
-    if rdf_format == OntologyExportFormat.JSON_LD.value:
-        _validate_jsonld_context(content)
-    graph = Graph()
-    try:
-        graph.parse(data=content, format=rdf_format)
-    except Exception as exc:
-        raise _invalid("invalid_rdf", format=rdf_format) from exc
-    if len(graph) > _MAX_TRIPLES:
-        raise _invalid("too_many_triples", max_triples=_MAX_TRIPLES)
-    if (None, OWL.imports, None) in graph:
-        raise _invalid("owl_imports_not_allowed")
-    return graph
-
-
-def _labels(graph: Graph, subject: URIRef) -> dict[str, str]:
-    labels: dict[str, str] = {}
-    for literal in graph.objects(subject, RDFS.label):
-        language = str(getattr(literal, "language", "") or "")
-        if language in {"zh", "zh-Hans", "zh-CN"}:
-            labels["zh-CN"] = str(literal)
-        elif language in {"en", "en-US"}:
-            labels["en-US"] = str(literal)
-    return labels
-
-
-def _resource_kind(graph: Graph, subject: URIRef) -> ResourceKind | None:
-    value = next(iter(graph.objects(subject, _KG_KIND)), None)
-    if value is not None:
-        try:
-            return ResourceKind(str(value))
-        except ValueError:
-            return None
-    for rdf_type, kind in _KIND_BY_RDF_TYPE.items():
-        if (subject, RDF.type, rdf_type) in graph:
-            return kind
-    return None
-
-
-def _parse_resources(graph: Graph) -> tuple[str | None, list[ImportResourcePreview]]:
-    roots = [
-        str(subject)
-        for subject in graph.subjects(RDF.type, OWL.Ontology)
-        if isinstance(subject, URIRef)
-    ]
-    root_iri = sorted(roots)[0] if roots else None
-    subjects = (
-        {
-            subject
-            for subject in graph.subjects(RDFS.isDefinedBy, URIRef(root_iri))
-            if isinstance(subject, URIRef)
-        }
-        if root_iri
-        else set()
-    )
-    if not subjects:
-        subjects = {
-            subject
-            for subject in graph.subjects()
-            if isinstance(subject, URIRef)
-            and _resource_kind(graph, subject) is not None
-        }
-    resources = [
-        ImportResourcePreview(
-            iri=str(subject),
-            kind=_resource_kind(graph, subject),
-            label_i18n=_labels(graph, subject),
-        )
-        for subject in sorted(subjects, key=str)
-    ]
-    return root_iri, resources
+from app.semantics.ontology_rdf import parse_ontology_rdf
 
 
 def _preview_conflicts(
@@ -213,14 +87,13 @@ def preview_import(
     content: str,
     ontology_id: int | None = None,
 ) -> OntologyImportPreview:
-    graph = _parse(rdf_format, content)
-    root_iri, resources = _parse_resources(graph)
-    conflicts = _preview_conflicts(session, resources, ontology_id)
+    parsed = parse_ontology_rdf(rdf_format, content)
+    conflicts = _preview_conflicts(session, parsed.resources, ontology_id)
     return OntologyImportPreview(
         format=rdf_format,
-        root_iri=root_iri,
-        triple_count=len(graph),
-        resources=resources,
+        root_iri=parsed.root_iri,
+        triple_count=parsed.triple_count,
+        resources=parsed.resources,
         conflicts=conflicts,
         requires_resolution=bool(conflicts),
     )

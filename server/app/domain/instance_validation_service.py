@@ -11,8 +11,12 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.ontology_snapshot import (
+    ResourceSnapshot,
+    load_ontology_snapshot,
+    relation_endpoints,
+)
 from app.models.data_access import Mapping, MappingRevision
-from app.models.domain import Ontology, OntologyResourceRef
 from app.models.enums import ResourceKind, ValidationState
 from app.models.extraction import (
     DerivedEdge,
@@ -23,7 +27,6 @@ from app.models.extraction import (
     GraphTriple,
     Quarantine,
 )
-from app.models.resource import ModelResource
 from app.models.validation import ValidationReport, ValidationResult
 
 
@@ -38,15 +41,20 @@ def run_instance_validation(
             {"graph_revision_id": graph_revision_id},
         )
     run = session.get(ExtractionRun, gr.run_id)
-    assert run is not None
+    if run is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"run_id": gr.run_id})
     rev = session.get(MappingRevision, run.mapping_revision_id)
-    assert rev is not None
+    if rev is None:
+        raise KGError(
+            ErrorCode.REVISION_NOT_FOUND,
+            {"mapping_revision_id": run.mapping_revision_id},
+        )
     mapping = session.get(Mapping, rev.mapping_id)
-    assert mapping is not None
-    ontology = session.get(Ontology, mapping.ontology_id)
-    assert ontology is not None
-
-    resources = _load_ontology_resources(session, ontology.id)
+    if mapping is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"mapping_id": rev.mapping_id})
+    resources = list(
+        load_ontology_snapshot(session, mapping.ontology_id, rev.onto_version).values()
+    )
 
     checks = [
         _check_i01_entity_type_defined(session, gr, resources),
@@ -78,26 +86,13 @@ def run_instance_validation(
     return report
 
 
-def _load_ontology_resources(session: Session, ontology_id: int) -> list[ModelResource]:
-    refs = list(
-        session.execute(
-            select(OntologyResourceRef).where(
-                OntologyResourceRef.ontology_id == ontology_id
-            )
-        ).scalars()
-    )
-    return [
-        r
-        for r in (session.get(ModelResource, ref.resource_id) for ref in refs)
-        if r is not None
-    ]
-
-
 def _check_i01_entity_type_defined(
-    session: Session, gr: GraphRevision, resources: list[ModelResource]
+    session: Session, gr: GraphRevision, resources: list[ResourceSnapshot]
 ) -> ValidationResult:
     """I01：每个 EntityIdentity 的 type_iri 必须在本体已定义。"""
-    entity_iris = {r.iri for r in resources if r.kind == ResourceKind.ENTITY}
+    entity_iris = {
+        r.iri for r in resources if r.kind in {ResourceKind.ENTITY, ResourceKind.ASSOC}
+    }
     entities = list(
         session.scalars(
             select(EntityIdentity).where(EntityIdentity.graph_revision_id == gr.id)
@@ -119,10 +114,11 @@ def _check_i01_entity_type_defined(
 
 
 def _check_i02_relation_endpoint_types(
-    session: Session, gr: GraphRevision, resources: list[ModelResource]
+    session: Session, gr: GraphRevision, resources: list[ResourceSnapshot]
 ) -> ValidationResult:
     """I02：关系三元组的 subject/object 类型符合 domain/range。"""
     rel_by_name = {r.name: r for r in resources if r.kind == ResourceKind.OBJECT_PROP}
+    resource_iris = {r.id: r.iri for r in resources}
     entity_type_map = _entity_type_map(session, gr)
     triples = list(
         session.scalars(
@@ -142,9 +138,14 @@ def _check_i02_relation_endpoint_types(
                 detail={"predicate": triple.predicate},
                 message="relation type not defined in ontology",
             )
-        meta = rel.definition_i18n or {}
-        domain_iri = meta.get("domain_iri")
-        range_iri = meta.get("range_iri")
+        domain_iri, range_iri = relation_endpoints(rel, resource_iris)
+        if not domain_iri or not range_iri:
+            return ValidationResult(
+                check_code="I02",
+                state=ValidationState.NOT_RUN,
+                focus_node=triple.predicate,
+                message="relation endpoint definitions missing from snapshot",
+            )
         subj_type = entity_type_map.get(triple.subject)
         obj_type = entity_type_map.get(triple.object_)
         if domain_iri and subj_type != domain_iri:
@@ -175,11 +176,16 @@ def _check_i02_relation_endpoint_types(
 
 
 def _check_i03_attribute_value_types(
-    session: Session, gr: GraphRevision, resources: list[ModelResource]
+    session: Session, gr: GraphRevision, resources: list[ResourceSnapshot]
 ) -> ValidationResult:
     """I03：实体属性值类型符合数据属性定义的 datatype。"""
     prop_by_name = {
         r.name: r for r in resources if r.kind == ResourceKind.DATATYPE_PROP
+    }
+    type_by_iri = {
+        r.iri: r
+        for r in resources
+        if r.kind in {ResourceKind.ENTITY, ResourceKind.ASSOC}
     }
     valid_types = {"string", "integer", "decimal", "boolean", "date", "enum"}
     entities = list(
@@ -189,9 +195,21 @@ def _check_i03_attribute_value_types(
     )
     for entity in entities:
         attrs = entity.attrs or {}
+        owner = type_by_iri.get(entity.type_iri)
+        owner_props = (
+            {prop.name: prop for prop in owner.datatype_props} if owner else {}
+        )
+        legacy_props = (
+            owner is not None and "datatype_props" not in owner.model_fields_set
+        )
         for attr_name, value in attrs.items():
+            detail = owner_props.get(attr_name)
             prop = prop_by_name.get(attr_name)
-            if prop is None:
+            if detail is not None:
+                datatype = detail.datatype
+            elif prop is not None and legacy_props:
+                datatype = (prop.definition_i18n or {}).get("datatype", "string")
+            else:
                 return ValidationResult(
                     check_code="I03",
                     state=ValidationState.VIOLATION,
@@ -199,10 +217,40 @@ def _check_i03_attribute_value_types(
                     detail={"attr": attr_name},
                     message="attribute not defined in ontology",
                 )
-            datatype = (prop.definition_i18n or {}).get("datatype", "string")
             if datatype not in valid_types:
-                continue
-            if not _value_matches_type(value, datatype):
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.NOT_RUN,
+                    focus_node=entity.iri,
+                    detail={"attr": attr_name, "datatype": datatype},
+                    message="unsupported datatype in resource snapshot",
+                )
+            if datatype == "enum" and (
+                detail is None or detail.enum_dictionary is None
+            ):
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.NOT_RUN,
+                    focus_node=entity.iri,
+                    detail={"attr": attr_name},
+                    message="enum dictionary missing from resource snapshot",
+                )
+            values = value if isinstance(value, list) else [value]
+            enum_values = (
+                {entry.value for entry in detail.enum_dictionary.entries}
+                if detail is not None and detail.enum_dictionary is not None
+                else None
+            )
+            nullable = detail.nullable if detail is not None else False
+            matches = (bool(values) or nullable) and all(
+                (item is None and nullable)
+                or (
+                    _value_matches_type(item, datatype)
+                    and (enum_values is None or item in enum_values)
+                )
+                for item in values
+            )
+            if not matches:
                 return ValidationResult(
                     check_code="I03",
                     state=ValidationState.VIOLATION,
