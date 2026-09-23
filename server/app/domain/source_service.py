@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -51,10 +51,7 @@ def list_datasources(
     stmt = select(Datasource)
     if q:
         stmt = stmt.where(Datasource.name.ilike(f"%{q}%"))
-    count_stmt = select(Datasource)
-    if q:
-        count_stmt = count_stmt.where(Datasource.name.ilike(f"%{q}%"))
-    total = len(list(session.execute(count_stmt).scalars()))
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     stmt = (
         stmt.order_by(Datasource.name).offset((page - 1) * page_size).limit(page_size)
     )

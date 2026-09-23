@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Literal, TypedDict
 
 from pydantic import ValidationError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -435,12 +435,7 @@ def list_relation_types(
     stmt = select(ModelResource).where(ModelResource.kind == ResourceKind.OBJECT_PROP)
     if q:
         stmt = stmt.where(ModelResource.name.ilike(f"%{q}%"))
-    count_stmt = select(ModelResource).where(
-        ModelResource.kind == ResourceKind.OBJECT_PROP
-    )
-    if q:
-        count_stmt = count_stmt.where(ModelResource.name.ilike(f"%{q}%"))
-    total = len(list(session.execute(count_stmt).scalars()))
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     stmt = (
         stmt.order_by(ModelResource.name)
         .offset((page - 1) * page_size)

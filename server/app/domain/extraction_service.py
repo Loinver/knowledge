@@ -695,7 +695,7 @@ def list_runs(
     session: Session, page: int = 1, page_size: int = 50
 ) -> tuple[list[ExtractionRun], int]:
     stmt = select(ExtractionRun).order_by(ExtractionRun.id.desc())
-    total = len(list(session.execute(select(ExtractionRun)).scalars()))
+    total = session.scalar(select(func.count()).select_from(ExtractionRun)) or 0
     items = list(
         session.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars()
     )
@@ -715,7 +715,7 @@ def list_graph_revisions(
 ) -> tuple[list[GraphRevision], int]:
     """列出所有图谱版本（含历史），按发布时间倒序。"""
     stmt = select(GraphRevision).order_by(GraphRevision.published_at.desc())
-    total = len(list(session.execute(stmt).scalars()))
+    total = session.scalar(select(func.count()).select_from(GraphRevision)) or 0
     items = list(
         session.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars()
     )
@@ -783,7 +783,7 @@ def list_triples(
     stmt = select(GraphTriple).where(GraphTriple.graph_revision_id == gr_id)
     if subject:
         stmt = stmt.where(GraphTriple.subject == subject)
-    total = len(list(session.execute(stmt).scalars()))
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     items = list(
         session.execute(stmt.offset((page - 1) * page_size).limit(page_size)).scalars()
     )

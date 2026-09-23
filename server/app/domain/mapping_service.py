@@ -8,7 +8,7 @@ mapping + mapping_revision：草稿可反复改，发布生成不可变 revision
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -68,10 +68,10 @@ def list_mappings(
     stmt = select(Mapping)
     if q:
         stmt = stmt.where(Mapping.name.ilike(f"%{q}%"))
-    count_stmt = select(Mapping)
+    count_stmt = select(func.count()).select_from(Mapping)
     if q:
         count_stmt = count_stmt.where(Mapping.name.ilike(f"%{q}%"))
-    total = len(list(session.execute(count_stmt).scalars()))
+    total = session.scalar(count_stmt) or 0
     stmt = stmt.order_by(Mapping.name).offset((page - 1) * page_size).limit(page_size)
     items = list(session.execute(stmt).scalars())
     return items, total

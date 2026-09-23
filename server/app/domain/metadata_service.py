@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import inspect, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.engine import Engine, Inspector
 from sqlalchemy.orm import Session
 
@@ -248,8 +248,7 @@ def list_snapshots(
         .where(MetadataSnapshot.datasource_id == ds_id)
         .order_by(MetadataSnapshot.revision.desc())
     )
-    count_stmt = select(MetadataSnapshot).where(MetadataSnapshot.datasource_id == ds_id)
-    total = len(list(session.execute(count_stmt).scalars()))
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     stmt = stmt.offset((page - 1) * page_size).limit(page_size)
     items = list(session.execute(stmt).scalars())
     return items, total

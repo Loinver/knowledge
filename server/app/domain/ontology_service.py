@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from sqlalchemy import func, select
 from sqlalchemy import inspect as sqlalchemy_inspect
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -168,10 +168,10 @@ def list_ontologies(
     stmt = select(Ontology)
     if q:
         stmt = stmt.where(Ontology.name.ilike(f"%{q}%"))
-    count_stmt = select(Ontology)
+    count_stmt = select(func.count()).select_from(Ontology)
     if q:
         count_stmt = count_stmt.where(Ontology.name.ilike(f"%{q}%"))
-    total = len(list(session.execute(count_stmt).scalars()))
+    total = session.scalar(count_stmt) or 0
     stmt = stmt.order_by(Ontology.name).offset((page - 1) * page_size).limit(page_size)
     items = list(session.execute(stmt).scalars())
     return items, total
