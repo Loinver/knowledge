@@ -41,13 +41,14 @@ function deferred() {
 }
 
 async function compileView(api, ssr = false) {
+  const entryPoint = path.join(web, 'src/views/extraction/ExtractionRuns.vue')
   const key = `runs_${randomUUID()}`
   globalThis[key] = api
   const outfile = path.join(web, `node_modules/.tmp/${key}.mjs`)
   await mkdir(path.dirname(outfile), { recursive: true })
   try {
     await build({
-      entryPoints: [path.join(web, 'src/views/extraction/ExtractionRuns.vue')],
+      entryPoints: [entryPoint],
       outfile,
       bundle: true,
       platform: 'node',
@@ -65,13 +66,15 @@ async function compileView(api, ssr = false) {
             bundler.onLoad({ filter: /.*/, namespace: 'api-stub' }, () => ({
               contents: `export const extractionApi = globalThis[${JSON.stringify(key)}]`,
             }))
-            bundler.onResolve({ filter: /^@\// }, ({ path: module }) => ({
-              path: path.join(web, 'src', `${module.slice(2)}.ts`),
-            }))
+            bundler.onResolve({ filter: /^@\// }, ({ path: module, kind, resolveDir }) =>
+              bundler.resolve(path.join(web, 'src', module.slice(2)), { kind, resolveDir }),
+            )
             bundler.onLoad({ filter: /\.vue$/ }, async ({ path: filename }) => {
               const source = await readFile(filename, 'utf8')
               const { descriptor } = parse(
-                ssr ? source : source.replace('</script>', `defineExpose({${exposed}})\n</script>`),
+                ssr || filename !== entryPoint
+                  ? source
+                  : source.replace('</script>', `defineExpose({${exposed}})\n</script>`),
                 { filename },
               )
               const script = compileScript(descriptor, {

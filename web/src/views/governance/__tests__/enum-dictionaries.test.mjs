@@ -68,13 +68,14 @@ const entity = (id = 1) => ({
 })
 
 async function compileView(name, state, ssr = false) {
+  const entryPoint = path.join(web, `src/views/${name}.vue`)
   await mkdir(outputDir, { recursive: true })
   const key = `enum_test_${randomUUID()}`
   globalThis[key] = state
   const outfile = path.join(outputDir, `${key}.mjs`)
   try {
     await build({
-      entryPoints: [path.join(web, `src/views/${name}.vue`)],
+      entryPoints: [entryPoint],
       outfile,
       bundle: true,
       platform: 'node',
@@ -97,17 +98,18 @@ async function compileView(name, state, ssr = false) {
                     ? `export const entityTypesApi = globalThis[${JSON.stringify(key)}].api.entityTypes`
                     : `export const enumDictionariesApi = globalThis[${JSON.stringify(key)}].dictionaries`,
             }))
-            bundler.onResolve({ filter: /^@\// }, ({ path: module }) => ({
-              path: path.join(web, 'src', `${module.slice(2)}.ts`),
-            }))
+            bundler.onResolve({ filter: /^@\// }, ({ path: module, kind, resolveDir }) =>
+              bundler.resolve(path.join(web, 'src', module.slice(2)), { kind, resolveDir }),
+            )
             bundler.onLoad({ filter: /\.vue$/ }, async ({ path: filename }) => {
               const source = await readFile(filename, 'utf8')
-              const instrumented = ssr
-                ? source
-                : source.replace(
-                    '</script>',
-                    `\ndefineExpose({${name.startsWith('governance/') ? dictionaryNames : entityNames}})\n</script>`,
-                  )
+              const instrumented =
+                ssr || filename !== entryPoint
+                  ? source
+                  : source.replace(
+                      '</script>',
+                      `\ndefineExpose({${name.startsWith('governance/') ? dictionaryNames : entityNames}})\n</script>`,
+                    )
               const { descriptor } = parse(instrumented, { filename })
               const script = compileScript(descriptor, {
                 id: key,
@@ -281,7 +283,7 @@ test('dictionary create/update/delete use current saved revision and expose in-u
 
 test('property resave pins the original version and sends edit CAS; upgrading validates the default', async () => {
   const writes = []
-  const view = await mountView('EntityDetail', {
+  const view = await mountView('ontology/EntityDetail', {
     entityTypes: {
       update: async (id, input) => {
         writes.push({ id, input })
@@ -324,7 +326,7 @@ test('property resave pins the original version and sends edit CAS; upgrading va
 
 test('new enum properties require explicit version choice and obsolete revision responses are ignored', async () => {
   const old = deferred()
-  const view = await mountView('EntityDetail', {
+  const view = await mountView('ontology/EntityDetail', {
     dictionaries: {
       revisions: (id) => (id === 1 ? old.promise : Promise.resolve([dictionary(id, 3)])),
     },
@@ -352,7 +354,7 @@ test('new enum properties require explicit version choice and obsolete revision 
 test('route changes ignore stale entity loads and published properties are read-only', async () => {
   const old = deferred()
   let writes = 0
-  const view = await mountView('EntityDetail', {
+  const view = await mountView('ontology/EntityDetail', {
     entityTypes: {
       get: (id) =>
         id === 1 ? old.promise : Promise.resolve({ ...entity(id), status: 'PUBLISHED' }),
@@ -380,7 +382,7 @@ test('route changes ignore stale entity loads and published properties are read-
 test('property add/remove retain sibling pins and rejected writes leave local data unchanged', async () => {
   const writes = []
   let conflict = false
-  const view = await mountView('EntityDetail', {
+  const view = await mountView('ontology/EntityDetail', {
     entityTypes: {
       update: async (_id, input) => {
         writes.push(input)

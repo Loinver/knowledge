@@ -55,6 +55,9 @@ async function component(name) {
               contents:
                 'export const rulesApi = {list: async () => ({items: [], total: 0})}; export const templatesApi = {list: async () => ({items: [], total: 0}), resources: async () => [], ontologies: async () => []}; export const http = {get: async () => ({data: []})}',
             }))
+            bundler.onResolve({ filter: /^@\// }, ({ path: module, kind, resolveDir }) =>
+              bundler.resolve(path.join(web, 'src', module.slice(2)), { kind, resolveDir }),
+            )
             bundler.onLoad({ filter: /\.vue$/ }, async ({ path: filename }) => {
               const { descriptor } = parse(await readFile(filename, 'utf8'), { filename })
               const script = compileScript(descriptor, {
