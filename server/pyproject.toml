@@ -2,6 +2,7 @@
 name = "knowledge-server"
 version = "0.1.0"
 description = "知识中台后端：本体建模、数据接入、映射配置、抽取执行、图谱与证据追溯"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115",
@@ -10,12 +11,16 @@ dependencies = [
   "alembic>=1.14",
   "pydantic>=2.10",
   "pydantic-settings>=2.7",
+  "rdflib>=7.1",
+  "pyshacl>=0.30",
+  "owlrl>=7.1",
   # cryptography 在 M2「数据源凭据后端加密」时再引入（需 wheel 可用环境）
 ]
 
 [project.optional-dependencies]
-dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6.0", "httpx>=0.28"]
-semantic = ["rdflib>=7.1", "pyshacl>=0.30", "owlrl>=7.1"]
+dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6.0", "httpx>=0.28", "pip-licenses>=5.0"]
+# 兼容已有的 .[semantic] 安装命令；当前语义实现已是必需的运行依赖。
+semantic = []
 
 [build-system]
 requires = ["setuptools>=75"]
