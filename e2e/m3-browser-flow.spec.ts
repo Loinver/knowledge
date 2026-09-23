@@ -303,6 +303,8 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   expect(tempDir, 'Playwright config provides an isolated temp directory').toBeTruthy()
   const sourcePath = join(tempDir!, 'enterprise-demo-copy.sqlite')
   copyFileSync(resolve('samples/enterprise_demo.sqlite'), sourcePath)
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
 
   await page.goto('/register')
   await page.getByLabel('用户名').fill('e2e_' + Date.now())
@@ -431,30 +433,40 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await expect(page.getByRole('cell', { name: 'hr_employee' }).first()).toBeVisible()
 
   const routes = [
-    '/',
-    '/ontology/entity-types',
-    '/ontology/entity-types/' + ontology.entityTypes.E2EEmployee.id,
-    '/ontology/relation-types',
-    '/ontology/domains',
-    '/ontology/designer',
-    '/datasources',
-    '/datasources/catalog?datasourceId=' + datasourceId,
-    '/datasources/preview?datasourceId=' + datasourceId + '&schema=main&table=hr_employee',
-    '/extraction',
-    '/extraction/runs',
-    '/graph?graph=' + partial.graph_revision.id,
-    '/graph/entities?graph=' + partial.graph_revision.id,
-    '/graph/entities/' + encodeURIComponent(employee!.iri) + '?graph=' + firstGraph!.id,
-    '/graph/evidence?mode=entity&graph=' +
-      firstGraph!.id +
-      '&iri=' +
-      encodeURIComponent(employee!.iri),
-    '/graph/reports',
-    '/governance/rules',
-    '/governance/templates',
-    '/governance/export',
-    '/governance/clauses',
-    '/governance/enum-dictionaries',
+    { path: '/', pageHeader: true },
+    { path: '/ontology/entity-types', pageHeader: true },
+    { path: '/ontology/entity-types/' + ontology.entityTypes.E2EEmployee.id, pageHeader: true },
+    { path: '/ontology/relation-types', pageHeader: true },
+    { path: '/ontology/domains', pageHeader: true },
+    { path: '/ontology/designer', pageHeader: false },
+    { path: '/datasources', pageHeader: true },
+    { path: '/datasources/catalog?datasourceId=' + datasourceId, pageHeader: true },
+    {
+      path: '/datasources/preview?datasourceId=' + datasourceId + '&schema=main&table=hr_employee',
+      pageHeader: true,
+    },
+    { path: '/extraction', pageHeader: true },
+    { path: '/extraction/runs', pageHeader: true },
+    { path: '/graph?graph=' + partial.graph_revision.id, pageHeader: true },
+    { path: '/graph/entities?graph=' + partial.graph_revision.id, pageHeader: true },
+    {
+      path: '/graph/entities/' + encodeURIComponent(employee!.iri) + '?graph=' + firstGraph!.id,
+      pageHeader: true,
+    },
+    {
+      path:
+        '/graph/evidence?mode=entity&graph=' +
+        firstGraph!.id +
+        '&iri=' +
+        encodeURIComponent(employee!.iri),
+      pageHeader: true,
+    },
+    { path: '/graph/reports', pageHeader: true },
+    { path: '/governance/rules', pageHeader: true },
+    { path: '/governance/templates', pageHeader: true },
+    { path: '/governance/export', pageHeader: true },
+    { path: '/governance/clauses', pageHeader: true },
+    { path: '/governance/enum-dictionaries', pageHeader: true },
   ]
   for (const theme of ['dark', 'light']) {
     await page.evaluate((value) => localStorage.setItem('kg-theme-mode', value), theme)
@@ -495,9 +507,10 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     ]) {
       await page.setViewportSize(viewport)
       for (const route of routes) {
-        await page.goto(route)
+        await page.goto(route.path)
         await expect(page.locator('#app')).toBeVisible()
         await expect(page.locator('body')).not.toContainText('页面不存在')
+        if (route.pageHeader) await expect(page.locator('.page-header')).toBeVisible()
         const width = await page.evaluate(() => ({
           viewport: window.innerWidth,
           document: document.documentElement.scrollWidth,
@@ -505,9 +518,10 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
         }))
         expect(
           Math.max(width.document, width.body),
-          route + ' at ' + viewport.width + 'px in ' + theme,
+          route.path + ' at ' + viewport.width + 'px in ' + theme,
         ).toBeLessThanOrEqual(width.viewport + 1)
       }
     }
   }
+  expect(pageErrors).toEqual([])
 })
