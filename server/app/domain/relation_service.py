@@ -520,13 +520,18 @@ class RelationMeta(TypedDict):
 
 
 def get_assoc_attributes(
-    session: Session, assoc_resource: ModelResource
+    session: Session, assoc_resource: ModelResource | int
 ) -> list[AttributeDefOut]:
     """取关联实体的属性定义。
 
     数据类型与可空性从 datatype_prop_detail 读回（M-07 补齐），
     历史行缺失明细时回退到 string / nullable 的保守默认。
     """
+    if isinstance(assoc_resource, int):
+        resource = session.get(ModelResource, assoc_resource)
+        if resource is None:
+            return []
+        assoc_resource = resource
     refs = (
         session.execute(
             select(ResourceRef).where(

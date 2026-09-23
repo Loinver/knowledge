@@ -62,9 +62,7 @@ def _to_out(session: Session, resource: ModelResource) -> RelationTypeOut:
 
     attribute_defs: list[AttributeDefOut] = []
     if meta["assoc_resource_id"] is not None:
-        assoc = session.get(ModelResource, meta["assoc_resource_id"])
-        if assoc is not None:
-            attribute_defs = get_assoc_attributes(session, assoc)
+        attribute_defs = get_assoc_attributes(session, meta["assoc_resource_id"])
 
     return RelationTypeOut(
         id=resource.id,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_session
@@ -11,6 +10,9 @@ from app.domain.iri_service import (
     delete_namespace,
     register_namespace,
     scan_rename_impact,
+)
+from app.domain.iri_service import (
+    list_namespaces as list_registered_namespaces,
 )
 from app.iri import build_iri, is_valid_name, is_valid_namespace
 from app.models.resource import Namespace
@@ -29,7 +31,7 @@ router = APIRouter(prefix="/namespaces", tags=["namespaces"])
 
 @router.get("", response_model=ApiResponse[list[NamespaceOut]])
 def list_namespaces(session: Session = Depends(get_session)) -> list[Namespace]:
-    return list(session.execute(select(Namespace).order_by(Namespace.prefix)).scalars())
+    return list_registered_namespaces(session)
 
 
 @router.post("", response_model=ApiResponse[NamespaceOut], status_code=201)

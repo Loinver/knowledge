@@ -12,6 +12,11 @@ from app.models.resource import Namespace, ResourceRef
 from app.schemas.common import ImpactItem
 
 
+def list_namespaces(session: Session) -> list[Namespace]:
+    """按前缀列出已注册命名空间。"""
+    return list(session.scalars(select(Namespace).order_by(Namespace.prefix)))
+
+
 def register_namespace(
     session: Session,
     prefix: str,
