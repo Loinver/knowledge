@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NEmpty, NSelect, NSpin, useMessage } from 'naive-ui'
+import { NAlert, NButton, NEmpty, NSelect, NSpin, useMessage } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -11,9 +11,11 @@ import type { CanvasPositions, Ontology, OntologyDetail, OntologyRef } from '@/a
 import { ontologyApi } from '@/api/ontology'
 import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
+import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
 const message = useMessage()
+const { toMessage } = useApiError()
 
 /** 画布世界尺寸固定，视口通过 transform 平移缩放 —— 拖动因此可以用纯 CSS 像素计算。 */
 const WORLD_W = 2200
@@ -22,7 +24,14 @@ const NODE_W = 148
 const NODE_H = 68
 
 const loading = ref(false)
+const catalogLoading = ref(true)
 const saving = ref(false)
+const working = ref(false)
+const catalogError = ref('')
+const loadError = ref('')
+const saveError = ref('')
+const actionError = ref('')
+const needsRefresh = ref(false)
 const ontologies = ref<Ontology[]>([])
 const ontologyId = ref<number | null>(null)
 const detail = ref<OntologyDetail | null>(null)
@@ -41,6 +50,33 @@ const domainMembers = ref<Record<number, DomainMember[]>>({})
 const canvasEl = ref<HTMLElement | null>(null)
 const worldEl = ref<HTMLElement | null>(null)
 const dragging = ref<{ key: string; offsetX: number; offsetY: number } | null>(null)
+
+type OntologySelection = { id: number; controller: AbortController }
+let selection: OntologySelection | undefined
+let catalogController: AbortController | undefined
+let alive = true
+const pendingWrites = new Map<number, Promise<unknown>>()
+const canEdit = computed(
+  () =>
+    detail.value?.id === ontologyId.value &&
+    !!detail.value &&
+    !catalogLoading.value &&
+    !catalogError.value &&
+    !loading.value &&
+    !loadError.value &&
+    !saving.value &&
+    !working.value &&
+    !needsRefresh.value,
+)
+
+function isCurrentSelection(context: OntologySelection) {
+  return (
+    alive &&
+    selection === context &&
+    ontologyId.value === context.id &&
+    !context.controller.signal.aborted
+  )
+}
 
 const STATUS_VAR: Record<ResourceStatus, string> = {
   PUBLISHED: 'var(--s-pass)',
@@ -253,26 +289,38 @@ const worldStyle = computed(() => ({
 // ── 加载 ───────────────────────────────────────────────────
 
 async function loadCatalog() {
-  const [types, rels, domainList] = await Promise.all([
-    entityTypesApi.list().catch(() => [] as EntityTypeBrief[]),
-    relationsApi.list().catch(() => [] as RelationTypeBrief[]),
-    domainsApi.list().catch(() => [] as DomainBrief[]),
-  ])
-  entityTypes.value = types
-  relations.value = rels
-  domains.value = domainList
-  const members = await Promise.all(
-    domainList.map((domain) => domainsApi.members(domain.id).catch(() => [] as DomainMember[])),
-  )
-  domainMembers.value = Object.fromEntries(
-    domainList.map((domain, index) => [domain.id, members[index]]),
-  )
-}
-
-async function loadOntologies() {
-  ontologies.value = await ontologyApi.list().catch(() => [] as Ontology[])
-  if (!ontologyId.value && ontologies.value.length) {
-    await selectOntology(ontologies.value[0].id)
+  if (!alive) return
+  catalogController?.abort()
+  const controller = new AbortController()
+  catalogController = controller
+  catalogLoading.value = true
+  catalogError.value = ''
+  try {
+    const [types, rels, domainList, ontologyList] = await Promise.all([
+      entityTypesApi.list({}, controller.signal),
+      relationsApi.list({}, controller.signal),
+      domainsApi.list({}, controller.signal),
+      ontologyApi.list({}, controller.signal),
+    ])
+    if (!alive || controller.signal.aborted) return
+    const members = await Promise.all(
+      domainList.map((domain) => domainsApi.members(domain.id, controller.signal)),
+    )
+    if (!alive || controller.signal.aborted) return
+    entityTypes.value = types
+    relations.value = rels
+    domains.value = domainList
+    domainMembers.value = Object.fromEntries(
+      domainList.map((domain, index) => [domain.id, members[index]]),
+    )
+    ontologies.value = ontologyList
+    catalogLoading.value = false
+    const id = ontologyList.find((item) => item.id === ontologyId.value)?.id ?? ontologyList[0]?.id
+    await selectOntology(id ?? null)
+  } catch (err) {
+    if (alive && !controller.signal.aborted) catalogError.value = toMessage(err)
+  } finally {
+    if (alive && !controller.signal.aborted) catalogLoading.value = false
   }
 }
 
@@ -294,58 +342,105 @@ function ensurePositions() {
   positions.value = next
 }
 
-async function selectOntology(id: number) {
+async function selectOntology(id: number | null) {
+  if (!alive || catalogLoading.value || catalogError.value) return false
+  selection?.controller.abort()
+  selection = id === null ? undefined : { id, controller: new AbortController() }
+  stopDragging()
   ontologyId.value = id
   selectedKey.value = null
-  loading.value = true
-  try {
-    const [onto, refList, canvas] = await Promise.all([
-      ontologyApi.get(id),
-      ontologyApi.refs(id).catch(() => [] as OntologyRef[]),
-      ontologyApi.getCanvas(id).catch(() => null),
-    ])
-    detail.value = onto
-    refs.value = refList
-    positions.value = { ...((canvas?.positions ?? {}) as CanvasPositions) }
+  saving.value = false
+  working.value = false
+  needsRefresh.value = false
+  saveError.value = ''
+  actionError.value = ''
+  loadError.value = ''
+  detail.value = null
+  refs.value = []
+  positions.value = {}
+  loading.value = false
+  return selection ? loadOntology(selection) : false
+}
 
+async function loadOntology(context: OntologySelection) {
+  if (!isCurrentSelection(context)) return false
+  loading.value = true
+  loadError.value = ''
+  selectedKey.value = null
+  detail.value = null
+  refs.value = []
+  positions.value = {}
+  relationDetails.value = {}
+  try {
+    // 返回同一本体时，先等已发出的写请求完成，再读取其内容和编辑版本。
+    await pendingWrites.get(context.id)?.catch(() => undefined)
+    if (!isCurrentSelection(context)) return false
+    const signal = context.controller.signal
+    // 先读版本再读引用；并发修改最多造成保守的 409，不能把新版本绑定到旧引用。
+    const onto = await ontologyApi.get(context.id, signal)
+    if (!isCurrentSelection(context)) return false
+    const [refList, canvas] = await Promise.all([
+      ontologyApi.refs(context.id, signal),
+      ontologyApi.getCanvas(context.id, signal),
+    ])
+    if (!isCurrentSelection(context)) return false
     // 连线需要定义域/值域，而列表接口只返回 brief，按需补详情
     const relIds = refList
       .map((r) => r.resource_id)
       .filter((rid) => relations.value.some((r) => r.id === rid))
-    await loadRelationDetails(relIds)
-
+    const relationItems = await Promise.all(relIds.map((id) => relationsApi.get(id, signal)))
+    if (!isCurrentSelection(context)) return false
+    detail.value = onto
+    refs.value = refList
+    positions.value = { ...((canvas.positions ?? {}) as CanvasPositions) }
+    relationDetails.value = Object.fromEntries(relationItems.map((item) => [item.id, item]))
     ensurePositions()
     await nextTick()
+    if (!isCurrentSelection(context)) return false
     fitView()
+    return true
+  } catch (err) {
+    if (isCurrentSelection(context)) loadError.value = toMessage(err)
+    return false
   } finally {
-    loading.value = false
+    if (isCurrentSelection(context)) loading.value = false
   }
 }
 
-async function loadRelationDetails(ids: number[]) {
-  const missing = ids.filter((id) => relationDetails.value[id] === undefined)
-  if (!missing.length) return
-  const results = await Promise.all(missing.map((id) => relationsApi.get(id).catch(() => null)))
-  const next = { ...relationDetails.value }
-  for (const item of results) if (item) next[item.id] = item
-  relationDetails.value = next
+async function trackWrite(id: number, write: Promise<unknown>) {
+  pendingWrites.set(id, write)
+  try {
+    await write
+  } finally {
+    if (pendingWrites.get(id) === write) pendingWrites.delete(id)
+  }
 }
 
 // ── 布局持久化 ─────────────────────────────────────────────
 
 async function persist() {
-  if (!ontologyId.value) return
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value) return
+  await persistLayout(context)
+}
+
+async function persistLayout(context: OntologySelection) {
+  const snapshot: CanvasPositions = Object.fromEntries(
+    Object.entries(positions.value).map(([key, position]) => [key, { ...position }]),
+  )
   saving.value = true
+  saveError.value = ''
   try {
-    await ontologyApi.saveCanvas(ontologyId.value, positions.value)
-  } catch {
-    message.error(t('designer.saveFailed'))
+    await trackWrite(context.id, ontologyApi.saveCanvas(context.id, snapshot))
+  } catch (err) {
+    if (isCurrentSelection(context)) saveError.value = toMessage(err)
   } finally {
-    saving.value = false
+    if (isCurrentSelection(context)) saving.value = false
   }
 }
 
 function autoLayout() {
+  if (!canEdit.value) return
   const list = nodes.value
   if (!list.length) return
   const next = { ...positions.value }
@@ -400,6 +495,7 @@ function stepZoom(delta: number) {
 // ── 拖拽 ───────────────────────────────────────────────────
 
 function onNodeDown(key: string, event: MouseEvent) {
+  if (!canEdit.value) return
   event.preventDefault()
   selectedKey.value = key
   const world = worldEl.value
@@ -417,7 +513,7 @@ function onNodeDown(key: string, event: MouseEvent) {
 function onNodeMove(event: MouseEvent) {
   const drag = dragging.value
   const world = worldEl.value
-  if (!drag || !world) return
+  if (!drag || !world || !canEdit.value) return
   const rect = world.getBoundingClientRect()
   positions.value = {
     ...positions.value,
@@ -428,11 +524,18 @@ function onNodeMove(event: MouseEvent) {
   }
 }
 
-function onNodeUp() {
-  window.removeEventListener('mousemove', onNodeMove)
-  window.removeEventListener('mouseup', onNodeUp)
-  if (!dragging.value) return
+function stopDragging() {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('mousemove', onNodeMove)
+    window.removeEventListener('mouseup', onNodeUp)
+  }
   dragging.value = null
+}
+
+function onNodeUp() {
+  const moved = !!dragging.value
+  stopDragging()
+  if (!moved) return
   // 拖拽只改布局，不产生语义版本，所以请求里没有 If-Match
   void persist()
 }
@@ -448,61 +551,63 @@ function selectRelation(id: number) {
 
 // ── 装配 ───────────────────────────────────────────────────
 
-async function addToCanvas(resourceId: number) {
-  if (!ontologyId.value) return
+async function updateOntology(
+  write: (id: number, editRevision: number) => Promise<unknown>,
+  saveLayout = false,
+) {
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value || !detail.value) return false
+  const revision = detail.value.edit_revision
+  working.value = true
+  actionError.value = ''
   try {
-    await ontologyApi.addRef(ontologyId.value, resourceId)
-    refs.value = await ontologyApi.refs(ontologyId.value)
-    if (relations.value.some((item) => item.id === resourceId)) {
-      await loadRelationDetails([resourceId])
+    await trackWrite(context.id, write(context.id, revision))
+    if (!isCurrentSelection(context)) return false
+    const loaded = await loadOntology(context)
+    if (!loaded || !isCurrentSelection(context)) return false
+    if (saveLayout) {
+      await persistLayout(context)
     }
-    ensurePositions()
-    fitView()
-    void persist()
+    return isCurrentSelection(context)
   } catch (err) {
-    message.error((err as { code?: string }).code || t('designer.addFailed'))
+    if (isCurrentSelection(context)) {
+      actionError.value = toMessage(err)
+      needsRefresh.value = (err as { code?: string })?.code === 'KG.REVISION_CONFLICT'
+    }
+    return false
+  } finally {
+    if (isCurrentSelection(context)) working.value = false
   }
+}
+
+async function addToCanvas(resourceId: number) {
+  await updateOntology(
+    (id, revision) => ontologyApi.addRef(id, resourceId, undefined, revision),
+    true,
+  )
 }
 
 async function removeFromCanvas(resourceId: number) {
-  if (!ontologyId.value) return
   const ref = refs.value.find((r) => r.resource_id === resourceId)
   if (!ref) return
-  try {
-    await ontologyApi.removeRef(ontologyId.value, ref.id)
-    refs.value = await ontologyApi.refs(ontologyId.value)
-    if (
-      selectedKey.value === String(resourceId) ||
-      selectedKey.value === `rel-${resourceId}` ||
-      selectedKey.value === `domain-${resourceId}`
-    ) {
-      selectedKey.value = null
-    }
-    fitView()
-  } catch (err) {
-    message.error((err as { code?: string }).code || t('designer.removeFailed'))
-  }
+  await updateOntology((id, revision) => ontologyApi.removeRef(id, ref.id, revision))
 }
 
 async function publish() {
-  if (!ontologyId.value) return
-  try {
-    await ontologyApi.publish(ontologyId.value)
-    await selectOntology(ontologyId.value)
+  const context = selection
+  const updated = await updateOntology((id, revision) => ontologyApi.publish(id, revision))
+  if (updated && context && isCurrentSelection(context)) {
     message.success(t('common.publish'))
-  } catch (err) {
-    message.error((err as { code?: string }).code || t('common.publish'))
   }
 }
 
-onMounted(async () => {
-  await loadCatalog()
-  await loadOntologies()
-})
+onMounted(() => void loadCatalog())
 
 onBeforeUnmount(() => {
-  window.removeEventListener('mousemove', onNodeMove)
-  window.removeEventListener('mouseup', onNodeUp)
+  alive = false
+  catalogController?.abort()
+  selection?.controller.abort()
+  stopDragging()
 })
 </script>
 
@@ -511,9 +616,11 @@ onBeforeUnmount(() => {
     <!-- 顶栏：本体选择 + 布局 + 发布 -->
     <header class="toolbar">
       <NSelect
-        v-model:value="ontologyId"
+        :value="ontologyId"
         :options="ontologies.map((o) => ({ label: o.name, value: o.id }))"
         :placeholder="t('designer.selectOntology')"
+        :loading="catalogLoading"
+        :disabled="catalogLoading || !!catalogError"
         class="onto-select"
         @update:value="(v: number) => selectOntology(v)"
       />
@@ -523,19 +630,35 @@ onBeforeUnmount(() => {
       </span>
       <span v-if="saving" class="saving">{{ t('designer.saving') }}</span>
       <span class="spacer" />
-      <NButton size="small" :disabled="!nodes.length" @click="autoLayout">
+      <NButton size="small" :disabled="!canEdit || !nodes.length" @click="autoLayout">
         {{ t('designer.autoLayout') }}
       </NButton>
-      <NButton size="small" type="primary" :disabled="!ontologyId" @click="publish">
+      <NButton size="small" type="primary" :disabled="!canEdit" @click="publish">
         {{ t('common.publish') }}
       </NButton>
     </header>
 
-    <div v-if="!ontologies.length" class="no-ontology">
+    <NAlert v-if="catalogError" type="error" role="alert">
+      {{ catalogError }}
+      <NButton :loading="catalogLoading" @click="loadCatalog">{{ t('graph.refresh') }}</NButton>
+    </NAlert>
+    <NAlert v-if="loadError || actionError" type="error" role="alert">
+      {{ loadError || actionError }}
+      <NButton :loading="loading" @click="ontologyId !== null && selectOntology(ontologyId)">
+        {{ t('graph.refresh') }}
+      </NButton>
+    </NAlert>
+    <NAlert v-if="saveError" type="error" role="alert">
+      {{ saveError }}
+      <NButton :disabled="!canEdit" @click="persist">{{ t('common.save') }}</NButton>
+    </NAlert>
+    <p v-if="catalogLoading" role="status">{{ t('common.loading') }}</p>
+
+    <div v-if="!catalogLoading && !catalogError && !ontologies.length" class="no-ontology">
       <NEmpty :description="t('designer.noOntologyHint')" />
     </div>
 
-    <div v-else class="body">
+    <div v-else-if="ontologies.length" class="body">
       <!-- 左：资源面板 -->
       <aside class="panel pool">
         <div class="panel-head">{{ t('designer.resourcePool') }}</div>
@@ -586,6 +709,7 @@ onBeforeUnmount(() => {
             :key="`a-${tp.id}`"
             type="button"
             class="pool-item addable"
+            :disabled="!canEdit"
             @click="addToCanvas(tp.id)"
           >
             <i class="dot" :style="{ background: STATUS_VAR[tp.status] }" />
@@ -597,6 +721,7 @@ onBeforeUnmount(() => {
             :key="`ar-${r.id}`"
             type="button"
             class="pool-item addable"
+            :disabled="!canEdit"
             @click="addToCanvas(r.id)"
           >
             <i class="dot" :style="{ background: STATUS_VAR[r.status] }" />
@@ -608,6 +733,7 @@ onBeforeUnmount(() => {
             :key="`ad-${domain.id}`"
             type="button"
             class="pool-item addable"
+            :disabled="!canEdit"
             @click="addToCanvas(domain.id)"
           >
             <i class="dot" :style="{ background: STATUS_VAR[domain.status] }" />
@@ -698,7 +824,7 @@ onBeforeUnmount(() => {
               <span class="node-meta">{{ node.name }}</span>
             </div>
 
-            <div v-if="!nodes.length" class="world-empty">
+            <div v-if="!loading && !loadError && !nodes.length" class="world-empty">
               <div class="world-empty-title">{{ t('designer.emptyCanvas') }}</div>
               <div class="world-empty-hint">{{ t('designer.emptyCanvasHint') }}</div>
             </div>
@@ -776,7 +902,7 @@ onBeforeUnmount(() => {
             </template>
           </dl>
 
-          <NButton size="small" block @click="removeFromCanvas(selected.id)">
+          <NButton size="small" block :disabled="!canEdit" @click="removeFromCanvas(selected.id)">
             {{ t('designer.removeFromCanvas') }}
           </NButton>
         </div>

@@ -3,16 +3,15 @@ import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NSelect, NSpace
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { http } from '@/api/client'
-import type { components } from '@/api/schema'
+import type { Ontology, OntologyExportFormat } from '@/api/ontology'
+import { ontologyApi } from '@/api/ontology'
 import PageHeader from '@/components/PageHeader.vue'
 
-type Ontology = components['schemas']['OntologyBrief']
 const { t, locale } = useI18n()
 const ontologies = ref<Ontology[]>([])
 const selectedId = ref<number | null>(null)
 const revision = ref<number | null>(null)
-const format = ref<'turtle' | 'json-ld'>('turtle')
+const format = ref<OntologyExportFormat>('turtle')
 const loading = ref(false)
 const downloading = ref(false)
 const error = ref('')
@@ -42,10 +41,7 @@ async function load() {
   try {
     const items: Ontology[] = []
     for (let page = 1; ; page++) {
-      const { data } = await http.get<Ontology[]>('/ontologies', {
-        params: { page, page_size: 200 },
-        signal: controller.signal,
-      })
+      const data = await ontologyApi.list({ page, page_size: 200 }, controller.signal)
       items.push(...data)
       if (data.length < 200) break
     }
@@ -70,11 +66,12 @@ async function download() {
   error.value = ''
   success.value = false
   try {
-    const { data } = await http.get<Blob>(`/ontologies/${ontology.id}/export`, {
-      params: { format: selectedFormat, revision: selectedRevision },
-      responseType: 'blob',
-      signal: controller.signal,
-    })
+    const data = await ontologyApi.export(
+      ontology.id,
+      { format: selectedFormat, revision: selectedRevision },
+      controller.signal,
+    )
+    if (controller.signal.aborted) return
     const url = URL.createObjectURL(data)
     const link = document.createElement('a')
     link.href = url
@@ -84,17 +81,9 @@ async function download() {
     success.value = true
   } catch (err) {
     if (controller.signal.aborted) return
-    const body = (err as { response?: { data?: Blob } })?.response?.data
-    let detail: { code?: string; params?: { reason?: string } } = {}
-    if (body instanceof Blob) {
-      try {
-        detail = JSON.parse(await body.text())
-      } catch {
-        /* Non-JSON errors use the fallback below. */
-      }
-    }
+    const detail = err as { params?: { reason?: string } } | null
     error.value = t('export.failed', {
-      reason: detail.params?.reason || detail.code || errorCode(err),
+      reason: detail?.params?.reason || errorCode(err),
     })
   } finally {
     downloading.value = false
