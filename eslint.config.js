@@ -65,5 +65,53 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['web/src/api/**/*.{ts,js,mjs}'],
+    ignores: ['**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/views/**',
+                '**/components/**',
+                '**/composables/**',
+                '**/layout/**',
+                '**/stores',
+                '**/stores/**',
+                '**/router',
+                '**/router/**',
+                'pinia',
+                'vue-router',
+                'vue-i18n',
+              ],
+              message: 'API modules must not depend on views, application state, or UI frameworks.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['web/src/{views,components,composables,layout,stores,router}/**/*.{ts,js,mjs,vue}'],
+    ignores: ['**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'axios', message: 'Use the domain API module for HTTP requests.' }],
+          patterns: [
+            {
+              group: ['**/api/client', '**/api/client.ts'],
+              importNames: ['http'],
+              message: 'Use the domain API module; keep HTTP requests in api/.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettier,
 )
