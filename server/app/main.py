@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -36,6 +38,7 @@ from app.api.v1.relations import router as relations_router
 from app.api.v1.templates import router as templates_router
 from app.api.v1.types import router as types_router
 from app.api.v1.validation import router as validation_router
+from app.core.config import get_settings
 from app.core.db import Base, get_engine
 from app.core.errors import install_error_handler
 from app.schemas.response import ApiResponse
@@ -43,19 +46,27 @@ from app.schemas.response import ApiResponse
 API_PREFIX = "/api/v1"
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """开发态按配置建表，并在正常退出或启动失败时释放数据库连接。"""
+    engine = get_engine()
+    try:
+        if get_settings().create_tables_on_startup:
+            Base.metadata.create_all(engine)
+        yield
+    finally:
+        engine.dispose()
+
+
 app = FastAPI(
     title="Knowledge Platform",
     description="知识中台：本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯",
     version="0.0.0",
+    lifespan=lifespan,
 )
 
 install_error_handler(app)
-
-
-@app.on_event("startup")
-def _create_tables() -> None:
-    """开发态自动建表（生产用 Alembic 迁移）。"""
-    Base.metadata.create_all(get_engine())
 
 
 app.include_router(namespaces_router, prefix=API_PREFIX)

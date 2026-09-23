@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     crypto_key: str = "dev-only-do-not-use-in-production-key-32bytes!"
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
+    # 本地开发自动建表；使用 Alembic 管理结构的环境应显式关闭。
+    create_tables_on_startup: bool = True
 
     # --- 账号模块 ---
     # 公开注册默认关闭：账号由管理员在用户管理里创建，首个管理员用
