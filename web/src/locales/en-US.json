@@ -734,6 +734,148 @@
       "next": "Next",
       "rowRange": "Rows {start}–{end}",
       "nullValue": "Empty"
+    },
+    "sources": {
+      "breadcrumb": "Data access",
+      "title": "Data sources",
+      "description": "Register database connections, test them, and store credentials encrypted.",
+      "actions": {
+        "create": "New data source",
+        "delete": "Delete",
+        "save": "Save",
+        "test": "Test connection"
+      },
+      "stats": {
+        "total": "Total",
+        "connected": "Connected",
+        "failed": "Disconnected",
+        "types": "Connection types"
+      },
+      "security": "Passwords are entered only when creating or testing a connection and are never shown again.",
+      "listTitle": "Registered data sources",
+      "search": "Search by name",
+      "filters": {
+        "kind": "Database",
+        "status": "Status",
+        "allKinds": "All types",
+        "allStatuses": "All statuses"
+      },
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Disconnected"
+      },
+      "connection": {
+        "sqlite": "Local SQLite file",
+        "network": "{kind} network connection",
+        "failed": "Connection failed. Check the network, address, and credentials. Detailed errors are not shown."
+      },
+      "deleteConfirm": "Delete data source \"{name}\"? Captured schema snapshots will also be deleted.",
+      "createTitle": "New data source",
+      "fields": {
+        "name": "Name",
+        "kind": "Type",
+        "host": "Host",
+        "port": "Port",
+        "database": "Database",
+        "user": "Username",
+        "credential": "Password",
+        "credentialHint": "Used only for this connection and never shown in the list"
+      },
+      "testTables": "{count} tables found",
+      "validation": {
+        "name": "Enter a data source name",
+        "connection": "Complete the connection details"
+      },
+      "states": {
+        "loadFailed": "Could not load data sources",
+        "created": "Data source created",
+        "deleted": "Data source deleted",
+        "noMatch": "No matching data sources",
+        "empty": "No data sources yet"
+      },
+      "columns": {
+        "name": "Name",
+        "kind": "Type",
+        "connection": "Connection"
+      },
+      "connectionProtected": "Connection details are protected",
+      "created": "Data source created.",
+      "deleteTitle": "Delete data source",
+      "deleted": "Data source deleted.",
+      "retry": "Retry",
+      "securityHint": "Credentials are encrypted on the server and never shown again. Source access is limited to read-only queries.",
+      "securityTitle": "Credentials and read-only access",
+      "statuses": {
+        "CONNECTED": "Connected",
+        "DISCONNECTED": "Disconnected"
+      },
+      "testHeading": "Connection test",
+      "testHint": "Enter a password here only if the connection requires one. It is used for this test and is neither shown again nor saved.",
+      "validationRequired": "Enter a name and the complete connection parameters."
+    },
+    "catalog": {
+      "description": "Browse schema snapshots, column changes, and mappings that reference them.",
+      "selectors": {
+        "datasource": "Data source",
+        "snapshot": "Snapshot"
+      },
+      "snapshotRevision": "Revision {revision}",
+      "actions": {
+        "capture": "Capture schema",
+        "retry": "Retry",
+        "samplePreview": "Sample preview"
+      },
+      "states": {
+        "capturing": "Capturing",
+        "errorTitle": "Could not load the data catalog",
+        "loadingSources": "Loading data sources",
+        "noSources": "No data sources yet",
+        "loadingMetadata": "Loading schema snapshot",
+        "noSnapshot": "No schema snapshot yet",
+        "noSnapshotHint": "Capture one to browse tables, columns, and structural changes.",
+        "noTables": "This snapshot has no tables",
+        "noColumns": "No columns",
+        "selectTable": "Select a table to inspect its columns"
+      },
+      "tree": {
+        "title": "Schema"
+      },
+      "diff": {
+        "title": "Since the previous revision",
+        "noChanges": "No structural changes",
+        "structureOnly": "Only table and column structure is compared, not row data.",
+        "tablesAdded": "Tables added",
+        "tablesRemoved": "Tables removed",
+        "columnsAdded": "Columns added",
+        "columnsRemoved": "Columns removed",
+        "columnsModified": "Columns modified"
+      },
+      "objectTypes": {
+        "view": "View",
+        "table": "Table"
+      },
+      "columns": {
+        "name": "Column",
+        "type": "Type",
+        "nullable": "Nullable",
+        "key": "Key",
+        "foreignKey": "Foreign key",
+        "change": "Change"
+      },
+      "keys": {
+        "primary": "Primary"
+      },
+      "selection": {
+        "column": "Selected column"
+      },
+      "references": {
+        "title": "References",
+        "loading": "Looking up references",
+        "empty": "No mappings reference this table",
+        "entityMapping": "Entity mapping",
+        "relationMapping": "Relation mapping",
+        "changeWarning": "Structural changes may affect these mappings."
+      }
     }
   }
 }

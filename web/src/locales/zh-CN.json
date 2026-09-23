@@ -734,6 +734,148 @@
       "next": "下一页",
       "rowRange": "第 {start}–{end} 行",
       "nullValue": "空"
+    },
+    "sources": {
+      "breadcrumb": "数据接入",
+      "title": "数据源",
+      "description": "登记数据库连接，测试连通性，并保存加密后的凭据。",
+      "actions": {
+        "create": "新建数据源",
+        "delete": "删除",
+        "save": "保存",
+        "test": "测试连接"
+      },
+      "stats": {
+        "total": "全部",
+        "connected": "已连接",
+        "failed": "未连接",
+        "types": "连接类型"
+      },
+      "securityTitle": "凭据与只读边界",
+      "securityHint": "凭据由服务端加密保存，页面不会回显；源库操作仅允许受限读取。",
+      "security": "凭据仅在新建和测试时输入，保存后由服务端加密保管，不会回显。",
+      "listTitle": "已登记的数据源",
+      "search": "按名称搜索",
+      "filters": {
+        "allKinds": "全部类型",
+        "allStatuses": "全部状态",
+        "kind": "数据库类型",
+        "status": "连接状态"
+      },
+      "statuses": {
+        "CONNECTED": "已连接",
+        "DISCONNECTED": "未连接"
+      },
+      "columns": {
+        "name": "名称",
+        "kind": "类型",
+        "connection": "连接信息"
+      },
+      "connectionProtected": "连接信息已保护",
+      "testHeading": "连接测试",
+      "testHint": "如果连接需要密码，请在这里临时输入。密码只用于本次测试，不会回显或保存。",
+      "testTables": "发现 {count} 张表。",
+      "validationRequired": "请填写名称和完整的连接参数。",
+      "created": "数据源已创建。",
+      "deleted": "数据源已删除。",
+      "retry": "重试",
+      "deleteTitle": "删除数据源",
+      "status": {
+        "connected": "已连接",
+        "disconnected": "未连接"
+      },
+      "connection": {
+        "failed": "连接失败。请检查网络、地址与凭据；详细异常不会在页面回显。",
+        "sqlite": "本地 SQLite 文件",
+        "network": "{kind} 网络连接"
+      },
+      "deleteConfirm": "确定删除“{name}”吗？引用此数据源的映射可能因此失效。",
+      "createTitle": "新建数据源",
+      "fields": {
+        "name": "名称",
+        "kind": "类型",
+        "host": "主机",
+        "port": "端口",
+        "database": "数据库",
+        "user": "用户名",
+        "credential": "密码",
+        "credentialHint": "仅用于本次连接，不会在列表中显示"
+      },
+      "validation": {
+        "name": "请填写数据源名称",
+        "connection": "请补全连接信息"
+      },
+      "states": {
+        "loadFailed": "无法加载数据源",
+        "created": "数据源已创建",
+        "deleted": "数据源已删除",
+        "noMatch": "没有匹配的数据源",
+        "empty": "还没有数据源"
+      }
+    },
+    "catalog": {
+      "description": "浏览数据源的结构快照、字段变化和已引用的映射。",
+      "selectors": {
+        "datasource": "数据源",
+        "snapshot": "快照"
+      },
+      "snapshotRevision": "版本 {revision}",
+      "actions": {
+        "capture": "采集结构",
+        "retry": "重试",
+        "samplePreview": "样例预览"
+      },
+      "states": {
+        "capturing": "正在采集",
+        "errorTitle": "无法加载数据目录",
+        "loadingSources": "正在加载数据源",
+        "noSources": "还没有数据源",
+        "loadingMetadata": "正在加载结构快照",
+        "noSnapshot": "还没有结构快照",
+        "noSnapshotHint": "采集一次后即可浏览表、字段和结构差异。",
+        "noTables": "这个快照没有表",
+        "noColumns": "没有字段",
+        "selectTable": "选择一张表查看字段"
+      },
+      "tree": {
+        "title": "结构"
+      },
+      "diff": {
+        "title": "相对上一版本",
+        "noChanges": "结构没有变化",
+        "structureOnly": "这里只比较表和字段结构，不比较数据内容。",
+        "tablesAdded": "新增表",
+        "tablesRemoved": "删除表",
+        "columnsAdded": "新增字段",
+        "columnsRemoved": "删除字段",
+        "columnsModified": "修改字段"
+      },
+      "objectTypes": {
+        "view": "视图",
+        "table": "表"
+      },
+      "columns": {
+        "name": "字段",
+        "type": "类型",
+        "nullable": "可空",
+        "key": "键",
+        "foreignKey": "外键",
+        "change": "变化"
+      },
+      "keys": {
+        "primary": "主键"
+      },
+      "selection": {
+        "column": "当前字段"
+      },
+      "references": {
+        "title": "引用",
+        "loading": "正在查找引用",
+        "empty": "没有映射引用这张表",
+        "entityMapping": "实体映射",
+        "relationMapping": "关系映射",
+        "changeWarning": "结构变化可能影响这些映射。"
+      }
     }
   }
 }
