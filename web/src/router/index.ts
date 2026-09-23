@@ -197,6 +197,16 @@ router.beforeEach(async (to) => {
   if (to.meta.adminOnly) {
     // 角色来自 /auth/me，首次进入受限页时补拉一次
     if (!auth.user) await auth.loadMe()
+    // loadMe 失败说明会话已失效（401 拦截器已清空凭据）；
+    // 此时应回登录页并保留 redirect，而不是判成"已登录但无权限"。
+    //
+    // 这里判 `auth.user` 而不是 `auth.isAuthenticated`：后者是
+    // `user !== null || hasSession()` 的 computed，而 hasSession() 读的是
+    // localStorage、不是响应式依赖；凭据被清空时 user 本就是 null（无变化），
+    // computed 不会失效，会一直返回清空前的旧值 true。
+    if (!auth.user) {
+      return { name: 'login', query: { redirect: to.fullPath } }
+    }
     if (!auth.isAdmin) return { name: 'forbidden' }
   }
 
