@@ -337,7 +337,7 @@ def publish_ontology(
             ref_types.append(ref.resource_id)
     new_rev = onto.current_revision + 1
     rule_rows = []
-    if sqlalchemy_inspect(session.get_bind()).has_table("ontology_rule_ref"):
+    if sqlalchemy_inspect(session.connection()).has_table("ontology_rule_ref"):
         rule_rows = list(
             session.execute(
                 select(Rule, OntologyRuleRef)
