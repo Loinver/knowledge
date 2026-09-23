@@ -12,10 +12,10 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from app.connectors.sql import select_source_rows
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.mapping_service import (
@@ -24,7 +24,7 @@ from app.domain.mapping_service import (
     get_published_revision,
 )
 from app.domain.metadata_service import get_latest_snapshot
-from app.domain.source_service import _build_engine, get_datasource
+from app.domain.source_service import datasource_engine, get_datasource
 from app.models.data_access import MappingPreview
 
 
@@ -60,27 +60,20 @@ def compile_mapping(
             {"datasource_id": datasource_id, "reason": "no_metadata_snapshot"},
         )
     table_set = _index_catalog_tables(snap.catalog)
-    try:
-        engine = _build_engine(ds)
-    except Exception as e:
-        raise KGError(
-            ErrorCode.SOURCE_UNREACHABLE,
-            {"datasource_id": datasource_id, "reason": str(e)[:200]},
-        ) from e
-
     entities_result: list[dict] = []
     relations_result: list[dict] = []
     errors_all: list[dict] = []
 
-    for em in rev.entity_maps:
-        compiled, errs = _compile_entity(em, engine, ds.kind, table_set, limit)
-        entities_result.append(compiled)
-        errors_all.extend(errs)
+    with datasource_engine(ds) as engine:
+        for em in rev.entity_maps:
+            compiled, errs = _compile_entity(em, engine, ds.kind, table_set, limit)
+            entities_result.append(compiled)
+            errors_all.extend(errs)
 
-    for rm in rev.rel_maps:
-        compiled, errs = _compile_relation(rm, engine, ds.kind, table_set, limit)
-        relations_result.append(compiled)
-        errors_all.extend(errs)
+        for rm in rev.rel_maps:
+            compiled, errs = _compile_relation(rm, engine, ds.kind, table_set, limit)
+            relations_result.append(compiled)
+            errors_all.extend(errs)
 
     result = {
         "mapping_id": mapping_id,
@@ -158,20 +151,19 @@ def _compile_entity(
             "errors": errs,
         }, errs
 
-    qualified = f'"{schema}"."{table}"' if schema and schema != "main" else f'"{table}"'
-    sql = text(f"SELECT * FROM {qualified} LIMIT :lim")
+    sql = select_source_rows(table, schema, limit=limit)
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql, {"lim": limit})
+            result = conn.execute(sql)
             raw_rows = [dict(r._mapping) for r in result.fetchmany(limit)]
-    except Exception as e:
+    except Exception:
         errs.append(
             {
                 "entity_type": entity_type,
                 "table": table,
                 "level": "table",
                 "code": "query_failed",
-                "message": str(e)[:200],
+                "message": "source_query_failed",
             }
         )
         return {
@@ -433,20 +425,19 @@ def _compile_relation(
             "errors": errs,
         }, errs
 
-    qualified = f'"{schema}"."{table}"' if schema and schema != "main" else f'"{table}"'
-    sql = text(f"SELECT * FROM {qualified} LIMIT :lim")
+    sql = select_source_rows(table, schema, limit=limit)
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql, {"lim": limit})
+            result = conn.execute(sql)
             raw_rows = [dict(r._mapping) for r in result.fetchmany(limit)]
-    except Exception as e:
+    except Exception:
         errs.append(
             {
                 "relation_type": rel_type,
                 "table": table,
                 "level": "table",
                 "code": "query_failed",
-                "message": str(e)[:200],
+                "message": "source_query_failed",
             }
         )
         return {

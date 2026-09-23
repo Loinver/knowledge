@@ -2,7 +2,7 @@
 
 安全约束（A15）：
 - 限行：limit 上限 100，offset 上限防止深翻页。
-- 限时：查询带超时（SQLite 不支持 connect timeout，用语句层 limit 兜底）。
+- 限时：连接器限制连接等待与 SQL 执行时间。
 - 不入库：预览结果不写入任何表，不写运行日志。
 - 凭据不出现在预览结果。
 - 只读：源库连接器强制只读，拦截写语句。
@@ -10,12 +10,12 @@
 
 from __future__ import annotations
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.connectors.sql import select_source_rows
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
-from app.domain.source_service import _build_engine, get_datasource
+from app.domain.source_service import datasource_engine, get_datasource
 
 _WRITE_KEYWORDS = (
     "insert",
@@ -91,28 +91,12 @@ def preview_table(
     _validate_table_exists(session, ds_id, table, schema)
 
     ds = get_datasource(session, ds_id)
-    try:
-        engine = _build_engine(ds)
-    except Exception as e:
-        raise KGError(
-            ErrorCode.SOURCE_UNREACHABLE,
-            {"datasource_id": ds_id, "reason": str(e)[:200]},
-        ) from e
-
-    # 限定 schema/表名用引号包裹防注入；表名校验已过
-    qualified = f'"{schema}"."{table}"' if schema and schema != "main" else f'"{table}"'
-    sql = text(f"SELECT * FROM {qualified} LIMIT :lim OFFSET :off")
-
-    try:
+    with datasource_engine(ds) as engine:
+        sql = select_source_rows(table, schema, limit=limit, offset=offset)
         with engine.connect() as conn:
-            result = conn.execute(sql, {"lim": limit, "off": offset})
+            result = conn.execute(sql)
             col_names = list(result.keys())
             rows_data = [dict(row._mapping) for row in result.fetchmany(limit)]
-    except Exception as e:
-        raise KGError(
-            ErrorCode.SOURCE_UNREACHABLE,
-            {"datasource_id": ds_id, "reason": str(e)[:200]},
-        ) from e
 
     # 凭据不出现在结果：遍历清除任何可能的密码字段
     sensitive_keys = {"password", "passwd", "secret", "credential", "token", "api_key"}

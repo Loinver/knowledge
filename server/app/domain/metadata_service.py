@@ -8,18 +8,18 @@
 from __future__ import annotations
 
 from sqlalchemy import func, inspect, select
-from sqlalchemy.engine import Engine, Inspector
+from sqlalchemy.engine import Connection, Inspector
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
-from app.domain.source_service import _build_engine, get_datasource
+from app.domain.source_service import datasource_engine, get_datasource
 from app.models.data_access import Mapping, MappingRevision, MetadataSnapshot
 
 
-def _collect_catalog(engine: Engine, kind: str) -> dict:
+def _collect_catalog(connection: Connection, kind: str) -> dict:
     """采集 schema -> tables -> columns 结构。SQLite 无 schema 归 main。"""
-    insp = inspect(engine)
+    insp = inspect(connection)
     schemas_data: list[dict] = []
     table_count = 0
     column_count = 0
@@ -116,20 +116,8 @@ def _get_latest_snapshot(session: Session, ds_id: int) -> MetadataSnapshot | Non
 def capture_metadata(session: Session, ds_id: int) -> MetadataSnapshot:
     """采集元数据并存快照。失败抛 SOURCE_UNREACHABLE。"""
     ds = get_datasource(session, ds_id)
-    try:
-        engine = _build_engine(ds)
-    except Exception as e:
-        raise KGError(
-            ErrorCode.SOURCE_UNREACHABLE,
-            {"datasource_id": ds_id, "reason": str(e)[:200]},
-        ) from e
-    try:
-        catalog = _collect_catalog(engine, ds.kind)
-    except Exception as e:
-        raise KGError(
-            ErrorCode.SOURCE_UNREACHABLE,
-            {"datasource_id": ds_id, "reason": str(e)[:200]},
-        ) from e
+    with datasource_engine(ds) as engine, engine.connect() as connection:
+        catalog = _collect_catalog(connection, ds.kind)
 
     revision = _next_revision(session, ds_id)
     prev = _get_latest_snapshot(session, ds_id)

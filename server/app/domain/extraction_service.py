@@ -10,15 +10,16 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import func, inspect, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
+from app.connectors.sql import select_source_rows
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.mapping_compiler import _apply_transform
 from app.domain.metadata_service import get_latest_snapshot
-from app.domain.source_service import _build_engine, get_datasource
+from app.domain.source_service import datasource_engine, get_datasource
 from app.models.data_access import Datasource, MappingRevision
 from app.models.enums import RunResult
 from app.models.extraction import (
@@ -76,15 +77,15 @@ def start_run(
 
     try:
         counts = _execute_four_phases(session, run, rev, ds, snap.catalog, namespace)
-    except Exception as e:
+    except Exception:
         run.status = RunResult.FAILED
         run.finished_at = datetime.now(UTC)
-        run.counts = {"error": str(e)[:500]}
+        run.counts = {"error": "source_execution_failed"}
         session.flush()
         raise KGError(
             ErrorCode.SOURCE_UNREACHABLE,
-            {"run_id": run.id, "reason": str(e)[:200]},
-        ) from e
+            {"run_id": run.id, "reason": "source_execution_failed"},
+        ) from None
 
     run.counts = counts
     run.fingerprint = _compute_fingerprint(cfg, counts)
@@ -121,7 +122,6 @@ def _execute_four_phases(
     namespace: str,
 ) -> dict:
     """四阶段执行。返回计数。"""
-    engine = _build_engine(ds)
     table_set = _index_catalog_tables(catalog)
     # 先建一个临时 graph_revision 给 entity/triple 挂（run 结束时统一发布）
     gr = GraphRevision(run_id=run.id, is_current=False, publishable=False)
@@ -132,24 +132,25 @@ def _execute_four_phases(
     quarantine_count = 0
     evidence_count = 0
 
-    # 阶段1：实体映射
-    for em in rev.entity_maps or []:
-        n, q = _phase1_entity(
-            session, run, gr, em, engine, table_set, namespace, entity_iri_index
-        )
-        quarantine_count += q
-        evidence_count += n
-
-    # 阶段2：关系映射
     triple_count = 0
     rel_evidence = 0
-    for rm in rev.rel_maps or []:
-        t, q, e = _phase2_relation(
-            session, run, gr, rm, engine, table_set, namespace, entity_iri_index
-        )
-        triple_count += t
-        quarantine_count += q
-        rel_evidence += e
+    with datasource_engine(ds) as engine:
+        # 阶段1：实体映射
+        for em in rev.entity_maps or []:
+            n, q = _phase1_entity(
+                session, run, gr, em, engine, table_set, namespace, entity_iri_index
+            )
+            quarantine_count += q
+            evidence_count += n
+
+        # 阶段2：关系映射
+        for rm in rev.rel_maps or []:
+            t, q, e = _phase2_relation(
+                session, run, gr, rm, engine, table_set, namespace, entity_iri_index
+            )
+            triple_count += t
+            quarantine_count += q
+            rel_evidence += e
 
     entity_count = len(entity_iri_index)
 
@@ -217,16 +218,15 @@ def _phase1_entity(
         )
         return 0, 1
 
-    qualified = f'"{schema}"."{table}"' if schema and schema != "main" else f'"{table}"'
-    sql = text(f"SELECT * FROM {qualified}")
+    sql = select_source_rows(table, schema)
     try:
         with engine.connect() as conn:
             result = conn.execute(sql)
             raw_rows = [dict(r._mapping) for r in result.fetchall()]
-    except Exception as e:
+    except Exception:
         session.add(
             _make_quarantine(
-                run, table, "N/A", "_query", str(e)[:200], ["query"], "query_failed"
+                run, table, "N/A", "_query", None, ["query"], "query_failed"
             )
         )
         return 0, 1
@@ -382,8 +382,7 @@ def _phase2_relation(
         )
         return 0, 1, 0
 
-    qualified = f'"{schema}"."{table}"' if schema and schema != "main" else f'"{table}"'
-    sql = text(f"SELECT * FROM {qualified}")
+    sql = select_source_rows(table, schema)
     try:
         with engine.connect() as conn:
             key_fields = (
@@ -393,10 +392,10 @@ def _phase2_relation(
             )
             result = conn.execute(sql)
             raw_rows = [dict(r._mapping) for r in result.fetchall()]
-    except Exception as e:
+    except Exception:
         session.add(
             _make_quarantine(
-                run, table, "N/A", "_query", str(e)[:200], ["query"], "query_failed"
+                run, table, "N/A", "_query", None, ["query"], "query_failed"
             )
         )
         return 0, 1, 0
