@@ -55,3 +55,10 @@ def required_revision(if_match: str | None = Header(None)) -> int:
     if match is None:
         raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "invalid_if_match"})
     return int(match.group(1) or match.group(2))
+
+
+def required_draft_revision(if_match: str | None = Header(None)) -> int:
+    """读取草稿 If-Match；草稿本体的初始修订号是 0。"""
+    if if_match is None or not re.fullmatch(r'"?(0|[1-9][0-9]{0,9})"?', if_match):
+        raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "invalid_if_match"})
+    return int(if_match.strip('"'))

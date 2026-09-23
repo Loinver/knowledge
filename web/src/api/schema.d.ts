@@ -233,6 +233,40 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ontologies/import/preview': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Preview Import Endpoint */
+    post: operations['preview_import_endpoint_api_v1_ontologies_import_preview_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ontologies/{ontology_id}/import': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Apply Import Endpoint */
+    post: operations['apply_import_endpoint_api_v1_ontologies__ontology_id__import_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/datasources': {
     parameters: {
       query?: never
@@ -2181,6 +2215,40 @@ export interface components {
        */
       data?: null
     }
+    /** ApiResponse[OntologyImportPreview] */
+    ApiResponse_OntologyImportPreview_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyImportPreview'] | null
+    }
+    /** ApiResponse[OntologyImportResult] */
+    ApiResponse_OntologyImportResult_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyImportResult'] | null
+    }
     /** ApiResponse[OntologyOut] */
     ApiResponse_OntologyOut_: {
       /**
@@ -3892,6 +3960,22 @@ export interface components {
       /** References */
       references: components['schemas']['ImpactItem'][]
     }
+    /** ImportResourcePreview */
+    ImportResourcePreview: {
+      /** Iri */
+      iri: string
+      kind?: components['schemas']['ResourceKind'] | null
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      }
+      /** Existing Resource Id */
+      existing_resource_id?: number | null
+      /** Existing Revision */
+      existing_revision?: number | null
+      /** Conflict Codes */
+      conflict_codes?: string[]
+    }
     /** IriBuildRequest */
     IriBuildRequest: {
       /** Namespace */
@@ -4134,6 +4218,86 @@ export interface components {
      * @enum {string}
      */
     OntologyExportFormat: 'turtle' | 'json-ld'
+    /** OntologyImportApplyRequest */
+    OntologyImportApplyRequest: {
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: 'turtle' | 'json-ld'
+      /** Content */
+      content: string
+      /** Ontology Id */
+      ontology_id: number
+      /** Resolutions */
+      resolutions?: components['schemas']['OntologyImportResolution'][]
+    }
+    /** OntologyImportConflict */
+    OntologyImportConflict: {
+      /** Iri */
+      iri: string
+      /** Code */
+      code: string
+      /** Params */
+      params?: {
+        [key: string]: unknown
+      }
+    }
+    /** OntologyImportPreview */
+    OntologyImportPreview: {
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: 'turtle' | 'json-ld'
+      /** Root Iri */
+      root_iri?: string | null
+      /** Triple Count */
+      triple_count: number
+      /** Resources */
+      resources: components['schemas']['ImportResourcePreview'][]
+      /** Conflicts */
+      conflicts: components['schemas']['OntologyImportConflict'][]
+      /** Requires Resolution */
+      requires_resolution: boolean
+    }
+    /** OntologyImportPreviewRequest */
+    OntologyImportPreviewRequest: {
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: 'turtle' | 'json-ld'
+      /** Content */
+      content: string
+      /** Ontology Id */
+      ontology_id?: number | null
+    }
+    /** OntologyImportResolution */
+    OntologyImportResolution: {
+      /** Iri */
+      iri: string
+      /**
+       * Action
+       * @enum {string}
+       */
+      action: 'USE_EXISTING' | 'SKIP'
+      /** Resource Id */
+      resource_id?: number | null
+    }
+    /** OntologyImportResult */
+    OntologyImportResult: {
+      /** Ontology Id */
+      ontology_id: number
+      /** Root Iri */
+      root_iri?: string | null
+      /** Added Resource Ids */
+      added_resource_ids?: number[]
+      /** Skipped Iris */
+      skipped_iris?: string[]
+      /** Triple Count */
+      triple_count: number
+    }
     /** OntologyOut */
     OntologyOut: {
       /** Id */
@@ -5728,6 +5892,76 @@ export interface operations {
         content: {
           'text/turtle': string
           'application/ld+json': string
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  preview_import_endpoint_api_v1_ontologies_import_preview_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OntologyImportPreviewRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyImportPreview_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  apply_import_endpoint_api_v1_ontologies__ontology_id__import_post: {
+    parameters: {
+      query?: never
+      header?: {
+        'if-match'?: string | null
+      }
+      path: {
+        ontology_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OntologyImportApplyRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyImportResult_']
         }
       }
       /** @description Validation Error */

@@ -5,9 +5,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
-from app.api.v1.governance_common import governance_session
+from app.api.v1.governance_common import (
+    governance_session,
+    required_draft_revision,
+)
 from app.core.db import get_session
+from app.core.error_codes import ErrorCode
+from app.core.errors import KGError
 from app.domain.ontology_export_service import export_ontology
+from app.domain.ontology_import_service import apply_import, preview_import
 from app.domain.ontology_service import (
     add_ref,
     create_ontology,
@@ -34,6 +40,12 @@ from app.schemas.ontology import (
     OntologyRefAdd,
     OntologyRefOut,
     OntologyUpdate,
+)
+from app.schemas.ontology_import import (
+    OntologyImportApplyRequest,
+    OntologyImportPreview,
+    OntologyImportPreviewRequest,
+    OntologyImportResult,
 )
 from app.schemas.response import ApiResponse
 from app.schemas.template import TemplateLink
@@ -184,3 +196,24 @@ def export_onto_endpoint(
         media_type=result.media_type,
         headers={"Content-Disposition": f'attachment; filename="{result.filename}"'},
     )
+
+
+@router.post("/import/preview", response_model=ApiResponse[OntologyImportPreview])
+def preview_import_endpoint(
+    payload: OntologyImportPreviewRequest,
+    session: Session = Depends(governance_session),
+) -> OntologyImportPreview:
+    return preview_import(session, payload.format, payload.content, payload.ontology_id)
+
+
+@router.post("/{ontology_id}/import", response_model=ApiResponse[OntologyImportResult])
+def apply_import_endpoint(
+    ontology_id: int,
+    payload: OntologyImportApplyRequest,
+    revision: int = Depends(required_draft_revision),
+    session: Session = Depends(governance_session),
+) -> OntologyImportResult:
+    if payload.ontology_id != ontology_id:
+        raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "ontology_id_mismatch"})
+    with session.begin():
+        return apply_import(session, payload, revision)
