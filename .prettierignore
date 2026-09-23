@@ -10,6 +10,7 @@ __pycache__/
 .mypy_cache/
 coverage/
 demo/
+design/
 .workbuddy/
 package-lock.json
 pnpm-lock.yaml
