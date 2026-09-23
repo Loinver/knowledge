@@ -27,6 +27,7 @@ import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
 import type { components } from '@/api/schema'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 
 type S = components['schemas']
 type Datasource = components['schemas']['DatasourceBrief']
@@ -89,6 +90,7 @@ interface RelationDraft {
 }
 
 const { t, locale } = useI18n()
+const { toMessage: describeError } = useApiError()
 const router = useRouter()
 const step = ref(1)
 const loading = ref(false)
@@ -124,6 +126,7 @@ const viewMode = ref<'graph' | 'table'>('graph')
 let selectionController: AbortController | undefined
 let assetController: AbortController | undefined
 let lifecycleController: AbortController | undefined
+let selectionGeneration = 0
 let nextLocalId = 1
 
 const selectedMapping = computed(
@@ -232,12 +235,6 @@ function errorCode(error: unknown): string {
 }
 function isCanceled(error: unknown): boolean {
   return errorCode(error) === 'ERR_CANCELED'
-}
-function describeError(error: unknown): string {
-  const code = errorCode(error)
-  const key = `errors.KG.${code.replace('KG.', '')}`
-  const translated = t(key)
-  return translated === key ? t('dataAccess.mapping.errors.request', { code }) : translated
 }
 function resourceLabel(item: { name: string; label_i18n?: Record<string, string> | null }): string {
   return item.label_i18n?.[locale.value] || item.label_i18n?.['zh-CN'] || item.name
@@ -474,6 +471,7 @@ async function loadInitial(): Promise<void> {
   }
 }
 async function loadOntologyAssets(ontologyId: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return
   assetController?.abort()
   const controller = new AbortController()
   assetController = controller
@@ -481,6 +479,7 @@ async function loadOntologyAssets(ontologyId: number, signal: AbortSignal): Prom
   signal.addEventListener('abort', abortListener, { once: true })
   try {
     const refs = await ontologyApi.refs(ontologyId, controller.signal)
+    if (controller.signal.aborted || assetController !== controller) return
     ontologyRefs.value = refs
     const ids = new Set(refs.map((item) => item.resource_id))
     const entityRefs = entityBriefs.value.filter((item) => ids.has(item.id))
@@ -489,6 +488,7 @@ async function loadOntologyAssets(ontologyId: number, signal: AbortSignal): Prom
       Promise.all(entityRefs.map((item) => entityTypesApi.get(item.id, controller.signal))),
       Promise.all(relationRefs.map((item) => relationsApi.get(item.id, controller.signal))),
     ])
+    if (controller.signal.aborted || assetController !== controller) return
     entityTypes.value = entities
     relationTypes.value = relations
   } finally {
@@ -515,7 +515,10 @@ async function chooseOntology(value: number | null): Promise<void> {
   }
 }
 function newMapping(): void {
+  selectionGeneration += 1
+  working.value = false
   selectionController?.abort()
+  assetController?.abort()
   selectedMappingId.value = null
   mappingName.value = ''
   selectedOntologyId.value = null
@@ -538,7 +541,10 @@ async function selectMapping(value: number | null): Promise<void> {
     newMapping()
     return
   }
+  selectionGeneration += 1
+  working.value = false
   selectionController?.abort()
+  assetController?.abort()
   const controller = new AbortController()
   selectionController = controller
   selectedMappingId.value = value
@@ -551,25 +557,31 @@ async function selectMapping(value: number | null): Promise<void> {
   relationMaps.value = []
   draftRevision.value = null
   publishedRevision.value = null
-  const item = mappings.value.find((mapping) => mapping.id === value)
-  if (!item) return
-  mappingName.value = item.name
-  selectedOntologyId.value = item.ontology_id
   try {
+    const item = await mappingsApi.get(value, controller.signal)
+    if (controller.signal.aborted || selectedMappingId.value !== value) return
+    mappings.value = mappings.value.map((mapping) => (mapping.id === value ? item : mapping))
+    mappingName.value = item.name
+    selectedOntologyId.value = item.ontology_id
     await loadOntologyAssets(item.ontology_id, controller.signal)
+    if (controller.signal.aborted || selectedMappingId.value !== value) return
     const revision =
       item.status === 'PUBLISHED'
         ? await mappingsApi.published(item.id, controller.signal)
         : await mappingsApi.draft(item.id, controller.signal)
+    if (controller.signal.aborted || selectedMappingId.value !== value) return
     if (item.status === 'PUBLISHED') publishedRevision.value = revision
     else draftRevision.value = revision
     if (revision) {
+      mappings.value = mappings.value.map((mapping) =>
+        mapping.id === value ? { ...mapping, edit_revision: revision.edit_revision } : mapping,
+      )
       entityMaps.value = revision.entity_maps.map(normalizeEntityMap)
       relationMaps.value = revision.rel_maps.map(normalizeRelationMap)
     }
     step.value = item.status === 'PUBLISHED' ? 5 : 3
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (!controller.signal.aborted && !isCanceled(error)) actionError.value = describeError(error)
   }
 }
 function serializeDraft(): S['MappingRevisionCreate'] {
@@ -612,8 +624,10 @@ async function saveDraft(): Promise<MappingRevision | null> {
     actionError.value = t('dataAccess.mapping.errors.incomplete')
     return null
   }
+  const generation = selectionGeneration
   const draft = serializeDraft()
   let mapping = selectedMapping.value
+  let revision: MappingRevision | null
   if (!mapping) {
     const ontologyId = selectedOntologyId.value
     if (ontologyId === null) return null
@@ -622,35 +636,57 @@ async function saveDraft(): Promise<MappingRevision | null> {
       ontology_id: ontologyId,
       draft,
     })
+    if (generation !== selectionGeneration) return null
     mapping = data
     mappings.value = [data, ...mappings.value.filter((item) => item.id !== data.id)]
     selectedMappingId.value = data.id
+    revision = await mappingsApi.draft(mapping.id)
+    if (generation !== selectionGeneration) return null
+    if (!revision) throw { code: 'KG.REVISION_NOT_FOUND' }
+    if (revision.edit_revision !== mapping.edit_revision) {
+      throw {
+        code: 'KG.REVISION_CONFLICT',
+        params: {
+          resource: mapping.name,
+          expected: mapping.edit_revision,
+          actual: revision.edit_revision,
+        },
+      }
+    }
   } else {
-    await mappingsApi.saveDraft(mapping.id, {
+    revision = await mappingsApi.saveDraft(mapping.id, {
       draft,
       if_match: mapping.current_revision,
+      if_edit_match: mapping.edit_revision,
     })
   }
-  const revision = await mappingsApi.draft(mapping.id)
+  if (generation !== selectionGeneration) return null
+  mappings.value = mappings.value.map((item) =>
+    item.id === mapping.id ? { ...item, edit_revision: revision.edit_revision } : item,
+  )
   draftRevision.value = revision
   notice.value = t('dataAccess.mapping.draftSaved')
   return revision
 }
 async function handleSaveDraft(): Promise<void> {
   if (working.value) return
+  const generation = selectionGeneration
   working.value = true
   actionError.value = ''
   notice.value = ''
   try {
     await saveDraft()
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 async function loadLatestMetadata(datasourceId: number): Promise<void> {
+  const generation = selectionGeneration
   const data = await metadataApi.latest(datasourceId, lifecycleController?.signal)
+  if (generation !== selectionGeneration || selectedDatasourceId.value !== datasourceId) return
   catalog.value = loadCatalog(data.catalog)
   metadataRevision.value = data.revision
   selectedSampleTable.value = null
@@ -658,20 +694,26 @@ async function loadLatestMetadata(datasourceId: number): Promise<void> {
 }
 async function captureMetadata(): Promise<void> {
   if (!selectedDatasourceId.value || working.value) return
+  const generation = selectionGeneration
+  const datasourceId = selectedDatasourceId.value
   working.value = true
   actionError.value = ''
   notice.value = ''
   try {
-    await metadataApi.capture(selectedDatasourceId.value)
-    await loadLatestMetadata(selectedDatasourceId.value)
+    await metadataApi.capture(datasourceId)
+    if (generation !== selectionGeneration) return
+    await loadLatestMetadata(datasourceId)
+    if (generation !== selectionGeneration) return
     notice.value = t('dataAccess.mapping.metadataCaptured')
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 async function chooseDatasource(value: number | null): Promise<void> {
+  const generation = selectionGeneration
   selectedDatasourceId.value = value
   catalog.value = null
   metadataRevision.value = null
@@ -701,22 +743,23 @@ async function chooseDatasource(value: number | null): Promise<void> {
   try {
     await loadLatestMetadata(value)
   } catch (error: unknown) {
-    if (!isCanceled(error)) {
+    if (generation === selectionGeneration && !isCanceled(error)) {
       if (errorCode(error) === 'KG.RESOURCE_NOT_FOUND')
         notice.value = t('dataAccess.mapping.metadataMissing')
       else actionError.value = describeError(error)
     }
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 async function fetchSamplePreview(): Promise<void> {
   if (!selectedDatasourceId.value || !selectedSampleTable.value || working.value) return
+  const generation = selectionGeneration
   working.value = true
   actionError.value = ''
   try {
     const parsed = tableParts(selectedSampleTable.value)
-    samplePreview.value = await datasourcesApi.preview(
+    const result = await datasourcesApi.preview(
       {
         datasource_id: selectedDatasourceId.value,
         table: parsed.table,
@@ -726,76 +769,95 @@ async function fetchSamplePreview(): Promise<void> {
       },
       lifecycleController?.signal,
     )
+    if (generation !== selectionGeneration) return
+    samplePreview.value = result
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 async function runCompile(): Promise<void> {
   if (!selectedDatasourceId.value || !canSaveDraft.value || working.value) return
+  const generation = selectionGeneration
+  const datasourceId = selectedDatasourceId.value
   working.value = true
   actionError.value = ''
   notice.value = ''
   preview.value = null
   try {
-    if (selectedMapping.value?.status !== 'PUBLISHED') await saveDraft()
-    if (!selectedMapping.value) return
-    preview.value = await mappingsApi.compile(selectedMapping.value.id, {
-      datasource_id: selectedDatasourceId.value,
+    if (selectedMapping.value?.status !== 'PUBLISHED' && !(await saveDraft())) return
+    if (generation !== selectionGeneration || !selectedMapping.value) return
+    const mapping = selectedMapping.value
+    const result = await mappingsApi.compile(mapping.id, {
+      datasource_id: datasourceId,
       limit: Math.max(1, Math.min(100, sampleLimit.value ?? 20)),
-      use_draft: selectedMapping.value.status !== 'PUBLISHED',
+      use_draft: mapping.status !== 'PUBLISHED',
     })
+    if (generation !== selectionGeneration) return
+    preview.value = result
     step.value = 4
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 async function publishMapping(): Promise<void> {
   if (!canPublish.value || working.value || !selectedMapping.value) return
+  const generation = selectionGeneration
+  const mapping = selectedMapping.value
   working.value = true
   actionError.value = ''
   notice.value = ''
   try {
     const saved = await saveDraft()
-    if (!saved || !selectedMapping.value) return
-    const data = await mappingsApi.publish(selectedMapping.value.id, {
-      if_match: selectedMapping.value.current_revision,
+    if (!saved || generation !== selectionGeneration) return
+    const data = await mappingsApi.publish(saved.mapping_id, {
+      if_match: mapping.current_revision,
+      if_edit_match: saved.edit_revision,
     })
+    if (generation !== selectionGeneration) return
     publishedRevision.value = data
     const published: Mapping = {
-      ...selectedMapping.value,
+      ...mapping,
       status: 'PUBLISHED',
       current_revision: data.revision,
+      edit_revision: data.edit_revision,
     }
     mappings.value = mappings.value.map((item) => (item.id === published.id ? published : item))
     step.value = 5
     notice.value = t('dataAccess.mapping.published')
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 async function startRun(): Promise<void> {
   if (!canRun.value || !selectedDatasourceId.value || !publishedRevision.value || working.value)
     return
+  const generation = selectionGeneration
   working.value = true
   actionError.value = ''
   notice.value = ''
   try {
-    runResult.value = await extractionApi.start({
+    const result = await extractionApi.start({
       mapping_revision_id: publishedRevision.value.id,
       datasource_id: selectedDatasourceId.value,
       namespace: namespace.value.trim() || selectedOntology.value?.iri || 'https://example.org/kg/',
     })
+    if (generation !== selectionGeneration) return
+    runResult.value = result
     notice.value = t('dataAccess.mapping.runStarted', { id: runResult.value.run.id })
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   } finally {
-    working.value = false
+    if (generation === selectionGeneration) working.value = false
   }
 }
 function gotoStep(target: number): void {
@@ -869,6 +931,7 @@ watch(
 )
 onMounted(() => void loadInitial())
 onBeforeUnmount(() => {
+  selectionGeneration += 1
   lifecycleController?.abort()
   selectionController?.abort()
   assetController?.abort()

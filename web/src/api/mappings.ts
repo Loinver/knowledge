@@ -17,6 +17,8 @@ export const mappingsApi = {
       .get<Mapping[]>('/mappings', { params: { page: 1, page_size: 200 }, signal })
       .then((r) => r.data),
   create: (payload: MappingCreate) => http.post<Mapping>('/mappings', payload).then((r) => r.data),
+  get: (id: number, signal?: AbortSignal) =>
+    http.get<Mapping>(`/mappings/${id}`, { signal }).then((r) => r.data),
   draft: (id: number, signal?: AbortSignal) =>
     http.get<MappingRevision | null>(`/mappings/${id}/draft`, { signal }).then((r) => r.data),
   published: (id: number, signal?: AbortSignal) =>
