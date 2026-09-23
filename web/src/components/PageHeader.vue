@@ -40,4 +40,16 @@ defineProps<{ title: string; description?: string }>()
   gap: var(--space-2);
   align-items: center;
 }
+@media (max-width: 640px) {
+  .page-header {
+    flex-wrap: wrap;
+  }
+  .titles,
+  .actions {
+    width: 100%;
+  }
+  .actions {
+    flex-wrap: wrap;
+  }
+}
 </style>

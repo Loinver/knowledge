@@ -104,14 +104,23 @@ async function submit() {
     <AuthHeading :title="t('auth.registerTitle')" :subtitle="t('auth.registerSubtitle')" />
     <NAlert v-if="error" type="error" role="alert" class="form-alert">{{ error }}</NAlert>
     <NFormItem :label="t('auth.username')" path="username">
-      <NInput v-model:value="model.username" autocomplete="username" />
+      <NInput
+        v-model:value="model.username"
+        :input-props="{ 'aria-label': t('auth.username') }"
+        autocomplete="username"
+      />
     </NFormItem>
     <NFormItem :label="t('auth.email')" path="email">
-      <NInput v-model:value="model.email" autocomplete="email" />
+      <NInput
+        v-model:value="model.email"
+        :input-props="{ 'aria-label': t('auth.email') }"
+        autocomplete="email"
+      />
     </NFormItem>
     <NFormItem :label="t('auth.password')" path="password">
       <NInput
         v-model:value="model.password"
+        :input-props="{ 'aria-label': t('auth.password') }"
         type="password"
         show-password-on="click"
         autocomplete="new-password"
@@ -120,6 +129,7 @@ async function submit() {
     <NFormItem :label="t('auth.confirmPassword')" path="confirm">
       <NInput
         v-model:value="model.confirm"
+        :input-props="{ 'aria-label': t('auth.confirmPassword') }"
         type="password"
         show-password-on="click"
         autocomplete="new-password"

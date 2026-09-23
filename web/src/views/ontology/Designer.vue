@@ -892,7 +892,7 @@ onBeforeUnmount(() => {
 }
 
 .pool-item.on {
-  color: #bfd4fb;
+  color: var(--text);
   background: var(--accent-soft);
   border-color: transparent;
 }

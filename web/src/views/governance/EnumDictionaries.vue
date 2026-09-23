@@ -31,6 +31,7 @@ import type {
   EnumSort,
 } from '@/api/enum-dictionaries'
 import { enumDictionariesApi } from '@/api/enum-dictionaries'
+import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
@@ -342,13 +343,14 @@ const referenceColumns = computed(() => [
 
 <template>
   <div class="enum-page">
-    <n-card :title="t('enumDictionaries.title')" :bordered="false">
-      <template #header-extra
-        ><n-button type="primary" :disabled="busy" @click="openCreate">{{
-          t('enumDictionaries.create')
-        }}</n-button></template
-      >
-      <p class="intro">{{ t('enumDictionaries.intro') }}</p>
+    <PageHeader :title="t('enumDictionaries.title')" :description="t('enumDictionaries.intro')">
+      <template #actions>
+        <n-button type="primary" :disabled="busy" @click="openCreate">
+          {{ t('enumDictionaries.create') }}
+        </n-button>
+      </template>
+    </PageHeader>
+    <n-card :bordered="false">
       <n-space class="toolbar" align="center">
         <n-input
           v-model:value="search"
@@ -525,9 +527,9 @@ const referenceColumns = computed(() => [
 </template>
 
 <style scoped>
-.intro {
-  margin: 0 0 16px;
-  color: var(--text-secondary);
+.enum-page {
+  display: grid;
+  gap: var(--space-4);
 }
 .toolbar,
 .feedback {

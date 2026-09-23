@@ -10,6 +10,7 @@ import type {
   TableReferenceResponse,
 } from '@/api/datasources'
 import { datasourcesApi, metadataApi } from '@/api/datasources'
+import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
 type DiffKind = 'added' | 'removed' | 'modified'
@@ -521,53 +522,51 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="data-catalog">
-    <header class="page-heading">
-      <div>
-        <h1>{{ t('page.dataCatalog') }}</h1>
-        <p>{{ t('dataAccess.catalog.description') }}</p>
-      </div>
-      <div class="toolbar">
-        <label class="field-label" for="catalog-datasource">{{
-          t('dataAccess.catalog.selectors.datasource')
-        }}</label>
-        <select
-          id="catalog-datasource"
-          v-model.number="datasourceId"
-          class="select-control"
-          :disabled="loadingDatasources || datasources.length === 0"
-        >
-          <option v-for="item in datasources" :key="item.id" :value="item.id">
-            {{ item.name }}
-          </option>
-        </select>
-        <label class="field-label" for="catalog-snapshot">{{
-          t('dataAccess.catalog.selectors.snapshot')
-        }}</label>
-        <select
-          id="catalog-snapshot"
-          v-model.number="snapshotId"
-          class="select-control snapshot-select"
-          :disabled="loadingCatalog || capturing || snapshots.length === 0"
-          @change="selectSnapshot"
-        >
-          <option v-for="item in snapshots" :key="item.id" :value="item.id">
-            {{ t('dataAccess.catalog.snapshotRevision', { revision: item.revision }) }} ·
-            {{ formatDate(item.captured_at) }}
-          </option>
-        </select>
-        <button
-          class="button button-primary"
-          :disabled="datasourceId === null || capturing || loadingCatalog"
-          @click="captureMetadata"
-        >
-          {{
-            capturing
-              ? t('dataAccess.catalog.states.capturing')
-              : t('dataAccess.catalog.actions.capture')
-          }}
-        </button>
-      </div>
-    </header>
+    <PageHeader :title="t('page.dataCatalog')" :description="t('dataAccess.catalog.description')">
+      <template #actions>
+        <div class="toolbar">
+          <label class="field-label" for="catalog-datasource">{{
+            t('dataAccess.catalog.selectors.datasource')
+          }}</label>
+          <select
+            id="catalog-datasource"
+            v-model.number="datasourceId"
+            class="select-control"
+            :disabled="loadingDatasources || datasources.length === 0"
+          >
+            <option v-for="item in datasources" :key="item.id" :value="item.id">
+              {{ item.name }}
+            </option>
+          </select>
+          <label class="field-label" for="catalog-snapshot">{{
+            t('dataAccess.catalog.selectors.snapshot')
+          }}</label>
+          <select
+            id="catalog-snapshot"
+            v-model.number="snapshotId"
+            class="select-control snapshot-select"
+            :disabled="loadingCatalog || capturing || snapshots.length === 0"
+            @change="selectSnapshot"
+          >
+            <option v-for="item in snapshots" :key="item.id" :value="item.id">
+              {{ t('dataAccess.catalog.snapshotRevision', { revision: item.revision }) }} ·
+              {{ formatDate(item.captured_at) }}
+            </option>
+          </select>
+          <button
+            class="button button-primary"
+            :disabled="datasourceId === null || capturing || loadingCatalog"
+            @click="captureMetadata"
+          >
+            {{
+              capturing
+                ? t('dataAccess.catalog.states.capturing')
+                : t('dataAccess.catalog.actions.capture')
+            }}
+          </button>
+        </div>
+      </template>
+    </PageHeader>
 
     <div v-if="datasourceError" class="state-card state-error" role="alert">
       <div>
@@ -848,7 +847,6 @@ onBeforeUnmount(() => {
   color: var(--text);
 }
 
-.page-heading,
 .toolbar,
 .panel-heading,
 .summary-heading,
@@ -858,22 +856,6 @@ onBeforeUnmount(() => {
 .column-detail {
   display: flex;
   align-items: center;
-}
-
-.page-heading {
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.page-heading h1 {
-  margin: 0;
-  font-size: var(--font-h1);
-}
-
-.page-heading p {
-  margin: 5px 0 0;
-  color: var(--text-secondary);
-  font-size: var(--font-small);
 }
 
 .toolbar {
@@ -919,7 +901,7 @@ onBeforeUnmount(() => {
 
 .button-primary {
   border-color: transparent;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
 }
 
