@@ -2,14 +2,16 @@
 
 ## 1. 分层
 
-| 层       | 工具                 | 位置                      | 覆盖什么                                 |
-| -------- | -------------------- | ------------------------- | ---------------------------------------- |
-| 后端单元 | pytest               | `server/tests/`           | 领域服务、IRI 治理、映射编译、版本冻结   |
-| 后端集成 | pytest + httpx       | `server/tests/`           | API 行为、错误码、并发冲突（409）        |
-| 语义     | pytest + Turtle 夹具 | `server/tests/semantics/` | SHACL 报告结构、A08 推理状态切换         |
-| 前端单元 | Vitest               | `web/src/**/__tests__/`   | 布局算法、图谱过滤组合、纯函数           |
-| 契约     | OpenAPI diff         | CI                        | 接口变更可感知、破坏性变更拦截           |
-| E2E      | Playwright（M3 起）  | `e2e/`                    | 8 步主流程贯通（跑在 seed 后的样例库上） |
+| 层       | 工具                 | 位置                      | 覆盖什么                                   |
+| -------- | -------------------- | ------------------------- | ------------------------------------------ |
+| 后端单元 | pytest               | `server/tests/`           | 领域服务、IRI 治理、映射编译、版本冻结     |
+| 后端集成 | pytest + httpx       | `server/tests/`           | API 行为、错误码、并发冲突（409）          |
+| 语义     | pytest + Turtle 夹具 | `server/tests/semantics/` | SHACL 报告结构、A08 推理状态切换           |
+| 前端单元 | Vitest               | `web/src/**/__tests__/`   | 布局算法、图谱过滤组合、纯函数             |
+| 契约     | OpenAPI diff         | CI                        | 接口变更可感知、破坏性变更拦截             |
+| E2E      | Playwright（M3 起）  | `e2e/`                    | 8 步主流程、失败保护、证据追溯与响应式检查 |
+
+运行 `make test-e2e`（或 `pnpm test:e2e`）。Playwright 会启动隔离的 FastAPI/Vite 服务，使用临时元数据库和 `samples/enterprise_demo.sqlite` 的临时副本；不要连接或清理开发数据库。首次运行需执行 `pnpm exec playwright install chromium`。测试固定使用 8000 / 5173 端口，不复用已运行的开发服务器。
 
 ## 2. 必测断言（P0，缺一条不算完成）
 

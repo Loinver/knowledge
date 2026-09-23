@@ -55,6 +55,7 @@ make start        # 构建前端 + 单端口 :8000
 make lint         # ESLint + vue-tsc + Prettier + Ruff + Mypy
 make fix          # 自动修复可修复项
 make test         # 后端 pytest
+make test-e2e     # Playwright 浏览器端主流程与响应式检查
 pnpm run commit   # 交互式提交（禁止手写 git commit -m）
 ```
 

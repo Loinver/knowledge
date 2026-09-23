@@ -31,6 +31,7 @@ make install     # install dependencies and git hooks
 make dev         # run frontend and backend together
 make lint        # ESLint + Prettier + vue-tsc + Ruff + Mypy
 make test        # backend tests
+make test-e2e    # Playwright main-flow and responsive UI checks
 pnpm run commit  # interactive commit (Conventional Commits)
 ```
 
