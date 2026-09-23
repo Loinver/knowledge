@@ -13,6 +13,7 @@ class DomainMemberAdd(BaseModel):
     resource_id: int
     as_ref: bool = False
     owner_domain_id: int | None = None
+    if_edit_match: int | None = Field(default=None, ge=0)
 
 
 class DomainMemberOut(BaseModel):
@@ -36,6 +37,7 @@ class DomainUpdate(BaseModel):
     label_i18n: dict[str, str] | None = None
     definition_i18n: dict[str, str] | None = None
     if_match: int
+    if_edit_match: int | None = Field(default=None, ge=0)
 
 
 class DomainOut(BaseModel):
@@ -47,6 +49,7 @@ class DomainOut(BaseModel):
     definition_i18n: dict[str, str] | None = None
     status: ResourceStatus
     current_revision: int
+    edit_revision: int
 
 
 class DomainBrief(BaseModel):
@@ -57,6 +60,7 @@ class DomainBrief(BaseModel):
     label_i18n: dict[str, str] | None = None
     status: ResourceStatus
     current_revision: int
+    edit_revision: int
 
 
 class PublishCheckResult(BaseModel):

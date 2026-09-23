@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_session
@@ -21,21 +20,13 @@ from app.schemas.mapping import (
     MappingBrief,
     MappingCreate,
     MappingOut,
-    MappingRevisionCreate,
     MappingRevisionOut,
+    PublishRequest,
+    SaveDraftRequest,
 )
 from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/mappings", tags=["mappings"])
-
-
-class SaveDraftRequest(BaseModel):
-    draft: MappingRevisionCreate
-    if_match: int
-
-
-class PublishRequest(BaseModel):
-    if_match: int
 
 
 @router.get("", response_model=ApiResponse[list[MappingBrief]])
@@ -65,8 +56,12 @@ def get_m(mapping_id: int, session: Session = Depends(get_session)) -> MappingOu
 
 
 @router.delete("/{mapping_id}", response_model=ApiResponse[None])
-def remove_m(mapping_id: int, session: Session = Depends(get_session)) -> None:
-    delete_mapping(session, mapping_id)
+def remove_m(
+    mapping_id: int,
+    if_edit_match: int | None = Header(None, ge=0),
+    session: Session = Depends(get_session),
+) -> None:
+    delete_mapping(session, mapping_id, if_edit_match)
     session.commit()
 
 
@@ -76,9 +71,12 @@ def put_draft(
     payload: SaveDraftRequest,
     session: Session = Depends(get_session),
 ) -> MappingRevisionOut:
-    rev = save_draft(session, mapping_id, payload.draft, payload.if_match)
+    rev = save_draft(
+        session, mapping_id, payload.draft, payload.if_match, payload.if_edit_match
+    )
+    result = MappingRevisionOut.model_validate(rev)
     session.commit()
-    return MappingRevisionOut.model_validate(rev)
+    return result
 
 
 @router.get(
@@ -99,9 +97,10 @@ def publish_m(
     payload: PublishRequest,
     session: Session = Depends(get_session),
 ) -> MappingRevisionOut:
-    rev = publish_mapping(session, mapping_id, payload.if_match)
+    rev = publish_mapping(session, mapping_id, payload.if_match, payload.if_edit_match)
+    result = MappingRevisionOut.model_validate(rev)
     session.commit()
-    return MappingRevisionOut.model_validate(rev)
+    return result
 
 
 @router.get("/{mapping_id}/published", response_model=ApiResponse[MappingRevisionOut])

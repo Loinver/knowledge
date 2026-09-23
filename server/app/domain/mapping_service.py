@@ -8,7 +8,7 @@ mapping + mapping_revision：草稿可反复改，发布生成不可变 revision
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -78,21 +78,55 @@ def list_mappings(
 
 
 def save_draft(
-    session: Session, mapping_id: int, draft: MappingRevisionCreate, if_match: int
+    session: Session,
+    mapping_id: int,
+    draft: MappingRevisionCreate,
+    if_match: int,
+    if_edit_match: int | None = None,
 ) -> MappingRevision:
     """保存草稿 revision。已发布的 mapping 不可再改草稿。"""
-    m = get_mapping(session, mapping_id)
-    if m.current_revision != if_match:
+    m = _lock_mapping_edit(session, mapping_id, if_match, if_edit_match)
+    return _save_draft_revision(session, m, draft)
+
+
+def _lock_mapping_edit(
+    session: Session,
+    mapping_id: int,
+    if_match: int | None = None,
+    if_edit_match: int | None = None,
+) -> Mapping:
+    """Serialize edits; legacy callers omit only the independent edit comparison."""
+    stmt = update(Mapping).where(
+        Mapping.id == mapping_id, Mapping.status != ResourceStatus.PUBLISHED
+    )
+    if if_match is not None:
+        stmt = stmt.where(Mapping.current_revision == if_match)
+    if if_edit_match is not None:
+        stmt = stmt.where(Mapping.edit_revision == if_edit_match)
+    locked = session.scalar(
+        stmt.values(edit_revision=Mapping.edit_revision + 1)
+        .returning(Mapping)
+        .execution_options(populate_existing=True)
+    )
+    if locked is not None:
+        return locked
+    m = session.get(Mapping, mapping_id, populate_existing=True)
+    if m is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"mapping_id": mapping_id})
+    if if_match is not None and m.current_revision != if_match:
         raise KGError(
             ErrorCode.REVISION_CONFLICT,
-            {"expected": if_match, "actual": m.current_revision},
+            {"resource": m.name, "expected": if_match, "actual": m.current_revision},
         )
     if m.status == ResourceStatus.PUBLISHED:
         raise KGError(
             ErrorCode.ALREADY_PUBLISHED,
             {"mapping_id": mapping_id, "reason": "mapping_published_immutable"},
         )
-    return _save_draft_revision(session, m, draft)
+    raise KGError(
+        ErrorCode.REVISION_CONFLICT,
+        {"resource": m.name, "expected": if_edit_match, "actual": m.edit_revision},
+    )
 
 
 def _save_draft_revision(
@@ -194,20 +228,13 @@ def _rm_to_dict(rm: RelMapCreate) -> dict:
 
 
 def publish_mapping(
-    session: Session, mapping_id: int, if_match: int
+    session: Session,
+    mapping_id: int,
+    if_match: int,
+    if_edit_match: int | None = None,
 ) -> MappingRevision:
     """发布映射：冻结 onto_version，生成不可变 revision。"""
-    m = get_mapping(session, mapping_id)
-    if m.current_revision != if_match:
-        raise KGError(
-            ErrorCode.REVISION_CONFLICT,
-            {"expected": if_match, "actual": m.current_revision},
-        )
-    if m.status == ResourceStatus.PUBLISHED:
-        raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
-            {"mapping_id": mapping_id, "reason": "already_published"},
-        )
+    m = _lock_mapping_edit(session, mapping_id, if_match, if_edit_match)
     # 取本体当前已发布版本
     onto = session.get(Ontology, m.ontology_id)
     if onto is None or onto.status != ResourceStatus.PUBLISHED:
@@ -215,14 +242,11 @@ def publish_mapping(
             ErrorCode.VALIDATION_VIOLATION,
             {"ontology_id": m.ontology_id, "reason": "ontology_not_published"},
         )
-    onto_rev = (
-        session.execute(
-            select(OntologyRevision)
-            .where(OntologyRevision.ontology_id == onto.id)
-            .order_by(OntologyRevision.revision.desc())
+    onto_rev = session.scalar(
+        select(OntologyRevision).where(
+            OntologyRevision.ontology_id == onto.id,
+            OntologyRevision.revision == onto.current_revision,
         )
-        .scalars()
-        .first()
     )
     if onto_rev is None:
         raise KGError(
@@ -230,12 +254,7 @@ def publish_mapping(
             {"ontology_id": onto.id, "reason": "no_ontology_revision"},
         )
     # 取草稿
-    draft = session.execute(
-        select(MappingRevision).where(
-            MappingRevision.mapping_id == m.id,
-            MappingRevision.revision == 0,
-        )
-    ).scalar_one_or_none()
+    draft = get_draft_revision(session, m.id)
     if draft is None:
         raise KGError(
             ErrorCode.VALIDATION_VIOLATION,
@@ -261,10 +280,12 @@ def get_published_revision(session: Session, mapping_id: int) -> MappingRevision
     rev = (
         session.execute(
             select(MappingRevision)
+            .join(Mapping)
             .where(
                 MappingRevision.mapping_id == mapping_id, MappingRevision.revision > 0
             )
             .order_by(MappingRevision.revision.desc())
+            .execution_options(populate_existing=True)
         )
         .scalars()
         .first()
@@ -279,19 +300,16 @@ def get_published_revision(session: Session, mapping_id: int) -> MappingRevision
 
 def get_draft_revision(session: Session, mapping_id: int) -> MappingRevision | None:
     return session.execute(
-        select(MappingRevision).where(
-            MappingRevision.mapping_id == mapping_id,
-            MappingRevision.revision == 0,
-        )
+        select(MappingRevision)
+        .join(Mapping)
+        .where(MappingRevision.mapping_id == mapping_id, MappingRevision.revision == 0)
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
 
 
-def delete_mapping(session: Session, mapping_id: int) -> None:
-    m = get_mapping(session, mapping_id)
-    if m.status == ResourceStatus.PUBLISHED:
-        raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
-            {"mapping_id": mapping_id, "reason": "published_not_deletable"},
-        )
+def delete_mapping(
+    session: Session, mapping_id: int, if_edit_match: int | None = None
+) -> None:
+    m = _lock_mapping_edit(session, mapping_id, if_edit_match=if_edit_match)
     session.delete(m)
     session.flush()

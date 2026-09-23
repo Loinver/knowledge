@@ -40,6 +40,9 @@ class BusinessDomain(Base):
         default=ResourceStatus.DRAFT, nullable=False
     )
     current_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    edit_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -100,6 +103,9 @@ class Ontology(Base):
         default=ResourceStatus.DRAFT, nullable=False
     )
     current_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    edit_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("assembly_template.id"), default=None
     )

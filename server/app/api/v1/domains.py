@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.core.db import get_session
@@ -94,9 +94,12 @@ def add_member_endpoint(
 
 @router.delete("/{domain_id}/members/{member_id}", response_model=ApiResponse[None])
 def remove_member_endpoint(
-    domain_id: int, member_id: int, session: Session = Depends(get_session)
+    domain_id: int,
+    member_id: int,
+    if_edit_match: int | None = Header(None, ge=0),
+    session: Session = Depends(get_session),
 ) -> None:
-    remove_member(session, domain_id, member_id)
+    remove_member(session, domain_id, member_id, if_edit_match)
     session.commit()
 
 
@@ -112,9 +115,12 @@ def publish_check_endpoint(
 
 @router.post("/{domain_id}/publish")
 def publish_domain_endpoint(
-    domain_id: int, session: Session = Depends(get_session)
+    domain_id: int,
+    if_edit_match: int | None = Header(None, ge=0),
+    session: Session = Depends(get_session),
 ) -> dict:
     domain = get_domain(session, domain_id)
-    revision = publish_domain(session, domain)
+    revision = publish_domain(session, domain, if_edit_match)
+    edit_revision = domain.edit_revision
     session.commit()
-    return {"revision": revision}
+    return {"revision": revision, "edit_revision": edit_revision}

@@ -16,8 +16,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    select,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.core.db import Base
@@ -75,6 +76,9 @@ class Mapping(Base):
         default=ResourceStatus.DRAFT, nullable=False
     )
     current_revision: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    edit_revision: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -96,6 +100,13 @@ class MappingRevision(Base):
     rel_maps: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # Read the draft body and its parent token in the same SQL snapshot.
+    edit_revision: Mapped[int] = column_property(
+        select(Mapping.edit_revision)
+        .where(Mapping.id == mapping_id)
+        .correlate_except(Mapping)
+        .scalar_subquery()
     )
 
 

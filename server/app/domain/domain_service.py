@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
@@ -47,6 +47,7 @@ def add_member(
     session: Session, domain_id: int, payload: DomainMemberAdd
 ) -> DomainMember:
     """添加业务域成员。as_ref=True 表示跨域引用，按 IRI 去重。"""
+    lock_domain_edit(session, get_domain(session, domain_id), payload.if_edit_match)
     resource = session.get(ModelResource, payload.resource_id)
     if resource is None:
         raise KGError(
@@ -75,7 +76,13 @@ def add_member(
     return member
 
 
-def remove_member(session: Session, domain_id: int, member_id: int) -> None:
+def remove_member(
+    session: Session,
+    domain_id: int,
+    member_id: int,
+    if_edit_match: int | None = None,
+) -> None:
+    lock_domain_edit(session, get_domain(session, domain_id), if_edit_match)
     member = session.get(DomainMember, member_id)
     if member is None or member.domain_id != domain_id:
         raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"member_id": member_id})
@@ -117,19 +124,53 @@ def list_domains(
     return items, total
 
 
-def update_domain(
-    session: Session, domain: BusinessDomain, payload: DomainUpdate
+def lock_domain_edit(
+    session: Session,
+    domain: BusinessDomain,
+    if_edit_match: int | None = None,
+    *,
+    if_match: int | None = None,
 ) -> BusinessDomain:
-    """更新业务域（草稿态）。带 If-Match 乐观锁。"""
-    if domain.current_revision != payload.if_match:
+    """Lock the parent before editing metadata, membership or publishing."""
+    stmt = update(BusinessDomain).where(BusinessDomain.id == domain.id)
+    if if_match is not None:
+        stmt = stmt.where(BusinessDomain.current_revision == if_match)
+    if if_edit_match is not None:
+        stmt = stmt.where(BusinessDomain.edit_revision == if_edit_match)
+    locked = session.scalar(
+        stmt.values(edit_revision=BusinessDomain.edit_revision + 1)
+        .returning(BusinessDomain)
+        .execution_options(populate_existing=True)
+    )
+    if locked is not None:
+        return locked
+    session.refresh(domain)
+    if if_match is not None and domain.current_revision != if_match:
         raise KGError(
             ErrorCode.REVISION_CONFLICT,
             {
-                "domain": domain.name,
-                "expected": domain.current_revision,
-                "actual": payload.if_match,
+                "resource": domain.name,
+                "expected": if_match,
+                "actual": domain.current_revision,
             },
         )
+    raise KGError(
+        ErrorCode.REVISION_CONFLICT,
+        {
+            "resource": domain.name,
+            "expected": if_edit_match,
+            "actual": domain.edit_revision,
+        },
+    )
+
+
+def update_domain(
+    session: Session, domain: BusinessDomain, payload: DomainUpdate
+) -> BusinessDomain:
+    """更新业务域；发布修订号和可选编辑令牌分别校验。"""
+    domain = lock_domain_edit(
+        session, domain, payload.if_edit_match, if_match=payload.if_match
+    )
     if payload.label_i18n is not None:
         domain.label_i18n = payload.label_i18n
     if payload.definition_i18n is not None:
@@ -199,8 +240,11 @@ def _has_circular_ref(
     return False
 
 
-def publish_domain(session: Session, domain: BusinessDomain) -> int:
+def publish_domain(
+    session: Session, domain: BusinessDomain, if_edit_match: int | None = None
+) -> int:
     """发布业务域：冻结不可变版本。发布前必须通过四项检查。"""
+    domain = lock_domain_edit(session, domain, if_edit_match)
     check = check_publish(session, domain)
     if not check.can_publish:
         raise KGError(

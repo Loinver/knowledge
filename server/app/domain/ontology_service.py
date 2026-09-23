@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.orm import Session
 
@@ -96,6 +96,9 @@ def add_ref(
     session: Session, ontology_id: int, payload: OntologyRefAdd
 ) -> OntologyResourceRef:
     """添加引用资源。按 IRI 去重；相同资源不兼容版本显式冲突。"""
+    lock_ontology_edit(
+        session, get_ontology(session, ontology_id), payload.if_edit_match
+    )
     resource = session.get(ModelResource, payload.resource_id)
     if resource is None:
         raise KGError(
@@ -137,7 +140,13 @@ def add_ref(
     return ref
 
 
-def remove_ref(session: Session, ontology_id: int, ref_id: int) -> None:
+def remove_ref(
+    session: Session,
+    ontology_id: int,
+    ref_id: int,
+    if_edit_match: int | None = None,
+) -> None:
+    lock_ontology_edit(session, get_ontology(session, ontology_id), if_edit_match)
     ref = session.get(OntologyResourceRef, ref_id)
     if ref is None or ref.ontology_id != ontology_id:
         raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"ref_id": ref_id})
@@ -162,6 +171,20 @@ def get_ontology(session: Session, ontology_id: int) -> Ontology:
     return onto
 
 
+def list_rules(
+    session: Session, ontology_id: int
+) -> list[tuple[Rule, OntologyRuleRef]]:
+    get_ontology(session, ontology_id)
+    return list(
+        session.execute(
+            select(Rule, OntologyRuleRef)
+            .join(OntologyRuleRef, OntologyRuleRef.rule_id == Rule.id)
+            .where(OntologyRuleRef.ontology_id == ontology_id)
+            .order_by(Rule.id)
+        ).tuples()
+    )
+
+
 def list_ontologies(
     session: Session, q: str = "", page: int = 1, page_size: int = 50
 ) -> tuple[list[Ontology], int]:
@@ -177,18 +200,52 @@ def list_ontologies(
     return items, total
 
 
-def update_ontology(
-    session: Session, onto: Ontology, payload: OntologyUpdate
+def lock_ontology_edit(
+    session: Session,
+    onto: Ontology,
+    if_edit_match: int | None = None,
+    *,
+    if_match: int | None = None,
 ) -> Ontology:
-    if onto.current_revision != payload.if_match:
+    """Lock the parent; edit tokens do not change frozen semantic revisions."""
+    stmt = update(Ontology).where(Ontology.id == onto.id)
+    if if_match is not None:
+        stmt = stmt.where(Ontology.current_revision == if_match)
+    if if_edit_match is not None:
+        stmt = stmt.where(Ontology.edit_revision == if_edit_match)
+    locked = session.scalar(
+        stmt.values(edit_revision=Ontology.edit_revision + 1)
+        .returning(Ontology)
+        .execution_options(populate_existing=True)
+    )
+    if locked is not None:
+        return locked
+    session.refresh(onto)
+    if if_match is not None and onto.current_revision != if_match:
         raise KGError(
             ErrorCode.REVISION_CONFLICT,
             {
-                "ontology": onto.name,
-                "expected": onto.current_revision,
-                "actual": payload.if_match,
+                "resource": onto.name,
+                "expected": if_match,
+                "actual": onto.current_revision,
             },
         )
+    raise KGError(
+        ErrorCode.REVISION_CONFLICT,
+        {
+            "resource": onto.name,
+            "expected": if_edit_match,
+            "actual": onto.edit_revision,
+        },
+    )
+
+
+def update_ontology(
+    session: Session, onto: Ontology, payload: OntologyUpdate
+) -> Ontology:
+    onto = lock_ontology_edit(
+        session, onto, payload.if_edit_match, if_match=payload.if_match
+    )
     if payload.label_i18n is not None:
         onto.label_i18n = payload.label_i18n
     if payload.definition_i18n is not None:
@@ -242,12 +299,15 @@ def update_canvas_layout(
     return layout
 
 
-def publish_ontology(session: Session, onto: Ontology) -> int:
+def publish_ontology(
+    session: Session, onto: Ontology, if_edit_match: int | None = None
+) -> int:
     """发布本体：冻结全部成员资源的版本号到 resource_versions 快照。
 
     版本冻结：发布时记录每个引用资源的 current_revision，
     上游资源升级产生新版本时，已发布本体不随动。
     """
+    onto = lock_ontology_edit(session, onto, if_edit_match)
     refs = list_refs(session, onto.id)
     ref_domains: list[int] = []
     ref_types: list[int] = []

@@ -98,6 +98,17 @@ class MappingCreate(BaseModel):
     draft: MappingRevisionCreate | None = None
 
 
+class SaveDraftRequest(BaseModel):
+    draft: MappingRevisionCreate
+    if_match: int
+    if_edit_match: int | None = Field(default=None, ge=0)
+
+
+class PublishRequest(BaseModel):
+    if_match: int
+    if_edit_match: int | None = Field(default=None, ge=0)
+
+
 class FieldMapOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     target_attr: str
@@ -134,6 +145,7 @@ class MappingOut(BaseModel):
     ontology_id: int
     status: str
     current_revision: int
+    edit_revision: int
 
 
 class MappingRevisionOut(BaseModel):
@@ -141,6 +153,7 @@ class MappingRevisionOut(BaseModel):
     id: int
     mapping_id: int
     revision: int
+    edit_revision: int
     onto_version: int
     entity_maps: list[dict]
     rel_maps: list[dict]
@@ -154,3 +167,4 @@ class MappingBrief(BaseModel):
     ontology_id: int
     status: str
     current_revision: int
+    edit_revision: int

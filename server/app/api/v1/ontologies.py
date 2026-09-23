@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
 from app.api.v1.governance_common import (
@@ -23,14 +22,14 @@ from app.domain.ontology_service import (
     get_ontology,
     list_ontologies,
     list_refs,
+    list_rules,
     publish_ontology,
     remove_ref,
     update_canvas_layout,
     update_ontology,
 )
 from app.domain.template_service import get_template
-from app.models.domain import Ontology, OntologyRuleRef
-from app.models.governance import Rule
+from app.models.domain import Ontology
 from app.schemas.ontology import (
     CanvasLayoutOut,
     CanvasLayoutUpdate,
@@ -117,13 +116,6 @@ def list_refs_endpoint(
 def list_rules_endpoint(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> list[OntologyRuleOut]:
-    get_ontology(session, ontology_id)
-    rules = session.execute(
-        select(Rule, OntologyRuleRef)
-        .join(OntologyRuleRef, OntologyRuleRef.rule_id == Rule.id)
-        .where(OntologyRuleRef.ontology_id == ontology_id)
-        .order_by(Rule.id)
-    )
     return [
         OntologyRuleOut(
             rule_id=rule.id,
@@ -132,7 +124,7 @@ def list_rules_endpoint(
             source_kind=rule.source_kind,
             source_reference=rule.source_reference,
         )
-        for rule, ref in rules
+        for rule, ref in list_rules(session, ontology_id)
     ]
 
 
@@ -151,9 +143,12 @@ def add_ref_endpoint(
 
 @router.delete("/{ontology_id}/refs/{ref_id}", response_model=ApiResponse[None])
 def remove_ref_endpoint(
-    ontology_id: int, ref_id: int, session: Session = Depends(get_session)
+    ontology_id: int,
+    ref_id: int,
+    if_edit_match: int | None = Header(None, ge=0),
+    session: Session = Depends(get_session),
 ) -> None:
-    remove_ref(session, ontology_id, ref_id)
+    remove_ref(session, ontology_id, ref_id, if_edit_match)
     session.commit()
 
 
@@ -188,12 +183,15 @@ def update_canvas_endpoint(
 
 @router.post("/{ontology_id}/publish")
 def publish_onto_endpoint(
-    ontology_id: int, session: Session = Depends(get_session)
+    ontology_id: int,
+    if_edit_match: int | None = Header(None, ge=0),
+    session: Session = Depends(get_session),
 ) -> dict:
     onto = get_ontology(session, ontology_id)
-    revision = publish_ontology(session, onto)
+    revision = publish_ontology(session, onto, if_edit_match)
+    edit_revision = onto.edit_revision
     session.commit()
-    return {"revision": revision}
+    return {"revision": revision, "edit_revision": edit_revision}
 
 
 @router.get(
@@ -237,9 +235,10 @@ def apply_import_endpoint(
     ontology_id: int,
     payload: OntologyImportApplyRequest,
     revision: int = Depends(required_draft_revision),
+    if_edit_match: int | None = Header(None, ge=0),
     session: Session = Depends(governance_session),
 ) -> OntologyImportResult:
     if payload.ontology_id != ontology_id:
         raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "ontology_id_mismatch"})
     with session.begin():
-        return apply_import(session, payload, revision)
+        return apply_import(session, payload, revision, if_edit_match=if_edit_match)

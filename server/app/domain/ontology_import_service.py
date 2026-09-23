@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.ontology_service import get_ontology, lock_ontology_edit
 from app.models.domain import OntologyResourceRef
 from app.models.enums import ResourceKind, ResourceStatus
 from app.models.resource import ModelResource
@@ -226,22 +227,15 @@ def preview_import(
 
 
 def apply_import(
-    session: Session, payload: OntologyImportApplyRequest, revision: int
+    session: Session,
+    payload: OntologyImportApplyRequest,
+    revision: int,
+    if_edit_match: int | None = None,
 ) -> OntologyImportResult:
-    from app.domain.ontology_service import get_ontology
-
     ontology = get_ontology(session, payload.ontology_id)
+    ontology = lock_ontology_edit(session, ontology, if_edit_match, if_match=revision)
     if ontology.status != ResourceStatus.DRAFT:
         raise KGError(ErrorCode.ALREADY_PUBLISHED, {"ontology_id": ontology.id})
-    if ontology.current_revision != revision:
-        raise KGError(
-            ErrorCode.REVISION_CONFLICT,
-            {
-                "ontology_id": ontology.id,
-                "expected": revision,
-                "actual": ontology.current_revision,
-            },
-        )
     parsed = preview_import(
         session, payload.format, payload.content, payload.ontology_id
     )
