@@ -19,6 +19,7 @@ from app.api.errors import install_error_handler
 from app.api.v1.accounts import router as accounts_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.clauses import router as clauses_router
+from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.datasources import router as datasources_router
 from app.api.v1.domains import router as domains_router
 from app.api.v1.enum_dictionaries import (
@@ -70,6 +71,7 @@ install_error_handler(app)
 
 
 app.include_router(namespaces_router, prefix=API_PREFIX)
+app.include_router(dashboard_router, prefix=API_PREFIX)
 app.include_router(ontologies_router, prefix=API_PREFIX)
 app.include_router(datasources_router, prefix=API_PREFIX)
 app.include_router(domains_router, prefix=API_PREFIX)
@@ -88,15 +90,6 @@ app.include_router(governance_router, prefix=API_PREFIX)
 app.include_router(clauses_router, prefix=API_PREFIX)
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(accounts_router, prefix=API_PREFIX)
-
-
-class IriRequest(BaseModel):
-    namespace: str
-    name: str
-
-
-class IriResponse(BaseModel):
-    iri: str
 
 
 class HealthResponse(BaseModel):

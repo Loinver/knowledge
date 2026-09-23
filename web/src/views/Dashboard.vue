@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import { NAlert, NSpin } from 'naive-ui'
+import { NAlert, NButton, NSpin } from 'naive-ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-import { dashboardApi, type DashboardStats } from '@/api/dashboard'
+import { dashboardApi } from '@/api/dashboard'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
 
 const { t } = useI18n()
-const { data, loading, error, reload } = useAsyncData((signal) => dashboardApi.stats(signal))
-
-const stats = computed<DashboardStats | null>(() => data.value)
+const { data: stats, loading, error, reload } = useAsyncData(dashboardApi.stats)
 
 /**
  * 主流程六步。这是产品的心脏，所以放在首屏最上方而不是塞进卡片网格。
@@ -21,7 +19,7 @@ const pipeline = computed(() => [
   {
     key: 'model',
     step: t('dashboard.step1'),
-    count: stats.value?.entityTypes ?? 0,
+    count: stats.value?.entity_types ?? 0,
     link: 'entity-types',
     hint: t('dashboard.goEntityTypes'),
   },
@@ -49,14 +47,14 @@ const pipeline = computed(() => [
   {
     key: 'graph',
     step: t('dashboard.step5'),
-    count: stats.value?.resultSetCount ?? 0,
+    count: stats.value?.result_set_count ?? 0,
     link: 'graph-browse',
     hint: t('dashboard.goGraphBrowse'),
   },
   {
     key: 'report',
     step: t('dashboard.step6'),
-    count: stats.value?.quarantineCount ?? 0,
+    count: stats.value?.quarantine_count ?? 0,
     link: 'graph-reports',
     hint: t('dashboard.goGraphReports'),
   },
@@ -64,11 +62,11 @@ const pipeline = computed(() => [
 
 /** 资产总览：本体侧的四类资源。 */
 const assets = computed(() => [
-  { key: 'entityTypes', label: t('dashboard.entityTypes'), value: stats.value?.entityTypes ?? 0 },
+  { key: 'entityTypes', label: t('dashboard.entityTypes'), value: stats.value?.entity_types ?? 0 },
   {
     key: 'relationTypes',
     label: t('dashboard.relationTypes'),
-    value: stats.value?.relationTypes ?? 0,
+    value: stats.value?.relation_types ?? 0,
   },
   { key: 'domains', label: t('dashboard.domains'), value: stats.value?.domains ?? 0 },
   { key: 'ontologies', label: t('dashboard.ontologies'), value: stats.value?.ontologies ?? 0 },
@@ -78,7 +76,8 @@ const assets = computed(() => [
 
 const hasIssues = computed(
   () =>
-    (stats.value && (stats.value.quarantineCount > 0 || stats.value.unpublishedCount > 0)) || false,
+    (stats.value && (stats.value.quarantine_count > 0 || stats.value.unpublished_count > 0)) ||
+    false,
 )
 </script>
 
@@ -86,9 +85,15 @@ const hasIssues = computed(
   <section class="dashboard">
     <PageHeader :title="t('page.dashboard')" :description="t('dashboard.description')" />
 
-    <NAlert v-if="error" type="error" :title="error" closable @close="reload" />
+    <NAlert v-if="error" type="error" :title="error">
+      <NButton size="small" @click="reload">{{ t('dashboard.retry') }}</NButton>
+    </NAlert>
 
-    <NSpin :show="loading">
+    <NSpin v-else-if="loading" :show="true">
+      <div class="loading-state" role="status">{{ t('common.loading') }}</div>
+    </NSpin>
+
+    <template v-else-if="stats">
       <!-- 主流程：六步管线，未开始的步骤整步变暗 -->
       <section class="block">
         <h3 class="block-title">{{ t('dashboard.overview') }}</h3>
@@ -111,8 +116,8 @@ const hasIssues = computed(
         <div class="result-row">
           <article class="card result-main">
             <div class="card-label">{{ t('dashboard.currentGraph') }}</div>
-            <div v-if="stats?.currentGraphId" class="result-value mono">
-              {{ t('dashboard.resultSet', { id: stats.currentGraphId }) }}
+            <div v-if="stats.current_graph_id !== null" class="result-value mono">
+              {{ t('dashboard.resultSet', { id: stats.current_graph_id }) }}
             </div>
             <div v-else class="result-empty">
               <span class="result-none">{{ t('dashboard.none') }}</span>
@@ -122,15 +127,15 @@ const hasIssues = computed(
 
           <article class="card">
             <div class="card-label">{{ t('dashboard.resultSets') }}</div>
-            <div class="metric mono">{{ stats?.resultSetCount ?? 0 }}</div>
+            <div class="metric mono">{{ stats.result_set_count }}</div>
           </article>
 
-          <article class="card" :class="{ warn: !!stats?.quarantineCount }">
+          <article class="card" :class="{ warn: !!stats.quarantine_count }">
             <div class="card-label">{{ t('dashboard.quarantine') }}</div>
-            <div class="metric mono" :class="{ 'metric-warn': !!stats?.quarantineCount }">
-              {{ stats?.quarantineCount ?? 0 }}
+            <div class="metric mono" :class="{ 'metric-warn': !!stats.quarantine_count }">
+              {{ stats.quarantine_count }}
             </div>
-            <div v-if="stats?.quarantineCount" class="hint">
+            <div v-if="stats.quarantine_count" class="hint">
               {{ t('dashboard.quarantineHint') }}
             </div>
           </article>
@@ -165,28 +170,33 @@ const hasIssues = computed(
         </div>
         <div v-else class="issue-list">
           <NAlert
-            v-if="stats?.quarantineCount"
+            v-if="stats.quarantine_count"
             type="warning"
-            :title="t('dashboard.quarantineCount', { count: stats.quarantineCount })"
+            :title="t('dashboard.quarantineCount', { count: stats.quarantine_count })"
           >
             {{ t('dashboard.quarantineHint') }}
           </NAlert>
           <NAlert
-            v-if="stats?.unpublishedCount"
+            v-if="stats.unpublished_count"
             type="info"
-            :title="t('dashboard.draftResources', { count: stats.unpublishedCount })"
+            :title="t('dashboard.draftResources', { count: stats.unpublished_count })"
           >
             {{ t('dashboard.unpublishedHint') }}
           </NAlert>
         </div>
       </section>
-    </NSpin>
+    </template>
   </section>
 </template>
 
 <style scoped>
 .dashboard {
   padding-bottom: var(--space-5);
+}
+
+.loading-state {
+  padding: var(--space-5);
+  text-align: center;
 }
 
 .block {

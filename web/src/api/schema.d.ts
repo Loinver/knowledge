@@ -93,6 +93,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/dashboard/stats': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read Stats */
+    get: operations['read_stats_api_v1_dashboard_stats_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/ontologies': {
     parameters: {
       query?: never
@@ -1892,6 +1909,23 @@ export interface components {
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['CoreCheckOut'] | null
     }
+    /** ApiResponse[DashboardStatsOut] */
+    ApiResponse_DashboardStatsOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['DashboardStatsOut'] | null
+    }
     /** ApiResponse[DatasourceOut] */
     ApiResponse_DatasourceOut_: {
       /**
@@ -3395,6 +3429,40 @@ export interface components {
       kind: components['schemas']['ResourceKind']
       /** Standard Clause Id */
       standard_clause_id: number
+    }
+    /** DashboardStatsOut */
+    DashboardStatsOut: {
+      /** Entity Types */
+      entity_types: number
+      /** Relation Types */
+      relation_types: number
+      /** Domains */
+      domains: number
+      /** Ontologies */
+      ontologies: number
+      /** Datasources */
+      datasources: number
+      /** Mappings */
+      mappings: number
+      /** Runs */
+      runs: number
+      /** Current Graph Id */
+      current_graph_id: number | null
+      /**
+       * Result Set Count
+       * @description All graph revisions, including history
+       */
+      result_set_count: number
+      /**
+       * Quarantine Count
+       * @description Quarantine records for the current graph's run only
+       */
+      quarantine_count: number
+      /**
+       * Unpublished Count
+       * @description Draft entity types, relation types, domains and ontologies
+       */
+      unpublished_count: number
     }
     /**
      * DataTypePropCreate
@@ -5732,6 +5800,26 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  read_stats_api_v1_dashboard_stats_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_DashboardStatsOut_']
         }
       }
     }
