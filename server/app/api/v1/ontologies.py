@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.v1.governance_common import (
@@ -28,7 +29,8 @@ from app.domain.ontology_service import (
     update_ontology,
 )
 from app.domain.template_service import get_template
-from app.models.domain import Ontology
+from app.models.domain import Ontology, OntologyRuleRef
+from app.models.governance import Rule
 from app.schemas.ontology import (
     CanvasLayoutOut,
     CanvasLayoutUpdate,
@@ -39,6 +41,7 @@ from app.schemas.ontology import (
     OntologyOut,
     OntologyRefAdd,
     OntologyRefOut,
+    OntologyRuleOut,
     OntologyUpdate,
 )
 from app.schemas.ontology_import import (
@@ -108,6 +111,29 @@ def list_refs_endpoint(
 ) -> list[OntologyRefOut]:
     refs = list_refs(session, ontology_id)
     return [OntologyRefOut.model_validate(r) for r in refs]
+
+
+@router.get("/{ontology_id}/rules", response_model=ApiResponse[list[OntologyRuleOut]])
+def list_rules_endpoint(
+    ontology_id: int, session: Session = Depends(get_session)
+) -> list[OntologyRuleOut]:
+    get_ontology(session, ontology_id)
+    rules = session.execute(
+        select(Rule, OntologyRuleRef)
+        .join(OntologyRuleRef, OntologyRuleRef.rule_id == Rule.id)
+        .where(OntologyRuleRef.ontology_id == ontology_id)
+        .order_by(Rule.id)
+    )
+    return [
+        OntologyRuleOut(
+            rule_id=rule.id,
+            identifier=rule.identifier,
+            revision=ref.pinned_revision,
+            source_kind=rule.source_kind,
+            source_reference=rule.source_reference,
+        )
+        for rule, ref in rules
+    ]
 
 
 @router.post(

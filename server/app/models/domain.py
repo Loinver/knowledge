@@ -149,6 +149,20 @@ class OntologyResourceRef(Base):
     pinned_revision: Mapped[int | None] = mapped_column(Integer, default=None)
 
 
+class OntologyRuleRef(Base):
+    """本体引用的规则及其发布时修订号。"""
+
+    __tablename__ = "ontology_rule_ref"
+    __table_args__ = (UniqueConstraint("ontology_id", "rule_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ontology_id: Mapped[int] = mapped_column(ForeignKey("ontology.id"), nullable=False)
+    rule_id: Mapped[int] = mapped_column(
+        ForeignKey("governance_rule.id"), nullable=False
+    )
+    pinned_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class CanvasLayout(Base):
     """画布布局（本体设计器/图谱浏览/映射图谱视图）。
 

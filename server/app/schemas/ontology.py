@@ -29,12 +29,14 @@ class OntologyCreate(BaseModel):
     definition_i18n: dict[str, str] | None = None
     template_id: int | None = None
     ref_resource_ids: list[int] = Field(default_factory=list)
+    rule_ids: list[int] = Field(default_factory=list)
 
 
 class OntologyUpdate(BaseModel):
     label_i18n: dict[str, str] | None = None
     definition_i18n: dict[str, str] | None = None
     if_match: int
+    rule_ids: list[int] | None = None
 
 
 class OntologyOut(BaseModel):
@@ -48,6 +50,14 @@ class OntologyOut(BaseModel):
     current_revision: int
     template_id: int | None = None
     template: TemplateLink | None = None
+
+
+class OntologyRuleOut(BaseModel):
+    rule_id: int
+    identifier: str
+    revision: int
+    source_kind: str
+    source_reference: str
 
 
 class OntologyBrief(BaseModel):

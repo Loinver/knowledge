@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,8 +20,10 @@ from app.models.domain import (
     Ontology,
     OntologyResourceRef,
     OntologyRevision,
+    OntologyRuleRef,
 )
 from app.models.enums import ResourceStatus
+from app.models.governance import Rule
 from app.models.resource import ModelResource
 from app.schemas.ontology import (
     ConflictInfo,
@@ -59,6 +62,12 @@ def create_ontology(session: Session, payload: OntologyCreate) -> Ontology:
                 )
         else:
             pins[resource_id] = None
+    rule_ids = sorted(set(payload.rule_ids))
+    if len(rule_ids) != len(payload.rule_ids):
+        raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "duplicate_rule_reference"})
+    for rule_id in rule_ids:
+        if session.get(Rule, rule_id) is None:
+            raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"rule_id": rule_id})
     onto = Ontology(
         name=payload.name,
         iri=payload.iri,
@@ -69,6 +78,14 @@ def create_ontology(session: Session, payload: OntologyCreate) -> Ontology:
     )
     session.add(onto)
     session.flush()
+    for rule_id in rule_ids:
+        rule = session.get(Rule, rule_id)
+        assert rule is not None
+        session.add(
+            OntologyRuleRef(
+                ontology_id=onto.id, rule_id=rule.id, pinned_revision=rule.revision
+            )
+        )
     for rid, pin in pins.items():
         add_ref(session, onto.id, OntologyRefAdd(resource_id=rid, pinned_revision=pin))
     session.flush()
@@ -176,6 +193,26 @@ def update_ontology(
         onto.label_i18n = payload.label_i18n
     if payload.definition_i18n is not None:
         onto.definition_i18n = payload.definition_i18n
+    if payload.rule_ids is not None:
+        rule_ids = sorted(set(payload.rule_ids))
+        if len(rule_ids) != len(payload.rule_ids):
+            raise KGError(
+                ErrorCode.INVALID_REQUEST, {"reason": "duplicate_rule_reference"}
+            )
+        for rule_id in rule_ids:
+            if session.get(Rule, rule_id) is None:
+                raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"rule_id": rule_id})
+        session.query(OntologyRuleRef).filter(
+            OntologyRuleRef.ontology_id == onto.id
+        ).delete()
+        for rule_id in rule_ids:
+            rule = session.get(Rule, rule_id)
+            assert rule is not None
+            session.add(
+                OntologyRuleRef(
+                    ontology_id=onto.id, rule_id=rule.id, pinned_revision=rule.revision
+                )
+            )
     session.flush()
     return onto
 
@@ -239,12 +276,31 @@ def publish_ontology(session: Session, onto: Ontology) -> int:
         else:
             ref_types.append(ref.resource_id)
     new_rev = onto.current_revision + 1
+    rule_rows = []
+    if sqlalchemy_inspect(session.get_bind()).has_table("ontology_rule_ref"):
+        rule_rows = list(
+            session.execute(
+                select(Rule, OntologyRuleRef)
+                .join(OntologyRuleRef, OntologyRuleRef.rule_id == Rule.id)
+                .where(OntologyRuleRef.ontology_id == onto.id)
+                .order_by(Rule.id)
+            )
+        )
     rev = OntologyRevision(
         ontology_id=onto.id,
         revision=new_rev,
         ref_domains=ref_domains,
         ref_types=ref_types,
-        rules=[],
+        rules=[
+            {
+                "rule_id": rule.id,
+                "identifier": rule.identifier,
+                "revision": rule.revision,
+                "source_kind": rule.source_kind,
+                "source_reference": rule.source_reference,
+            }
+            for rule, ref in rule_rows
+        ],
         resource_versions=resource_versions,
         metadata_snapshot={
             "name": onto.name,

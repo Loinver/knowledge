@@ -28,6 +28,7 @@ from app.models.domain import (
     Ontology,
     OntologyResourceRef,
     OntologyRevision,
+    OntologyRuleRef,
 )
 from app.models.enum_dictionary import EnumDictionary, EnumDictionaryRevision
 from app.models.enums import (
@@ -90,6 +91,7 @@ __all__ = [
     "Ontology",
     "OntologyResourceRef",
     "OntologyRevision",
+    "OntologyRuleRef",
     "PasswordResetToken",
     "Quarantine",
     "RelMapMode",
