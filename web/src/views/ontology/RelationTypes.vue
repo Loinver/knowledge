@@ -33,8 +33,12 @@ const details = ref<Record<number, RelationTypeDetail>>({})
 const namespaces = ref<Namespace[]>([])
 const typeList = ref<EntityTypeBrief[]>([])
 const showCreate = ref(false)
+const showEdit = ref(false)
 const creating = ref(false)
+const editing = ref(false)
 const createError = ref('')
+const editError = ref('')
+const editingDetail = ref<RelationTypeDetail | null>(null)
 const statusFilter = ref<ResourceStatus | ''>('')
 const view = ref<'table' | 'card'>('table')
 
@@ -124,6 +128,17 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
     key: 'current_revision',
     width: 86,
     render: (row) => h('span', { class: 'mono rev' }, `v${row.current_revision}`),
+  },
+  {
+    title: t('common.actions'),
+    key: 'actions',
+    width: 100,
+    render: (row) =>
+      h(
+        NButton,
+        { size: 'small', quaternary: true, onClick: () => void openEdit(row.id) },
+        { default: () => t('common.edit') },
+      ),
   },
 ])
 
@@ -234,6 +249,55 @@ async function handleCreate() {
     createError.value = (err as { code?: string }).code || t('common.save')
   } finally {
     creating.value = false
+  }
+}
+
+async function openEdit(id: number) {
+  editError.value = ''
+  try {
+    const detail = await relationsApi.get(id)
+    editingDetail.value = detail
+    formData.value = {
+      name: detail.name,
+      namespace_id: detail.namespace_id,
+      labelZh: detail.label_i18n?.['zh-CN'] ?? detail.name,
+      labelEn: detail.label_i18n?.['en-US'] ?? detail.name,
+      domainType: detail.domain_spec.type_id,
+      rangeType: detail.range_spec.type_id,
+      enableAttrs: detail.enable_attributes,
+    }
+    showEdit.value = true
+  } catch (err) {
+    editError.value = (err as { code?: string }).code || t('relation.loadFailed')
+  }
+}
+
+async function handleEdit() {
+  const detail = editingDetail.value
+  const f = formData.value
+  if (!detail || !f.labelZh || !f.domainType || !f.rangeType) {
+    editError.value = t('relation.editIncomplete')
+    return
+  }
+  editing.value = true
+  editError.value = ''
+  try {
+    const updated = await relationsApi.update(detail.id, {
+      label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
+      domain_spec: { ...detail.domain_spec, type_id: f.domainType },
+      range_spec: { ...detail.range_spec, type_id: f.rangeType },
+      enable_attributes: f.enableAttrs,
+      owl: detail.owl,
+      if_match: detail.current_revision,
+      edit_revision: detail.edit_revision,
+    })
+    details.value = { ...details.value, [updated.id]: updated }
+    showEdit.value = false
+    await load()
+  } catch (err) {
+    editError.value = (err as { code?: string }).code || t('common.save')
+  } finally {
+    editing.value = false
   }
 }
 
@@ -450,6 +514,37 @@ onMounted(async () => {
               {{ t('common.save') }}
             </NButton>
             <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
+          </div>
+        </template>
+      </NDrawerContent>
+    </NDrawer>
+
+    <NDrawer v-model:show="showEdit" :width="520">
+      <NDrawerContent :title="t('relation.edit')" closable>
+        <NForm label-placement="top">
+          <NFormItem :label="t('common.name')"
+            ><NInput v-model:value="formData.name" disabled
+          /></NFormItem>
+          <NFormItem :label="t('common.labelZh')"
+            ><NInput v-model:value="formData.labelZh"
+          /></NFormItem>
+          <NFormItem :label="t('common.labelEn')"
+            ><NInput v-model:value="formData.labelEn"
+          /></NFormItem>
+          <NFormItem :label="t('relation.domain')"
+            ><NSelect v-model:value="formData.domainType" :options="typeOptions" filterable
+          /></NFormItem>
+          <NFormItem :label="t('relation.range')"
+            ><NSelect v-model:value="formData.rangeType" :options="typeOptions" filterable
+          /></NFormItem>
+        </NForm>
+        <p v-if="editError" class="create-error">{{ editError }}</p>
+        <template #footer>
+          <div class="drawer-actions">
+            <NButton type="primary" :loading="editing" @click="handleEdit">{{
+              t('common.save')
+            }}</NButton>
+            <NButton @click="showEdit = false">{{ t('common.cancel') }}</NButton>
           </div>
         </template>
       </NDrawerContent>
