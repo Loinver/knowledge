@@ -24,10 +24,12 @@ defineProps<{ title: string; description?: string }>()
 }
 .titles h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-h1);
+  font-weight: 500;
   line-height: 1.4;
 }
 .titles p {
+  max-width: 74ch;
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
   font-size: var(--font-small);

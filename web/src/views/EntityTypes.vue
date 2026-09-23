@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useMessage } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import {
   NButton,
   NDataTable,
@@ -10,19 +10,17 @@ import {
   NFormItem,
   NInput,
   NSelect,
-  NSpace,
   NSpin,
-  NTag,
 } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import type { EntityTypeBrief } from '@/api/client'
-import { api, type Namespace } from '@/api/client'
+import type { EntityTypeBrief, Namespace, ResourceStatus } from '@/api/client'
+import { api } from '@/api/client'
+import PageHeader from '@/components/PageHeader.vue'
 
-const { t } = useI18n()
-const message = useMessage()
+const { t, locale } = useI18n()
 const router = useRouter()
 
 const loading = ref(false)
@@ -30,42 +28,88 @@ const items = ref<EntityTypeBrief[]>([])
 const searchQuery = ref('')
 const showCreate = ref(false)
 const namespaces = ref<Namespace[]>([])
+const creating = ref(false)
+const createError = ref('')
 
-const columns = computed(() => [
-  { title: t('common.name'), key: 'name', resizable: true },
-  { title: t('common.iri'), key: 'iri', resizable: true },
+/** 空串表示「全部」。统计条本身即筛选入口，不额外占一行控件。 */
+const statusFilter = ref<ResourceStatus | ''>('')
+const view = ref<'table' | 'card'>('table')
+
+const STATUS_ORDER: ResourceStatus[] = ['PUBLISHED', 'DRAFT', 'ARCHIVED']
+
+/** 状态色取自设计令牌，与校验四态同一套语义（已发布=pass / 草稿=notrun / 归档=na）。 */
+const STATUS_VAR: Record<ResourceStatus, string> = {
+  PUBLISHED: 'var(--s-pass)',
+  DRAFT: 'var(--s-notrun)',
+  ARCHIVED: 'var(--s-na)',
+}
+
+function displayLabel(row: EntityTypeBrief): string {
+  const labels = row.label_i18n ?? {}
+  return labels[locale.value] ?? labels['zh-CN'] ?? row.name
+}
+
+const counts = computed(() => {
+  const base: Record<string, number> = { '': items.value.length }
+  for (const s of STATUS_ORDER) base[s] = 0
+  for (const row of items.value) base[row.status] = (base[row.status] ?? 0) + 1
+  return base
+})
+
+const filtered = computed(() =>
+  statusFilter.value ? items.value.filter((row) => row.status === statusFilter.value) : items.value,
+)
+
+const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
+  {
+    title: t('common.displayName'),
+    key: 'name',
+    render(row) {
+      const label = displayLabel(row)
+      return h('div', { class: 'cell-name' }, [
+        h('span', { class: 'cell-primary' }, label),
+        label === row.name ? null : h('span', { class: 'cell-sub mono' }, row.name),
+      ])
+    },
+  },
+  {
+    title: t('common.iri'),
+    key: 'iri',
+    render: (row) => h('span', { class: 'iri' }, row.iri),
+  },
   {
     title: t('common.status'),
     key: 'status',
-    render(row: EntityTypeBrief) {
-      const color = row.status === 'PUBLISHED' ? 'success' : 'default'
-      return h(
-        NTag,
-        { type: color, size: 'small' },
-        { default: () => t(`resourceStatus.${row.status}`) },
-      )
-    },
+    width: 120,
+    render: (row) => renderStatus(row.status),
   },
-  { title: t('common.revision'), key: 'current_revision' },
+  {
+    title: t('common.revision'),
+    key: 'current_revision',
+    width: 90,
+    render: (row) => h('span', { class: 'mono rev' }, `v${row.current_revision}`),
+  },
   {
     title: t('common.actions'),
     key: 'actions',
-    render(row: EntityTypeBrief) {
-      return h(
+    width: 100,
+    render: (row) =>
+      h(
         NButton,
-        { size: 'small', text: true, onClick: () => goToDetail(row.id) },
+        { size: 'small', quaternary: true, onClick: () => goToDetail(row.id) },
         { default: () => t('common.edit') },
-      )
-    },
+      ),
   },
 ])
 
-const formData = ref({
-  name: '',
-  namespace_id: 0,
-  labelZh: '',
-  labelEn: '',
-})
+function renderStatus(status: ResourceStatus) {
+  return h('span', { class: 'status-tag', style: { '--dot': STATUS_VAR[status] } }, [
+    h('i', { class: 'status-dot' }),
+    t(`resourceStatus.${status}`),
+  ])
+}
+
+const formData = ref({ name: '', namespace_id: null as number | null, labelZh: '', labelEn: '' })
 
 const nsOptions = computed(() => namespaces.value.map((ns) => ({ label: ns.prefix, value: ns.id })))
 
@@ -78,7 +122,7 @@ async function loadList() {
   try {
     items.value = await api.entityTypes.list({ q: searchQuery.value })
   } catch {
-    message.error(t('common.loading'))
+    items.value = []
   } finally {
     loading.value = false
   }
@@ -88,15 +132,17 @@ async function loadNamespaces() {
   try {
     namespaces.value = await api.namespaces.list()
   } catch {
-    // ignore
+    namespaces.value = []
   }
 }
 
 async function handleCreate() {
+  createError.value = ''
   if (!formData.value.name || !formData.value.namespace_id || !formData.value.labelZh) {
-    message.warning(t('entityType.create'))
+    createError.value = t('entityType.createIncomplete')
     return
   }
+  creating.value = true
   try {
     await api.entityTypes.create({
       name: formData.value.name,
@@ -106,12 +152,13 @@ async function handleCreate() {
         'en-US': formData.value.labelEn || formData.value.name,
       },
     })
-    message.success(t('common.save'))
     showCreate.value = false
+    formData.value = { name: '', namespace_id: null, labelZh: '', labelEn: '' }
     await loadList()
   } catch (err) {
-    const e = err as { code?: string }
-    message.error(e.code || t('common.save'))
+    createError.value = (err as { code?: string }).code || t('common.save')
+  } finally {
+    creating.value = false
   }
 }
 
@@ -121,68 +168,344 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="page-container">
-    <n-space align="center" justify="space-between" class="page-header">
-      <h2>{{ t('page.entityTypes') }}</h2>
-      <n-button type="primary" @click="showCreate = true">{{ t('common.create') }}</n-button>
-    </n-space>
-    <n-space class="toolbar">
-      <n-input
+  <section class="page">
+    <PageHeader :title="t('page.entityTypes')" :description="t('entityType.description')">
+      <template #actions>
+        <NButton type="primary" @click="showCreate = true">{{ t('common.create') }}</NButton>
+      </template>
+    </PageHeader>
+
+    <!-- 统计条：本身就是筛选入口，点击即过滤 -->
+    <div class="stats">
+      <button
+        type="button"
+        class="stat"
+        :class="{ active: statusFilter === '' }"
+        @click="statusFilter = ''"
+      >
+        <span class="stat-value mono">{{ counts[''] ?? 0 }}</span>
+        <span class="stat-label">{{ t('entityType.total') }}</span>
+      </button>
+      <button
+        v-for="s in STATUS_ORDER"
+        :key="s"
+        type="button"
+        class="stat"
+        :class="{ active: statusFilter === s }"
+        @click="statusFilter = statusFilter === s ? '' : s"
+      >
+        <span class="stat-value mono" :style="{ color: counts[s] ? STATUS_VAR[s] : undefined }">
+          {{ counts[s] ?? 0 }}
+        </span>
+        <span class="stat-label">{{ t(`resourceStatus.${s}`) }}</span>
+      </button>
+    </div>
+
+    <div class="toolbar">
+      <NInput
         v-model:value="searchQuery"
         :placeholder="t('common.search')"
         clearable
-        @update:value="loadList"
+        class="search"
+        @keyup.enter="loadList"
+        @clear="loadList"
       />
-      <n-button @click="loadList">{{ t('common.search') }}</n-button>
-    </n-space>
-    <n-spin :show="loading">
-      <n-data-table
-        :columns="columns"
-        :data="items"
-        :bordered="false"
-        :pagination="{ pageSize: 20 }"
-      >
-        <template #empty>
-          <n-empty :description="t('common.empty')" />
-        </template>
-      </n-data-table>
-    </n-spin>
+      <span class="spacer" />
+      <div class="seg" role="group" :aria-label="t('common.viewMode')">
+        <button type="button" :class="{ on: view === 'table' }" @click="view = 'table'">
+          {{ t('common.viewTable') }}
+        </button>
+        <button type="button" :class="{ on: view === 'card' }" @click="view = 'card'">
+          {{ t('common.viewCard') }}
+        </button>
+      </div>
+    </div>
 
-    <n-drawer v-model:show="showCreate" :width="480">
-      <n-drawer-content :title="t('entityType.create')" closable>
-        <n-form>
-          <n-form-item :label="t('common.name')">
-            <n-input v-model:value="formData.name" placeholder="Employee" />
-          </n-form-item>
-          <n-form-item :label="t('common.namespace')">
-            <n-select v-model:value="formData.namespace_id" :options="nsOptions" />
-          </n-form-item>
-          <n-form-item :label="t('common.labelZh')">
-            <n-input v-model:value="formData.labelZh" />
-          </n-form-item>
-          <n-form-item :label="t('common.labelEn')">
-            <n-input v-model:value="formData.labelEn" />
-          </n-form-item>
-        </n-form>
+    <NSpin :show="loading">
+      <div v-if="view === 'table'" class="card">
+        <NDataTable
+          :columns="columns"
+          :data="filtered"
+          :bordered="false"
+          :pagination="{ pageSize: 20 }"
+          :row-key="(row: EntityTypeBrief) => row.id"
+        >
+          <template #empty>
+            <NEmpty :description="t('common.empty')" />
+          </template>
+        </NDataTable>
+      </div>
+
+      <!-- 卡片视图：同一份数据换一种扫读方式，IRI 仍然可见 -->
+      <div v-else-if="filtered.length" class="cards">
+        <button
+          v-for="row in filtered"
+          :key="row.id"
+          type="button"
+          class="type-card"
+          @click="goToDetail(row.id)"
+        >
+          <span class="type-head">
+            <i class="type-dot" :style="{ background: STATUS_VAR[row.status] }" />
+            <span class="cell-primary">{{ displayLabel(row) }}</span>
+            <span class="mono rev">{{ `v${row.current_revision}` }}</span>
+          </span>
+          <span class="cell-sub mono">{{ row.name }}</span>
+          <!-- IRI 在窄卡片里会被截断，用 title 保留完整值可悬停查看 -->
+          <span class="iri type-iri" :title="row.iri">{{ row.iri }}</span>
+          <span class="status-tag" :style="{ '--dot': STATUS_VAR[row.status] }">
+            <i class="status-dot" />
+            {{ t(`resourceStatus.${row.status}`) }}
+          </span>
+        </button>
+      </div>
+
+      <div v-else class="card empty-card">
+        <NEmpty :description="t('common.empty')" />
+      </div>
+    </NSpin>
+
+    <NDrawer v-model:show="showCreate" :width="460">
+      <NDrawerContent :title="t('entityType.create')" closable>
+        <NForm>
+          <NFormItem :label="t('common.name')">
+            <NInput v-model:value="formData.name" placeholder="Employee" />
+          </NFormItem>
+          <NFormItem :label="t('common.namespace')">
+            <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
+          </NFormItem>
+          <NFormItem :label="t('common.labelZh')">
+            <NInput v-model:value="formData.labelZh" />
+          </NFormItem>
+          <NFormItem :label="t('common.labelEn')">
+            <NInput v-model:value="formData.labelEn" />
+          </NFormItem>
+        </NForm>
+        <p v-if="createError" class="create-error">{{ createError }}</p>
         <template #footer>
-          <n-space>
-            <n-button type="primary" @click="handleCreate">{{ t('common.save') }}</n-button>
-            <n-button @click="showCreate = false">{{ t('common.cancel') }}</n-button>
-          </n-space>
+          <div class="drawer-actions">
+            <NButton type="primary" :loading="creating" @click="handleCreate">
+              {{ t('common.save') }}
+            </NButton>
+            <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
+          </div>
         </template>
-      </n-drawer-content>
-    </n-drawer>
-  </div>
+      </NDrawerContent>
+    </NDrawer>
+  </section>
 </template>
 
 <style scoped>
-.page-container {
-  /* 内容区留白由 AdminLayout 统一提供，页面不再自带 padding */
+.page {
+  padding-bottom: var(--space-5);
 }
-.page-header {
-  margin-bottom: 16px;
+
+/* ── 统计条 ─────────────────────────────────────────────── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 14px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-surface);
+  border: 0;
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-1);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+.stat:hover {
+  box-shadow: var(--elev-2);
+}
+
+.stat.active {
+  background: var(--accent-soft);
+  box-shadow: var(--glow);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.stat-label {
+  color: var(--text-tertiary);
+  font-size: var(--font-caption);
+}
+
+/* ── 工具条 ─────────────────────────────────────────────── */
 .toolbar {
-  margin-bottom: 16px;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.search {
+  max-width: 280px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-inset);
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+.seg button {
+  padding: 3px 11px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.seg button.on {
+  color: var(--text);
+  background: var(--bg-active);
+}
+
+/* ── 容器 ───────────────────────────────────────────────── */
+.card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+}
+
+.empty-card {
+  padding: var(--space-6);
+}
+
+/* 表格内的单元格样式（NDataTable 的 render 里用 class，必须非 scoped 才生效，见下方 :deep） */
+:deep(.cell-name) {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+:deep(.cell-primary) {
+  font-weight: 500;
+}
+
+:deep(.cell-sub) {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+:deep(.rev) {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+:deep(.status-tag) {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-pill);
+}
+
+:deep(.status-dot) {
+  width: 6px;
+  height: 6px;
+  background: var(--dot);
+  border-radius: 50%;
+}
+
+/* ── 卡片视图 ───────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: var(--space-3);
+}
+
+.type-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-surface);
+  border: 0;
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.type-card:hover {
+  box-shadow: var(--glow);
+  transform: translateY(-1px);
+}
+
+.type-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.type-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.type-head .rev {
+  margin-left: auto;
+}
+
+.type-iri {
+  max-width: 100%;
+}
+
+/* ── 抽屉 ───────────────────────────────────────────────── */
+.create-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-small);
+}
+
+.drawer-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

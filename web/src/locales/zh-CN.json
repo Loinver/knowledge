@@ -105,7 +105,12 @@
     "datatype": "数据类型",
     "nullable": "可空",
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "displayName": "名称",
+    "viewMode": "视图模式",
+    "viewTable": "表格",
+    "viewCard": "卡片",
+    "noneValue": "—"
   },
   "entityType": {
     "list": "实体类型列表",
@@ -119,7 +124,10 @@
     "hierarchy": "类型层级",
     "relations": "关联关系",
     "rules": "规则",
-    "references": "引用与版本"
+    "references": "引用与版本",
+    "description": "定义业务里的核心对象。每个类型都有稳定的 IRI，发布后版本冻结，供本体装配与抽取映射引用。",
+    "total": "类型总数",
+    "createIncomplete": "请填写机读名、命名空间与中文标签"
   },
   "relation": {
     "list": "关系类型列表",
@@ -135,7 +143,11 @@
     "transitive": "传递",
     "inverseFunctional": "反功能性",
     "enableAttributes": "启用关系属性（生成关联实体）",
-    "inverseOf": "逆关系"
+    "inverseOf": "逆关系",
+    "description": "定义类型之间的语义关系。基数写在定义域一侧，表示一个源实例可指向多少个目标实例。",
+    "total": "关系总数",
+    "assocEntity": "关联实体",
+    "createIncomplete": "请填写机读名、命名空间、中文标签、定义域与值域"
   },
   "domain": {
     "list": "业务域列表",
@@ -150,7 +162,16 @@
     "versionsAvailable": "版本可用",
     "dependenciesComplete": "依赖完整",
     "noCircularRef": "无循环引用",
-    "memberNo": "成员 #{n}"
+    "memberNo": "成员 #{n}",
+    "description": "业务域把相关类型圈在一起，是本体装配的最小单位。成员分为「核心类型」与「跨域引用」，前者归属本域，后者只被引用。",
+    "selectHint": "从左侧选择一个业务域查看成员",
+    "memberResource": "资源",
+    "role": "域内角色",
+    "coreMember": "核心类型",
+    "refMember": "跨域引用",
+    "noMembers": "还没有成员",
+    "addMemberIncomplete": "请先选择要加入的类型",
+    "createIncomplete": "请填写机读名、IRI 与中文标签"
   },
   "graph": {
     "notFound": "没有可用的结果集，或该实体/事实不属于所选结果集。请先运行抽取，或重新选择结果集。",

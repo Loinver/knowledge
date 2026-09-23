@@ -105,7 +105,12 @@
     "datatype": "Datatype",
     "nullable": "Nullable",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "displayName": "Name",
+    "viewMode": "View mode",
+    "viewTable": "Table",
+    "viewCard": "Cards",
+    "noneValue": "—"
   },
   "entityType": {
     "list": "Entity Type List",
@@ -119,7 +124,10 @@
     "hierarchy": "Type Hierarchy",
     "relations": "Relations",
     "rules": "Rules",
-    "references": "References & Versions"
+    "references": "References & Versions",
+    "description": "Define the core objects of your business. Each type has a stable IRI and a frozen revision once published, referenced by ontology assembly and extraction mapping.",
+    "total": "Total types",
+    "createIncomplete": "Machine name, namespace and Chinese label are required"
   },
   "relation": {
     "list": "Relation Type List",
@@ -135,7 +143,11 @@
     "transitive": "Transitive",
     "inverseFunctional": "Inverse Functional",
     "enableAttributes": "Enable attributes (generate association)",
-    "inverseOf": "Inverse Of"
+    "inverseOf": "Inverse Of",
+    "description": "Define semantic relations between types. Cardinality is stated on the domain side: how many target instances one source instance may point to.",
+    "total": "Total relations",
+    "assocEntity": "Associative entity",
+    "createIncomplete": "Enter the machine name, namespace, Chinese label, domain and range"
   },
   "domain": {
     "list": "Business Domain List",
@@ -150,7 +162,16 @@
     "versionsAvailable": "Versions Available",
     "dependenciesComplete": "Dependencies Complete",
     "noCircularRef": "No Circular Reference",
-    "memberNo": "Member #{n}"
+    "memberNo": "Member #{n}",
+    "description": "A business domain groups related types and is the smallest unit of ontology assembly. Members are either core types owned by this domain, or cross-domain references.",
+    "selectHint": "Select a business domain on the left to see its members",
+    "memberResource": "Resource",
+    "role": "Domain role",
+    "coreMember": "Core type",
+    "refMember": "Cross-domain ref",
+    "noMembers": "No members yet",
+    "addMemberIncomplete": "Select a type to add first",
+    "createIncomplete": "Machine name, IRI and Chinese label are required"
   },
   "graph": {
     "notFound": "No result set is available, or the entity/fact is not in this result set. Run extraction or select another result set.",
