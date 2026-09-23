@@ -11,7 +11,9 @@ from app.api.v1.governance_common import (
     required_revision,
 )
 from app.domain import template_service as service
+from app.domain.core_check_service import check_template_core
 from app.domain.ontology_service import create_ontology
+from app.schemas.core_check import CoreCheckOut, CoreCheckRequest
 from app.schemas.ontology import OntologyCreate, OntologyOut
 from app.schemas.response import ApiResponse
 from app.schemas.template import (
@@ -148,3 +150,12 @@ def instantiate(
         result = OntologyOut.model_validate(onto)
         result.template = TemplateLink.model_validate(template)
         return result
+
+
+@router.post("/{template_id}/core-check", response_model=ApiResponse[CoreCheckOut])
+def core_check(
+    template_id: int,
+    payload: CoreCheckRequest,
+    session: Session = Depends(governance_session),
+) -> CoreCheckOut:
+    return check_template_core(session, template_id, payload)

@@ -22,6 +22,7 @@ from app.domain.status_service import publish_resource
 from app.domain.type_service import create_entity_type
 from app.models.domain import AssemblyTemplate, Ontology
 from app.models.enums import ResourceStatus
+from app.models.governance import StandardClause
 from app.models.resource import ModelResource
 from app.schemas.template import TemplateCreate
 from app.schemas.type import EntityTypeCreate
@@ -319,6 +320,46 @@ def test_catalog_includes_only_real_published_revisions(
     assert result.status_code == 200
     assert result.json()["items"][0]["resource_id"] == resource_id
     assert result.json()["items"][0]["revisions"] == [1]
+
+
+def test_core_check_distinguishes_missing_present_and_enterprise_extension(
+    client: TestClient, sessions: sessionmaker[Session], resource_id: int
+) -> None:
+    template = create(client, resource_id)
+    with sessions.begin() as session:
+        clause = StandardClause(
+            standard="GB/T 48000.3-2026",
+            clause_number="5.1",
+            title_i18n={"zh-CN": "实体类型", "en-US": "Entity type"},
+            self_authored_description={"zh-CN": "核心实体", "en-US": "Core entity"},
+        )
+        session.add(clause)
+        session.flush()
+        clause_id = clause.id
+    result = client.post(
+        f"{URL}/{template['id']}/core-check",
+        json={
+            "requirements": [
+                {
+                    "name": "Person",
+                    "kind": "ENTITY",
+                    "standard_clause_id": clause_id,
+                },
+                {
+                    "name": "MissingCore",
+                    "kind": "OBJECT_PROP",
+                    "standard_clause_id": clause_id,
+                },
+            ]
+        },
+    )
+    assert result.status_code == 200, result.text
+    body = result.json()
+    states = {item["name"]: item["state"] for item in body["items"]}
+    assert states["Person"] == "PRESENT"
+    assert states["MissingCore"] == "MISSING"
+    assert body["items"][0]["pinned_revision"] == 1
+    assert body["all_core_present"] is False
 
 
 def test_migration_preserves_legacy_template(tmp_path: Path) -> None:
