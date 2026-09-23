@@ -42,7 +42,7 @@ cd server
 .venv/bin/pytest tests/test_m4_clauses.py tests/test_m4_prop_constraints.py tests/test_api_envelope.py
 .venv/bin/pytest tests/test_m4_rules.py tests/test_m4_export.py
 cd ..
-node --test web/src/views/__tests__/governance-render.test.mjs
+node --test web/src/views/governance/__tests__/governance-render.test.mjs
 npm run typecheck --workspace=web
 make lint-server
 make test
@@ -67,5 +67,5 @@ make test
 cd server
 .venv/bin/pytest tests/test_m4_run_export.py tests/test_m3_extraction.py tests/test_m3_graph_revision.py tests/test_m3_pipeline.py tests/test_m3_evidence.py tests/test_m3_instance_validation.py --basetemp=.pytest_cache/run-export-check
 cd ..
-node --test web/src/views/__tests__/extraction-runs.test.mjs web/src/views/__tests__/governance-render.test.mjs
+node --test web/src/views/extraction/__tests__/extraction-runs.test.mjs web/src/views/governance/__tests__/governance-render.test.mjs
 ```

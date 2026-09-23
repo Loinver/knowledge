@@ -43,19 +43,23 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'ontology/entity-types',
         name: 'entity-types',
-        component: () => import('@/views/EntityTypes.vue'),
+        component: () => import('@/views/ontology/EntityTypes.vue'),
       },
       {
         path: 'ontology/entity-types/:id',
         name: 'entity-detail',
-        component: () => import('@/views/EntityDetail.vue'),
+        component: () => import('@/views/ontology/EntityDetail.vue'),
       },
       {
         path: 'ontology/relation-types',
         name: 'relation-types',
-        component: () => import('@/views/RelationTypes.vue'),
+        component: () => import('@/views/ontology/RelationTypes.vue'),
       },
-      { path: 'ontology/domains', name: 'domains', component: () => import('@/views/Domains.vue') },
+      {
+        path: 'ontology/domains',
+        name: 'domains',
+        component: () => import('@/views/ontology/Domains.vue'),
+      },
       {
         path: 'ontology/designer',
         name: 'designer',
@@ -65,7 +69,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'datasources',
         name: 'datasources',
-        component: () => import('@/views/DataSources.vue'),
+        component: () => import('@/views/datasources/DataSources.vue'),
       },
       {
         path: 'datasources/catalog',
@@ -75,7 +79,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'datasources/preview',
         name: 'sample-preview',
-        component: () => import('@/views/SamplePreview.vue'),
+        component: () => import('@/views/datasources/SamplePreview.vue'),
       },
 
       {
@@ -86,40 +90,44 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'extraction/runs',
         name: 'extraction-runs',
-        component: () => import('@/views/ExtractionRuns.vue'),
+        component: () => import('@/views/extraction/ExtractionRuns.vue'),
       },
 
-      { path: 'graph', name: 'graph-browse', component: () => import('@/views/GraphBrowse.vue') },
+      {
+        path: 'graph',
+        name: 'graph-browse',
+        component: () => import('@/views/graph/GraphBrowse.vue'),
+      },
       {
         path: 'graph/entities',
         name: 'graph-entities',
-        component: () => import('@/views/GraphEntities.vue'),
+        component: () => import('@/views/graph/GraphEntities.vue'),
       },
       {
         path: 'graph/entities/:id',
         name: 'graph-entity-detail',
-        component: () => import('@/views/GraphEntityDetail.vue'),
+        component: () => import('@/views/graph/GraphEntityDetail.vue'),
       },
       {
         path: 'graph/evidence',
         name: 'graph-evidence',
-        component: () => import('@/views/GraphEvidence.vue'),
+        component: () => import('@/views/graph/GraphEvidence.vue'),
       },
       {
         path: 'graph/reports',
         name: 'graph-reports',
-        component: () => import('@/views/GraphReports.vue'),
+        component: () => import('@/views/graph/GraphReports.vue'),
       },
 
       {
         path: 'governance/rules',
         name: 'governance-rules',
-        component: () => import('@/views/GovernanceRules.vue'),
+        component: () => import('@/views/governance/GovernanceRules.vue'),
       },
       {
         path: 'governance/clauses',
         name: 'governance-clauses',
-        component: () => import('@/views/StandardClauses.vue'),
+        component: () => import('@/views/governance/StandardClauses.vue'),
       },
       {
         path: 'governance/enum-dictionaries',
@@ -130,12 +138,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'governance/templates',
         name: 'assembly-templates',
-        component: () => import('@/views/AssemblyTemplates.vue'),
+        component: () => import('@/views/governance/AssemblyTemplates.vue'),
       },
       {
         path: 'governance/export',
         name: 'ontology-export',
-        component: () => import('@/views/OntologyExport.vue'),
+        component: () => import('@/views/governance/OntologyExport.vue'),
       },
 
       {

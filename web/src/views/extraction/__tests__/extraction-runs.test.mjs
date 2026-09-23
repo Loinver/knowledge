@@ -12,7 +12,7 @@ import { build } from 'esbuild'
 import { createRenderer, createSSRApp, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 
-const web = fileURLToPath(new URL('../../..', import.meta.url))
+const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed = 'page,data,error,loading,reload,downloading,downloadError,download,formatTime'
 const renderer = createRenderer({
   createElement: () => ({}),
@@ -47,7 +47,7 @@ async function compileView(api, ssr = false) {
   await mkdir(path.dirname(outfile), { recursive: true })
   try {
     await build({
-      entryPoints: [path.join(web, 'src/views/ExtractionRuns.vue')],
+      entryPoints: [path.join(web, 'src/views/extraction/ExtractionRuns.vue')],
       outfile,
       bundle: true,
       platform: 'node',

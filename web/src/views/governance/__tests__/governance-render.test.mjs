@@ -12,7 +12,7 @@ import { build } from 'esbuild'
 import { createSSRApp } from 'vue'
 import { createI18n } from 'vue-i18n'
 
-const web = fileURLToPath(new URL('../../..', import.meta.url))
+const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const outputDir = path.join(web, 'node_modules/.tmp')
 
 test('Chinese and English locale keys stay aligned', async () => {
@@ -33,7 +33,7 @@ async function component(name) {
   const outfile = path.join(outputDir, `governance-render-${randomUUID()}.mjs`)
   try {
     await build({
-      entryPoints: [path.join(web, `src/views/${name}.vue`)],
+      entryPoints: [path.join(web, `src/views/governance/${name}.vue`)],
       outfile,
       bundle: true,
       platform: 'node',
