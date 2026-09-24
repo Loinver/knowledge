@@ -12,13 +12,20 @@ from app.core.errors import KGError
 from app.domain.enum_dictionary_service import lock_dictionary, resolve_reference
 from app.domain.iri_service import build_resource_iri, validate_name
 from app.domain.status_service import lock_resource_edit, publish_resource
-from app.models.domain import DomainMember
+from app.models.domain import (
+    BusinessDomain,
+    DomainMember,
+    Ontology,
+    OntologyResourceRef,
+)
 from app.models.enums import ResourceKind, ResourceStatus, ValidationState
+from app.models.governance import Rule
 from app.models.resource import (
     DatatypePropDetail,
     ModelResource,
     ResourceParent,
     ResourceRef,
+    ResourceRevision,
 )
 from app.models.validation import ValidationReport, ValidationResult
 from app.schemas.type import (
@@ -343,6 +350,156 @@ def entity_type_stats(session: Session) -> dict[str, int]:
 def entity_type_violation_iris(session: Session) -> set[str]:
     """列表页判断逐行「校验违反」徽标用；与库级统计同源。"""
     return _violation_iris(session)
+
+
+def entity_type_usages(session: Session, resource: ModelResource) -> dict[str, object]:
+    """类型详情页三个页签的数据：关联关系 / 规则 / 引用与版本。
+
+    一次取全，避免详情页为每个页签发一串请求。
+    """
+    # ── 关联关系：该类型作为定义域或值域参与的对象属性 ──
+    refs = session.execute(
+        select(ResourceRef, ModelResource)
+        .join(ModelResource, ModelResource.id == ResourceRef.source_id)
+        .where(
+            ResourceRef.target_id == resource.id,
+            ResourceRef.role.in_(("relation_domain", "relation_range")),
+        )
+        .order_by(ModelResource.name)
+    ).all()
+    relation_ids = [ref.source_id for ref, _ in refs]
+    endpoints: dict[int, dict[str, int]] = {}
+    if relation_ids:
+        for row in session.scalars(
+            select(ResourceRef).where(
+                ResourceRef.source_id.in_(relation_ids),
+                ResourceRef.role.in_(("relation_domain", "relation_range")),
+            )
+        ):
+            endpoints.setdefault(row.source_id, {})[row.role] = row.target_id
+    other_ids = {
+        other
+        for mapping in endpoints.values()
+        for other in mapping.values()
+        if other != resource.id
+    }
+    other_by_id: dict[int, ModelResource] = {}
+    if other_ids:
+        for item in session.scalars(
+            select(ModelResource).where(ModelResource.id.in_(other_ids))
+        ):
+            other_by_id[item.id] = item
+
+    relations: list[dict[str, object]] = []
+    for ref, relation in refs:
+        other_role = (
+            "relation_range" if ref.role == "relation_domain" else "relation_domain"
+        )
+        other = other_by_id.get(endpoints.get(relation.id, {}).get(other_role, -1))
+        relations.append(
+            {
+                "id": relation.id,
+                "name": relation.name,
+                "label_i18n": relation.label_i18n,
+                "status": relation.status,
+                "role": "domain" if ref.role == "relation_domain" else "range",
+                "other_type_id": other.id if other else None,
+                "other_name": other.name if other else None,
+                "other_label_i18n": other.label_i18n if other else None,
+            }
+        )
+
+    # ── 规则：按目标 IRI 命中 ──
+    rules = [
+        {
+            "id": rule.id,
+            "identifier": rule.identifier,
+            "name_i18n": rule.name_i18n,
+            "severity": rule.severity,
+        }
+        for rule in session.scalars(
+            select(Rule)
+            .where(Rule.target_iri == resource.iri)
+            .order_by(Rule.identifier)
+        )
+    ]
+
+    # ── 引用面：业务域归属 + 引用了它的本体 ──
+    member_rows = session.execute(
+        select(DomainMember, BusinessDomain)
+        .join(BusinessDomain, BusinessDomain.id == DomainMember.domain_id)
+        .where(DomainMember.resource_id == resource.id)
+        .order_by(BusinessDomain.name)
+    ).all()
+    domains = [
+        {
+            "id": domain.id,
+            "name": domain.name,
+            "label_i18n": domain.label_i18n,
+            "as_ref": member.as_ref,
+        }
+        for member, domain in member_rows
+    ]
+
+    ontology_rows = session.execute(
+        select(Ontology)
+        .join(OntologyResourceRef, OntologyResourceRef.ontology_id == Ontology.id)
+        .where(OntologyResourceRef.resource_id == resource.id)
+        .order_by(Ontology.name)
+    ).scalars()
+    ontologies = [
+        {
+            "id": item.id,
+            "name": item.name,
+            "label_i18n": item.label_i18n,
+            "status": item.status,
+            "current_revision": item.current_revision,
+        }
+        for item in ontology_rows
+    ]
+
+    # ── 版本历史 ──
+    revisions = [
+        {"revision": row.revision, "published_at": row.published_at}
+        for row in session.scalars(
+            select(ResourceRevision)
+            .where(ResourceRevision.resource_id == resource.id)
+            .order_by(ResourceRevision.revision.desc())
+        )
+    ]
+
+    # ── 校验状态：最近一次资产层报告里焦点节点命中该类型的检查项 ──
+    validations: list[dict[str, object]] = []
+    latest = session.scalar(
+        select(func.max(ValidationReport.id)).where(
+            ValidationReport.scope == "ontology"
+        )
+    )
+    if latest is not None:
+        validations = [
+            {
+                "check_code": row.check_code,
+                "state": row.state.value,
+                "message": row.message,
+            }
+            for row in session.scalars(
+                select(ValidationResult)
+                .where(
+                    ValidationResult.report_id == latest,
+                    ValidationResult.focus_node == resource.iri,
+                )
+                .order_by(ValidationResult.check_code)
+            )
+        ]
+
+    return {
+        "relations": relations,
+        "rules": rules,
+        "domains": domains,
+        "ontologies": ontologies,
+        "revisions": revisions,
+        "validations": validations,
+    }
 
 
 def get_entity_type(session: Session, type_id: int) -> ModelResource:

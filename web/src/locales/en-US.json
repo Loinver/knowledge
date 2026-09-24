@@ -200,7 +200,22 @@
     "hierarchy": "Type Hierarchy",
     "relations": "Relations",
     "rules": "Rules",
-    "references": "References & Versions"
+    "references": "References & Versions",
+    "validationState": "Validation status",
+    "noValidation": "No asset-layer validation result for this type yet. Run Validate in the ontology designer.",
+    "role": "Role in this type",
+    "asDomain": "Domain",
+    "asRange": "Range",
+    "otherEnd": "Other endpoint",
+    "noParent": "No parent type.",
+    "noRelations": "No relation uses this type as an endpoint yet.",
+    "noRules": "No rule targets this type's IRI.",
+    "referencedBy": "Referenced by",
+    "notReferenced": "No business domain or ontology references this type yet.",
+    "revisionHistory": "Revision history",
+    "noRevisions": "Not published yet.",
+    "ontologyRef": "{name} · revision v{revision}",
+    "revisionValue": "v{revision}"
   },
   "relation": {
     "list": "Relation Type List",

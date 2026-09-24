@@ -102,6 +102,74 @@ class EntityTypeStatsOut(BaseModel):
     violation: int = 0
 
 
+class TypeRelationUsageOut(BaseModel):
+    """该类型参与的一条关系：自己在哪一端，另一端是什么类型。"""
+
+    id: int
+    name: str
+    label_i18n: dict[str, str] | None = None
+    status: ResourceStatus
+    role: str  # domain | range
+    other_type_id: int | None = None
+    other_name: str | None = None
+    other_label_i18n: dict[str, str] | None = None
+
+
+class TypeRuleUsageOut(BaseModel):
+    """挂在该类型 IRI 上的治理规则。"""
+
+    id: int
+    identifier: str
+    name_i18n: dict[str, str] | None = None
+    severity: str
+
+
+class TypeDomainUsageOut(BaseModel):
+    """该类型归属或被引用的业务域。"""
+
+    id: int
+    name: str
+    label_i18n: dict[str, str] | None = None
+    as_ref: bool = False
+
+
+class TypeOntologyUsageOut(BaseModel):
+    """引用了该类型的本体。"""
+
+    id: int
+    name: str
+    label_i18n: dict[str, str] | None = None
+    status: ResourceStatus
+    current_revision: int
+
+
+class TypeRevisionOut(BaseModel):
+    revision: int
+    published_at: datetime
+
+
+class TypeValidationOut(BaseModel):
+    """最近一次资产层校验里与该类型相关的检查项。"""
+
+    check_code: str
+    state: str
+    message: str | None = None
+
+
+class EntityTypeUsagesOut(BaseModel):
+    """类型详情页「关联关系 / 规则 / 引用与版本」三个页签的数据源。
+
+    一次请求取全，避免详情页为每个页签发一串请求。
+    """
+
+    relations: list[TypeRelationUsageOut] = Field(default_factory=list)
+    rules: list[TypeRuleUsageOut] = Field(default_factory=list)
+    domains: list[TypeDomainUsageOut] = Field(default_factory=list)
+    ontologies: list[TypeOntologyUsageOut] = Field(default_factory=list)
+    revisions: list[TypeRevisionOut] = Field(default_factory=list)
+    validations: list[TypeValidationOut] = Field(default_factory=list)
+
+
 class RevisionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     revision: int

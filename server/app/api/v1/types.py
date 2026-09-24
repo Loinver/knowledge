@@ -10,6 +10,7 @@ from app.domain.type_service import (
     create_entity_type,
     entity_type_metrics,
     entity_type_stats,
+    entity_type_usages,
     entity_type_violation_iris,
     get_data_props,
     get_entity_type,
@@ -28,6 +29,7 @@ from app.schemas.type import (
     EntityTypeOut,
     EntityTypeStatsOut,
     EntityTypeUpdate,
+    EntityTypeUsagesOut,
     RevisionOut,
 )
 
@@ -116,6 +118,15 @@ def create_type(
     resource = create_entity_type(session, payload)
     session.commit()
     return _out(session, resource)
+
+
+@router.get("/{type_id}/usages", response_model=ApiResponse[EntityTypeUsagesOut])
+def type_usages(
+    type_id: int, session: Session = Depends(governance_session)
+) -> EntityTypeUsagesOut:
+    """详情页「关联关系 / 规则 / 引用与版本」三个页签的数据。"""
+    resource = get_entity_type(session, type_id)
+    return EntityTypeUsagesOut.model_validate(entity_type_usages(session, resource))
 
 
 @router.get("/{type_id}", response_model=ApiResponse[EntityTypeOut])

@@ -200,7 +200,22 @@
     "hierarchy": "类型层级",
     "relations": "关联关系",
     "rules": "规则",
-    "references": "引用与版本"
+    "references": "引用与版本",
+    "validationState": "校验状态",
+    "noValidation": "还没有该类型的资产层校验结果。到本体设计器里点「校验」运行一次。",
+    "role": "在本类型中的角色",
+    "asDomain": "定义域",
+    "asRange": "值域",
+    "otherEnd": "另一端类型",
+    "noParent": "没有父类型。",
+    "noRelations": "还没有以本类型为端点关系。",
+    "noRules": "没有作用在本类型 IRI 上的规则。",
+    "referencedBy": "引用面",
+    "notReferenced": "还没有业务域或本体引用本类型。",
+    "revisionHistory": "版本历史",
+    "noRevisions": "还没有发布版本。",
+    "ontologyRef": "{name} · 版本 v{revision}",
+    "revisionValue": "v{revision}"
   },
   "relation": {
     "list": "关系类型列表",

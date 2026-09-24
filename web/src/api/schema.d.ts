@@ -846,6 +846,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/entity-types/{type_id}/usages': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Type Usages
+     * @description 详情页「关联关系 / 规则 / 引用与版本」三个页签的数据。
+     */
+    get: operations['type_usages_api_v1_entity_types__type_id__usages_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/entity-types/{type_id}': {
     parameters: {
       query?: never
@@ -2081,6 +2101,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['EntityTypeStatsOut'] | null
+    }
+    /** ApiResponse[EntityTypeUsagesOut] */
+    ApiResponse_EntityTypeUsagesOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityTypeUsagesOut'] | null
     }
     /** ApiResponse[EnumDictionaryOut] */
     ApiResponse_EnumDictionaryOut_: {
@@ -3949,6 +3986,26 @@ export interface components {
       /** Edit Revision */
       edit_revision?: number | null
     }
+    /**
+     * EntityTypeUsagesOut
+     * @description 类型详情页「关联关系 / 规则 / 引用与版本」三个页签的数据源。
+     *
+     *     一次请求取全，避免详情页为每个页签发一串请求。
+     */
+    EntityTypeUsagesOut: {
+      /** Relations */
+      relations?: components['schemas']['TypeRelationUsageOut'][]
+      /** Rules */
+      rules?: components['schemas']['TypeRuleUsageOut'][]
+      /** Domains */
+      domains?: components['schemas']['TypeDomainUsageOut'][]
+      /** Ontologies */
+      ontologies?: components['schemas']['TypeOntologyUsageOut'][]
+      /** Revisions */
+      revisions?: components['schemas']['TypeRevisionOut'][]
+      /** Validations */
+      validations?: components['schemas']['TypeValidationOut'][]
+    }
     /** EnumDictionaryInput */
     EnumDictionaryInput: {
       /** Name */
@@ -5605,6 +5662,105 @@ export interface components {
      * @enum {string}
      */
     TransformKind: 'IDENTITY' | 'TEMPLATE' | 'DATE' | 'ENUM' | 'DECIMAL'
+    /**
+     * TypeDomainUsageOut
+     * @description 该类型归属或被引用的业务域。
+     */
+    TypeDomainUsageOut: {
+      /** Id */
+      id: number
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      } | null
+      /**
+       * As Ref
+       * @default false
+       */
+      as_ref: boolean
+    }
+    /**
+     * TypeOntologyUsageOut
+     * @description 引用了该类型的本体。
+     */
+    TypeOntologyUsageOut: {
+      /** Id */
+      id: number
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      } | null
+      status: components['schemas']['ResourceStatus']
+      /** Current Revision */
+      current_revision: number
+    }
+    /**
+     * TypeRelationUsageOut
+     * @description 该类型参与的一条关系：自己在哪一端，另一端是什么类型。
+     */
+    TypeRelationUsageOut: {
+      /** Id */
+      id: number
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      } | null
+      status: components['schemas']['ResourceStatus']
+      /** Role */
+      role: string
+      /** Other Type Id */
+      other_type_id?: number | null
+      /** Other Name */
+      other_name?: string | null
+      /** Other Label I18N */
+      other_label_i18n?: {
+        [key: string]: string
+      } | null
+    }
+    /** TypeRevisionOut */
+    TypeRevisionOut: {
+      /** Revision */
+      revision: number
+      /**
+       * Published At
+       * Format: date-time
+       */
+      published_at: string
+    }
+    /**
+     * TypeRuleUsageOut
+     * @description 挂在该类型 IRI 上的治理规则。
+     */
+    TypeRuleUsageOut: {
+      /** Id */
+      id: number
+      /** Identifier */
+      identifier: string
+      /** Name I18N */
+      name_i18n?: {
+        [key: string]: string
+      } | null
+      /** Severity */
+      severity: string
+    }
+    /**
+     * TypeValidationOut
+     * @description 最近一次资产层校验里与该类型相关的检查项。
+     */
+    TypeValidationOut: {
+      /** Check Code */
+      check_code: string
+      /** State */
+      state: string
+      /** Message */
+      message?: string | null
+    }
     /**
      * UserCreate
      * @description 管理员建号。角色由管理员指定，注册开关不影响这条路径。
@@ -7927,6 +8083,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_EntityTypeStatsOut_']
+        }
+      }
+    }
+  }
+  type_usages_api_v1_entity_types__type_id__usages_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        type_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EntityTypeUsagesOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
         }
       }
     }
