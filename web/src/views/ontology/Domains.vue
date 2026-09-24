@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { FormInst, FormRules } from 'naive-ui'
 import {
   NAlert,
   NButton,
+  NCheckbox,
   NDrawer,
   NDrawerContent,
   NEmpty,
@@ -9,12 +11,13 @@ import {
   NFormItem,
   NInput,
   NSelect,
+  NSpace,
   NSpin,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { DomainBrief, DomainMember, PublishCheckResult } from '@/api/domains'
+import type { DomainBrief, DomainDetail, DomainMember, PublishCheckResult } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
 import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
@@ -28,15 +31,27 @@ const loading = ref(true)
 const items = ref<DomainBrief[]>([])
 const typeList = ref<EntityTypeBrief[]>([])
 const selected = ref<DomainBrief | null>(null)
+/**
+ * 选中域的详情。列表接口只返回 brief（没有 definition_i18n），
+ * 编辑标签与定义需要详情，所以与成员一起按需拉取，保持同代次更新。
+ */
+const detail = ref<DomainDetail | null>(null)
 const members = ref<DomainMember[]>([])
 const membersLoading = ref(false)
 const checking = ref(false)
 const working = ref(false)
 const addTypeId = ref<number | null>(null)
+/** 新成员是否作为「跨域引用」加入。核心类型归属本域，跨域引用只被引用。 */
+const addAsRef = ref(false)
 const checkResult = ref<PublishCheckResult | null>(null)
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
+const notice = ref('')
+const showBasicEditor = ref(false)
+const basicError = ref('')
+const basicFormRef = ref<FormInst | null>(null)
+const basicForm = ref({ labelZh: '', labelEn: '', definitionZh: '', definitionEn: '' })
 const actionError = ref('')
 const listError = ref('')
 const membersError = ref('')
@@ -100,6 +115,14 @@ const checkItems = computed(() => {
   ]
 })
 
+const basicRules = computed<FormRules>(() => ({
+  labelZh: {
+    required: true,
+    message: t('domain.basicIncomplete'),
+    trigger: ['blur', 'input'],
+  },
+}))
+
 async function load() {
   if (!alive) return null
   listController?.abort()
@@ -131,6 +154,7 @@ async function select(domain: DomainBrief | null) {
   selection = domain ? { id: domain.id, controller: new AbortController() } : undefined
   selected.value = domain
   members.value = []
+  detail.value = null
   membersLoading.value = false
   checking.value = false
   working.value = false
@@ -138,7 +162,9 @@ async function select(domain: DomainBrief | null) {
   actionError.value = ''
   membersError.value = ''
   needsRefresh.value = false
+  notice.value = ''
   addTypeId.value = null
+  addAsRef.value = false
   return selection ? loadMembers(selection) : false
 }
 
@@ -163,9 +189,13 @@ async function loadMembers(context: DomainSelection) {
       selected.value = fresh
     }
     if (!isCurrentSelection(context)) return false
-    const next = await domainsApi.members(context.id, context.controller.signal)
+    const [next, info] = await Promise.all([
+      domainsApi.members(context.id, context.controller.signal),
+      domainsApi.get(context.id, context.controller.signal),
+    ])
     if (!isCurrentSelection(context)) return false
     members.value = next
+    detail.value = info
     return true
   } catch (err) {
     if (isCurrentSelection(context)) membersError.value = toMessage(err)
@@ -232,10 +262,11 @@ async function addMember() {
     return
   }
   const updated = await updateDomain((id, revision) =>
-    domainsApi.addMember(id, resourceId, false, revision),
+    domainsApi.addMember(id, resourceId, addAsRef.value, revision),
   )
   if (updated && isCurrentSelection(context)) {
     addTypeId.value = null
+    addAsRef.value = false
   }
 }
 
@@ -292,6 +323,53 @@ async function handleCreate() {
   }
 }
 
+/** 打开基本信息编辑抽屉。机读名与 IRI 是业务域的身份，不在这里改。 */
+function openBasicEditor() {
+  const info = detail.value
+  if (!info || !canEdit.value) return
+  basicForm.value = {
+    labelZh: info.label_i18n?.['zh-CN'] ?? '',
+    labelEn: info.label_i18n?.['en-US'] ?? '',
+    definitionZh: info.definition_i18n?.['zh-CN'] ?? '',
+    definitionEn: info.definition_i18n?.['en-US'] ?? '',
+  }
+  basicError.value = ''
+  showBasicEditor.value = true
+}
+
+async function saveBasic() {
+  const context = selection
+  const info = detail.value
+  if (!context || !info || !isCurrentSelection(context) || !canEdit.value) return
+  try {
+    await basicFormRef.value?.validate()
+  } catch {
+    return
+  }
+  const labelZh = basicForm.value.labelZh.trim()
+  const label: Record<string, string> = {
+    'zh-CN': labelZh,
+    'en-US': basicForm.value.labelEn.trim() || labelZh,
+  }
+  const definition: Record<string, string> = {}
+  if (basicForm.value.definitionZh.trim()) definition['zh-CN'] = basicForm.value.definitionZh.trim()
+  if (basicForm.value.definitionEn.trim()) definition['en-US'] = basicForm.value.definitionEn.trim()
+
+  // 走统一的写入口，沿用它的选中代次校验与冲突处理
+  const updated = await updateDomain((id, revision) =>
+    domainsApi.update(id, {
+      label_i18n: label,
+      definition_i18n: definition,
+      if_match: info.current_revision,
+      if_edit_match: revision,
+    }),
+  )
+  if (updated) {
+    showBasicEditor.value = false
+    notice.value = t('domain.basicSaved')
+  }
+}
+
 onMounted(() => void load())
 onBeforeUnmount(() => {
   alive = false
@@ -312,6 +390,7 @@ onBeforeUnmount(() => {
       {{ listError }}
       <NButton :loading="loading" @click="refreshSelection">{{ t('graph.refresh') }}</NButton>
     </NAlert>
+    <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
     <NSpin :show="loading">
       <div class="split">
         <!-- 左：域列表。业务域当前是平铺的（无父子），所以用列表而非树 -->
@@ -352,6 +431,9 @@ onBeforeUnmount(() => {
             </div>
             <span class="iri">{{ selected.iri }}</span>
             <div class="detail-actions">
+              <NButton size="small" :disabled="!canEdit" @click="openBasicEditor">
+                {{ t('common.edit') }}
+              </NButton>
               <NButton size="small" :disabled="!canEdit" :loading="checking" @click="publishCheck">
                 {{ t('domain.publishCheck') }}
               </NButton>
@@ -392,6 +474,9 @@ onBeforeUnmount(() => {
               :disabled="!canEdit"
               class="member-select"
             />
+            <NCheckbox v-model:checked="addAsRef" :disabled="!canEdit">
+              {{ t('domain.asRef') }}
+            </NCheckbox>
             <NButton :disabled="!canEdit" @click="addMember">{{ t('domain.addMember') }}</NButton>
           </div>
 
@@ -459,6 +544,63 @@ onBeforeUnmount(() => {
         </section>
       </div>
     </NSpin>
+
+    <!-- 基本信息编辑。机读名与 IRI 是业务域的身份，只读展示。 -->
+    <NDrawer
+      v-model:show="showBasicEditor"
+      :width="480"
+      :mask-closable="!working"
+      :close-on-esc="!working"
+    >
+      <NDrawerContent :title="t('domain.edit')" :closable="!working">
+        <NAlert v-if="basicError" type="error" role="alert">{{ basicError }}</NAlert>
+        <NForm
+          ref="basicFormRef"
+          :model="basicForm"
+          :rules="basicRules"
+          :disabled="working"
+          label-placement="top"
+        >
+          <NFormItem :label="t('common.name')">
+            <NInput :value="detail?.name ?? ''" disabled />
+            <template #feedback>{{ t('domain.nameImmutable') }}</template>
+          </NFormItem>
+          <NFormItem :label="t('common.iri')">
+            <NInput :value="detail?.iri ?? ''" disabled />
+          </NFormItem>
+          <NFormItem :label="t('common.labelZh')" path="labelZh">
+            <NInput v-model:value="basicForm.labelZh" />
+          </NFormItem>
+          <NFormItem :label="t('common.labelEn')" path="labelEn">
+            <NInput v-model:value="basicForm.labelEn" />
+          </NFormItem>
+          <NFormItem :label="t('common.definitionZh')" path="definitionZh">
+            <NInput
+              v-model:value="basicForm.definitionZh"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 4 }"
+            />
+          </NFormItem>
+          <NFormItem :label="t('common.definitionEn')" path="definitionEn">
+            <NInput
+              v-model:value="basicForm.definitionEn"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 4 }"
+            />
+          </NFormItem>
+        </NForm>
+        <template #footer>
+          <NSpace justify="end">
+            <NButton :disabled="working" @click="showBasicEditor = false">
+              {{ t('common.cancel') }}
+            </NButton>
+            <NButton type="primary" :loading="working" @click="saveBasic">
+              {{ t('common.save') }}
+            </NButton>
+          </NSpace>
+        </template>
+      </NDrawerContent>
+    </NDrawer>
 
     <NDrawer
       v-model:show="showCreate"
@@ -675,7 +817,9 @@ onBeforeUnmount(() => {
 /* ── 成员 ───────────────────────────────────────────────── */
 .member-add {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  align-items: center;
 }
 
 .member-select {

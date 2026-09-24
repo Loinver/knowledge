@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FormInst, FormRules } from 'naive-ui'
 import {
   NAlert,
   NButton,
@@ -54,6 +55,26 @@ let editorGeneration = 0
 let dictionaryController: AbortController | undefined
 let versionController: AbortController | undefined
 let alive = true
+
+/**
+ * 基本信息（标签 / 定义）的编辑态。
+ *
+ * 机读名 name 是资源的身份，创建后不可改，表单里只读展示；IRI 由
+ * namespace + name 推导，同样不在这里改。其余可编辑字段与后端
+ * `EntityTypeUpdate` 一致：只送 label_i18n / definition_i18n，不碰 data_props。
+ */
+const showBasicEditor = ref(false)
+const basicError = ref('')
+const basicFormRef = ref<FormInst | null>(null)
+const basicForm = ref({ labelZh: '', labelEn: '', definitionZh: '', definitionEn: '' })
+
+const basicRules = computed<FormRules>(() => ({
+  labelZh: {
+    required: true,
+    message: t('entityType.basicIncomplete'),
+    trigger: ['blur', 'input'],
+  },
+}))
 
 function emptyProperty() {
   return {
@@ -113,6 +134,68 @@ async function handlePublish() {
     if (alive && generation === loadGeneration) await loadDetail()
   } catch (err) {
     if (alive && generation === loadGeneration) error.value = failure(err)
+  } finally {
+    if (alive) busy.value = false
+  }
+}
+
+/**
+ * 打开基本信息编辑抽屉。只允许在草稿态编辑——已发布/已归档的资源是冻结快照。
+ */
+function openBasicEditor() {
+  if (!data.value || data.value.status !== 'DRAFT' || busy.value) return
+  basicForm.value = {
+    labelZh: data.value.label_i18n?.['zh-CN'] ?? '',
+    labelEn: data.value.label_i18n?.['en-US'] ?? '',
+    definitionZh: data.value.definition_i18n?.['zh-CN'] ?? '',
+    definitionEn: data.value.definition_i18n?.['en-US'] ?? '',
+  }
+  basicError.value = ''
+  showBasicEditor.value = true
+}
+
+/** 中文标签必填；英文缺省时回退到中文，不留空 key。 */
+function collectBasicPayload(): {
+  label_i18n: Record<string, string>
+  definition_i18n: Record<string, string>
+} {
+  const f = basicForm.value
+  const labelZh = f.labelZh.trim()
+  const label: Record<string, string> = { 'zh-CN': labelZh }
+  label['en-US'] = f.labelEn.trim() || labelZh
+
+  const definition: Record<string, string> = {}
+  if (f.definitionZh.trim()) definition['zh-CN'] = f.definitionZh.trim()
+  if (f.definitionEn.trim()) definition['en-US'] = f.definitionEn.trim()
+  return { label_i18n: label, definition_i18n: definition }
+}
+
+async function saveBasic() {
+  const entity = data.value
+  if (!entity || entity.status !== 'DRAFT' || busy.value) return
+  try {
+    await basicFormRef.value?.validate()
+  } catch {
+    return
+  }
+  const generation = loadGeneration
+  busy.value = true
+  basicError.value = ''
+  error.value = ''
+  notice.value = ''
+  try {
+    const result = await entityTypesApi.update(entity.id, {
+      ...collectBasicPayload(),
+      if_match: entity.current_revision,
+      edit_revision: entity.edit_revision,
+    })
+    if (!alive || generation !== loadGeneration) return
+    data.value = result
+    notice.value = t('entityType.basicSaved')
+    showBasicEditor.value = false
+  } catch (err) {
+    if (!alive || generation !== loadGeneration) return
+    basicError.value = failure(err)
   } finally {
     if (alive) busy.value = false
   }
@@ -415,6 +498,9 @@ onBeforeUnmount(() => {
       :description="data?.iri"
     >
       <template #actions>
+        <n-button v-if="data && isDraft" :disabled="busy" @click="openBasicEditor">
+          {{ t('common.edit') }}
+        </n-button>
         <n-button
           v-if="data && isDraft"
           type="primary"
@@ -492,6 +578,60 @@ onBeforeUnmount(() => {
       </n-tabs>
       <n-empty v-else-if="!loading && !error" :description="t('common.empty')" />
     </n-spin>
+    <!-- 基本信息编辑。机读名是资源身份、IRI 由它推导，两者只读；其余字段走
+         EntityTypeUpdate，只送 label/definition，不动 data_props。 -->
+    <n-drawer
+      v-model:show="showBasicEditor"
+      :width="520"
+      :mask-closable="!busy"
+      :close-on-esc="!busy"
+    >
+      <n-drawer-content :title="t('entityType.edit')" :closable="!busy">
+        <n-alert v-if="basicError" type="error" class="feedback">{{ basicError }}</n-alert>
+        <n-form
+          ref="basicFormRef"
+          :model="basicForm"
+          :rules="basicRules"
+          :disabled="busy"
+          label-placement="top"
+        >
+          <n-form-item :label="t('common.name')">
+            <n-input :value="data?.name ?? ''" disabled />
+            <template #feedback>{{ t('entityType.nameImmutable') }}</template>
+          </n-form-item>
+          <n-form-item :label="t('common.labelZh')" path="labelZh">
+            <n-input v-model:value="basicForm.labelZh" />
+          </n-form-item>
+          <n-form-item :label="t('common.labelEn')" path="labelEn">
+            <n-input v-model:value="basicForm.labelEn" />
+          </n-form-item>
+          <n-form-item :label="t('common.definitionZh')" path="definitionZh">
+            <n-input
+              v-model:value="basicForm.definitionZh"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 4 }"
+            />
+          </n-form-item>
+          <n-form-item :label="t('common.definitionEn')" path="definitionEn">
+            <n-input
+              v-model:value="basicForm.definitionEn"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 4 }"
+            />
+          </n-form-item>
+        </n-form>
+        <template #footer>
+          <n-space justify="end">
+            <n-button :disabled="busy" @click="showBasicEditor = false">
+              {{ t('common.cancel') }}
+            </n-button>
+            <n-button type="primary" :loading="busy" @click="saveBasic">
+              {{ t('common.save') }}
+            </n-button>
+          </n-space>
+        </template>
+      </n-drawer-content>
+    </n-drawer>
     <n-drawer
       :show="showEditor"
       :width="600"

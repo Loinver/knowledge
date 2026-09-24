@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
 import {
+  NAlert,
   NButton,
   NCheckbox,
   NDataTable,
@@ -11,6 +12,7 @@ import {
   NFormItem,
   NInput,
   NSelect,
+  NSpace,
   NSpin,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
@@ -38,6 +40,8 @@ const creating = ref(false)
 const editing = ref(false)
 const createError = ref('')
 const editError = ref('')
+const actionError = ref('')
+const publishingId = ref<number | null>(null)
 const editingDetail = ref<RelationTypeDetail | null>(null)
 const statusFilter = ref<ResourceStatus | ''>('')
 const view = ref<'table' | 'card'>('table')
@@ -132,13 +136,30 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
   {
     title: t('common.actions'),
     key: 'actions',
-    width: 100,
+    width: 168,
     render: (row) =>
-      h(
-        NButton,
-        { size: 'small', quaternary: true, onClick: () => void openEdit(row.id) },
-        { default: () => t('common.edit') },
-      ),
+      h(NSpace, { size: 4, wrap: false }, () => [
+        h(
+          NButton,
+          { size: 'small', quaternary: true, onClick: () => void openEdit(row.id) },
+          { default: () => t('common.edit') },
+        ),
+        // 草稿才能发布：发布即冻结，之后不可再改。已发布的没有「重新发布」语义。
+        row.status === 'DRAFT'
+          ? h(
+              NButton,
+              {
+                size: 'small',
+                type: 'primary',
+                quaternary: true,
+                loading: publishingId.value === row.id,
+                disabled: publishingId.value !== null && publishingId.value !== row.id,
+                onClick: () => void publish(row),
+              },
+              { default: () => t('common.publish') },
+            )
+          : null,
+      ]),
   },
 ])
 
@@ -301,6 +322,27 @@ async function handleEdit() {
   }
 }
 
+/**
+ * 发布关系类型：冻结当前草稿为不可变版本。
+ *
+ * 没有这一步，草稿态关系永远进不了本体装配——后端一直有 publish 接口，
+ * 前端此前没有封装，等于把工作流断在列表页。
+ */
+async function publish(row: RelationTypeBrief) {
+  if (publishingId.value !== null) return
+  publishingId.value = row.id
+  actionError.value = ''
+  try {
+    await relationsApi.publish(row.id)
+    await load()
+    await loadDetails()
+  } catch (err) {
+    actionError.value = (err as { code?: string }).code || t('relation.publishFailed')
+  } finally {
+    publishingId.value = null
+  }
+}
+
 onMounted(async () => {
   await Promise.all([
     load(),
@@ -328,6 +370,10 @@ onMounted(async () => {
         <NButton type="primary" @click="showCreate = true">{{ t('common.create') }}</NButton>
       </template>
     </PageHeader>
+
+    <NAlert v-if="actionError" type="error" role="alert" class="action-alert">{{
+      actionError
+    }}</NAlert>
 
     <div class="stats">
       <button
@@ -766,6 +812,10 @@ onMounted(async () => {
   margin: 0;
   color: var(--danger);
   font-size: var(--font-small);
+}
+
+.action-alert {
+  margin-bottom: var(--space-3);
 }
 
 .drawer-actions {
