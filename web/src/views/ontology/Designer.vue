@@ -916,10 +916,23 @@ onBeforeUnmount(() => {
 .designer {
   display: flex;
   flex-direction: column;
-  /* 设计器要占满内容区，用负边距抵消 AdminLayout 的统一留白 */
-  height: calc(100vh - var(--header-height) - var(--space-5) * 2);
+  /*
+   * 设计器要占满内容区：内容区高度就是「视口 - 顶栏」（见 AdminLayout 的高度链），
+   * 再用负边距抵消内容区留白，画布即铺满顶栏以下全部空间。
+   *
+   * 这里不能用 height:100%——设计器真正的父元素是 naive 在 NLayoutContent 内部
+   * 生成的滚动包装层，它高度是 auto，百分比解析不出来，画布会塌成一条。
+   */
+  height: calc(100vh - var(--header-height));
   margin: calc(var(--space-5) * -1);
   overflow: hidden;
+}
+
+/* 窄屏下 AdminLayout 的内容留白换成 --space-4，负边距要跟着走，否则画布溢出 */
+@media (max-width: 767px) {
+  .designer {
+    margin: calc(var(--space-4) * -1);
+  }
 }
 
 .toolbar {
