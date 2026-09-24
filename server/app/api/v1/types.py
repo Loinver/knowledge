@@ -8,6 +8,9 @@ from sqlalchemy.orm import Session
 from app.api.v1.governance_common import governance_session
 from app.domain.type_service import (
     create_entity_type,
+    entity_type_metrics,
+    entity_type_stats,
+    entity_type_violation_iris,
     get_data_props,
     get_entity_type,
     get_parent_ids,
@@ -23,6 +26,7 @@ from app.schemas.type import (
     EntityTypeBrief,
     EntityTypeCreate,
     EntityTypeOut,
+    EntityTypeStatsOut,
     EntityTypeUpdate,
     RevisionOut,
 )
@@ -75,10 +79,34 @@ def list_types(
     q: str = Query(""),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    domain_id: int | None = Query(None, ge=1),
     session: Session = Depends(governance_session),
 ) -> list[EntityTypeBrief]:
-    items, _total = list_entity_types(session, q, page, page_size)
-    return [EntityTypeBrief.model_validate(i) for i in items]
+    items, _total = list_entity_types(session, q, page, page_size, domain_id)
+    metrics = entity_type_metrics(session, [item.id for item in items])
+    violation_iris = entity_type_violation_iris(session)
+    out: list[EntityTypeBrief] = []
+    for item in items:
+        brief = EntityTypeBrief.model_validate(item)
+        props, relations = metrics.get(item.id, (0, 0))
+        out.append(
+            brief.model_copy(
+                update={
+                    "data_prop_count": props,
+                    "relation_count": relations,
+                    "has_violation": item.iri in violation_iris,
+                }
+            )
+        )
+    return out
+
+
+@router.get("/stats", response_model=ApiResponse[EntityTypeStatsOut])
+def type_stats(
+    session: Session = Depends(governance_session),
+) -> EntityTypeStatsOut:
+    """库级统计（不受分页影响）。声明在 /{type_id} 之前，避免被路径参数吃掉。"""
+    return EntityTypeStatsOut(**entity_type_stats(session))
 
 
 @router.post("", response_model=ApiResponse[EntityTypeOut], status_code=201)

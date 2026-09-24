@@ -17,7 +17,9 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
-import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
+import type { DomainBrief } from '@/api/domains'
+import { domainsApi } from '@/api/domains'
+import type { EntityTypeBrief, EntityTypeStats, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
 import type { Namespace } from '@/api/namespaces'
 import { namespacesApi } from '@/api/namespaces'
@@ -33,14 +35,33 @@ const items = ref<EntityTypeBrief[]>([])
 const searchQuery = ref('')
 const showCreate = ref(false)
 const namespaces = ref<Namespace[]>([])
+const domains = ref<DomainBrief[]>([])
 const creating = ref(false)
 const createError = ref('')
+const stats = ref<EntityTypeStats | null>(null)
 
 /** 空串表示「全部」。统计条本身即筛选入口，不额外占一行控件。 */
 const statusFilter = ref<ResourceStatus | ''>('')
+/** 第四张卡：只看最近一次资产层校验里判为违反的类型。 */
+const violationOnly = ref(false)
+const domainFilter = ref<number | null>(null)
 const view = ref<'table' | 'card'>('table')
 
-const STATUS_ORDER: ResourceStatus[] = ['PUBLISHED', 'DRAFT', 'ARCHIVED']
+/** 统计条点击即筛选：三个状态卡与「校验违反」互斥，统一在这里收口。 */
+function selectAllStatuses() {
+  statusFilter.value = ''
+  violationOnly.value = false
+}
+
+function selectStatus(status: ResourceStatus) {
+  violationOnly.value = false
+  statusFilter.value = statusFilter.value === status ? '' : status
+}
+
+function toggleViolationOnly() {
+  statusFilter.value = ''
+  violationOnly.value = !violationOnly.value
+}
 
 /** 状态色取自设计令牌，与校验四态同一套语义（已发布=pass / 草稿=notrun / 归档=na）。 */
 const STATUS_VAR: Record<ResourceStatus, string> = {
@@ -54,16 +75,29 @@ function displayLabel(row: EntityTypeBrief): string {
   return labels[locale.value] ?? labels['zh-CN'] ?? row.name
 }
 
-const counts = computed(() => {
-  const base: Record<string, number> = { '': items.value.length }
-  for (const s of STATUS_ORDER) base[s] = 0
-  for (const row of items.value) base[row.status] = (base[row.status] ?? 0) + 1
-  return base
-})
-
 const filtered = computed(() =>
-  statusFilter.value ? items.value.filter((row) => row.status === statusFilter.value) : items.value,
+  items.value.filter((row) => {
+    if (statusFilter.value && row.status !== statusFilter.value) return false
+    if (violationOnly.value && !row.has_violation) return false
+    return true
+  }),
 )
+
+const domainOptions = computed(() =>
+  domains.value.map((domain) => ({
+    label: domain.label_i18n?.[locale.value] ?? domain.label_i18n?.['zh-CN'] ?? domain.name,
+    value: domain.id,
+  })),
+)
+
+/** 列表只到分钟；跨天数据看的是「最近改过没有」，不需要秒。 */
+function formatUpdated(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
 
 const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
@@ -83,20 +117,48 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
     title: t('common.iri'),
     key: 'iri',
-    minWidth: 320,
+    minWidth: 300,
     render: (row) => h('span', { class: 'iri' }, row.iri),
+  },
+  {
+    title: t('entityType.propCount'),
+    key: 'data_prop_count',
+    width: 80,
+    render: (row) => h('span', { class: 'mono count' }, String(row.data_prop_count ?? 0)),
+  },
+  {
+    title: t('entityType.relationCount'),
+    key: 'relation_count',
+    width: 80,
+    render: (row) => h('span', { class: 'mono count' }, String(row.relation_count ?? 0)),
   },
   {
     title: t('common.status'),
     key: 'status',
-    width: 120,
-    render: (row) => renderStatus(row.status),
+    width: 150,
+    render: (row) =>
+      h('div', { class: 'status-cell' }, [
+        renderStatus(row.status),
+        // 状态与校验是两个维度：状态照常显示，违反另起一个徽标
+        row.has_violation
+          ? h('span', { class: 'status-tag', style: { '--dot': 'var(--s-violation)' } }, [
+              h('i', { class: 'status-dot' }),
+              t('entityType.violation'),
+            ])
+          : null,
+      ]),
   },
   {
     title: t('common.revision'),
     key: 'current_revision',
     width: 90,
     render: (row) => h('span', { class: 'mono rev' }, `v${row.current_revision}`),
+  },
+  {
+    title: t('entityType.updatedAt'),
+    key: 'updated_at',
+    width: 110,
+    render: (row) => h('span', { class: 'mono rev' }, formatUpdated(row.updated_at)),
   },
   {
     title: t('common.actions'),
@@ -152,11 +214,31 @@ function goToDetail(id: number) {
 async function loadList() {
   loading.value = true
   try {
-    items.value = await entityTypesApi.list({ q: searchQuery.value })
+    items.value = await entityTypesApi.list({
+      q: searchQuery.value,
+      domain_id: domainFilter.value ?? undefined,
+    })
   } catch {
     items.value = []
   } finally {
     loading.value = false
+  }
+}
+
+/** 统计条走库级统计接口，不能拿当前页去数（分页后会失真）。 */
+async function loadStats() {
+  try {
+    stats.value = await entityTypesApi.stats()
+  } catch {
+    stats.value = null
+  }
+}
+
+async function loadDomains() {
+  try {
+    domains.value = await domainsApi.list()
+  } catch {
+    domains.value = []
   }
 }
 
@@ -206,8 +288,10 @@ watch(showCreate, (open) => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadList(), loadNamespaces()])
+  await Promise.all([loadList(), loadStats(), loadNamespaces(), loadDomains()])
 })
+
+watch(domainFilter, () => void loadList())
 </script>
 
 <template>
@@ -218,29 +302,49 @@ onMounted(async () => {
       </template>
     </PageHeader>
 
-    <!-- 统计条：本身就是筛选入口，点击即过滤 -->
+    <!-- 统计条：本身就是筛选入口，点击即过滤。数值取库级统计，不受分页影响 -->
     <div class="stats">
       <button
         type="button"
         class="stat"
-        :class="{ active: statusFilter === '' }"
-        @click="statusFilter = ''"
+        :class="{ active: statusFilter === '' && !violationOnly }"
+        @click="selectAllStatuses"
       >
-        <span class="stat-value mono">{{ counts[''] ?? 0 }}</span>
+        <span class="stat-value mono">{{ stats?.total ?? 0 }}</span>
         <span class="stat-label">{{ t('entityType.total') }}</span>
       </button>
       <button
-        v-for="s in STATUS_ORDER"
+        v-for="s in ['PUBLISHED', 'DRAFT'] as ResourceStatus[]"
         :key="s"
         type="button"
         class="stat"
-        :class="{ active: statusFilter === s }"
-        @click="statusFilter = statusFilter === s ? '' : s"
+        :class="{ active: statusFilter === s && !violationOnly }"
+        @click="selectStatus(s)"
       >
-        <span class="stat-value mono" :style="{ color: counts[s] ? STATUS_VAR[s] : undefined }">
-          {{ counts[s] ?? 0 }}
+        <span
+          class="stat-value mono"
+          :style="{ color: statusFilter === s ? STATUS_VAR[s] : undefined }"
+        >
+          {{ s === 'PUBLISHED' ? (stats?.published ?? 0) : (stats?.draft ?? 0) }}
         </span>
-        <span class="stat-label">{{ t(`resourceStatus.${s}`) }}</span>
+        <span class="stat-label">
+          {{ s === 'DRAFT' ? t('entityType.draftUnpublished') : t(`resourceStatus.${s}`) }}
+        </span>
+      </button>
+      <!-- 第四项按设计稿是「校验违反」：取最近一次资产层校验报告的结果 -->
+      <button
+        type="button"
+        class="stat"
+        :class="{ active: violationOnly }"
+        @click="toggleViolationOnly"
+      >
+        <span
+          class="stat-value mono"
+          :style="{ color: stats?.violation ? 'var(--s-violation)' : undefined }"
+        >
+          {{ stats?.violation ?? 0 }}
+        </span>
+        <span class="stat-label">{{ t('entityType.violation') }}</span>
       </button>
     </div>
 
@@ -261,6 +365,20 @@ onMounted(async () => {
           @clear="loadList"
         />
       </NFormItem>
+      <NFormItem
+        :label="t('page.domains')"
+        label-placement="left"
+        :label-width="72"
+        :show-feedback="false"
+      >
+        <NSelect
+          v-model:value="domainFilter"
+          :options="domainOptions"
+          clearable
+          :placeholder="t('entityType.allDomains')"
+          class="domain-filter"
+        />
+      </NFormItem>
       <span class="spacer" />
       <div class="seg" role="group" :aria-label="t('common.viewMode')">
         <button type="button" :class="{ on: view === 'table' }" @click="view = 'table'">
@@ -279,7 +397,7 @@ onMounted(async () => {
           :data="filtered"
           :bordered="false"
           :pagination="{ pageSize: 20 }"
-          :scroll-x="860"
+          :scroll-x="1150"
           :row-key="(row: EntityTypeBrief) => row.id"
         >
           <template #empty>
@@ -479,6 +597,22 @@ onMounted(async () => {
 :deep(.rev) {
   color: var(--text-tertiary);
   font-size: 11px;
+}
+
+:deep(.count) {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 状态列可能同时放「状态」与「校验违反」两个徽标 */
+:deep(.status-cell) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.domain-filter {
+  width: 200px;
 }
 
 :deep(.status-tag) {

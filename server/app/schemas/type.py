@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import ResourceKind, ResourceStatus
@@ -71,7 +73,11 @@ class EntityTypeOut(BaseModel):
 
 
 class EntityTypeBrief(BaseModel):
-    """列表项：精简版。"""
+    """列表项：精简版。
+
+    额外带装配规模（数据属性数 / 关系端点数）与最近变更时间 —— 列表页要展示，
+    在服务端一次聚合完，避免前端逐行再请求。
+    """
 
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -80,6 +86,20 @@ class EntityTypeBrief(BaseModel):
     label_i18n: dict[str, str] | None = None
     status: ResourceStatus
     current_revision: int
+    data_prop_count: int = 0
+    relation_count: int = 0
+    updated_at: datetime | None = None
+    has_violation: bool = False
+
+
+class EntityTypeStatsOut(BaseModel):
+    """实体类型库的库级统计。校验违反取自最近一次资产层校验报告。"""
+
+    total: int = 0
+    published: int = 0
+    draft: int = 0
+    archived: int = 0
+    violation: int = 0
 
 
 class RevisionOut(BaseModel):

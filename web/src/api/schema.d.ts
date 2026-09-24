@@ -826,6 +826,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/entity-types/stats': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Type Stats
+     * @description 库级统计（不受分页影响）。声明在 /{type_id} 之前，避免被路径参数吃掉。
+     */
+    get: operations['type_stats_api_v1_entity_types_stats_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/entity-types/{type_id}': {
     parameters: {
       query?: never
@@ -2044,6 +2064,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['EntityTypeOut'] | null
+    }
+    /** ApiResponse[EntityTypeStatsOut] */
+    ApiResponse_EntityTypeStatsOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityTypeStatsOut'] | null
     }
     /** ApiResponse[EnumDictionaryOut] */
     ApiResponse_EnumDictionaryOut_: {
@@ -3772,6 +3809,9 @@ export interface components {
     /**
      * EntityTypeBrief
      * @description 列表项：精简版。
+     *
+     *     额外带装配规模（数据属性数 / 关系端点数）与最近变更时间 —— 列表页要展示，
+     *     在服务端一次聚合完，避免前端逐行再请求。
      */
     EntityTypeBrief: {
       /** Id */
@@ -3787,6 +3827,23 @@ export interface components {
       status: components['schemas']['ResourceStatus']
       /** Current Revision */
       current_revision: number
+      /**
+       * Data Prop Count
+       * @default 0
+       */
+      data_prop_count: number
+      /**
+       * Relation Count
+       * @default 0
+       */
+      relation_count: number
+      /** Updated At */
+      updated_at?: string | null
+      /**
+       * Has Violation
+       * @default false
+       */
+      has_violation: boolean
     }
     /**
      * EntityTypeCreate
@@ -3838,6 +3895,37 @@ export interface components {
       data_props?: components['schemas']['DataTypePropOut'][]
       /** Parent Ids */
       parent_ids?: number[]
+    }
+    /**
+     * EntityTypeStatsOut
+     * @description 实体类型库的库级统计。校验违反取自最近一次资产层校验报告。
+     */
+    EntityTypeStatsOut: {
+      /**
+       * Total
+       * @default 0
+       */
+      total: number
+      /**
+       * Published
+       * @default 0
+       */
+      published: number
+      /**
+       * Draft
+       * @default 0
+       */
+      draft: number
+      /**
+       * Archived
+       * @default 0
+       */
+      archived: number
+      /**
+       * Violation
+       * @default 0
+       */
+      violation: number
     }
     /**
      * EntityTypeUpdate
@@ -7762,6 +7850,7 @@ export interface operations {
         q?: string
         page?: number
         page_size?: number
+        domain_id?: number | null
       }
       header?: never
       path?: never
@@ -7818,6 +7907,26 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  type_stats_api_v1_entity_types_stats_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EntityTypeStatsOut_']
         }
       }
     }

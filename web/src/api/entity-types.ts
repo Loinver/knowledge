@@ -11,10 +11,16 @@ export type EntityType = S['EntityTypeOut']
 export type EntityTypeBrief = S['EntityTypeBrief']
 export type EntityTypeCreate = S['EntityTypeCreate']
 export type EntityTypeUpdate = S['EntityTypeUpdate']
+export type EntityTypeStats = S['EntityTypeStatsOut']
 
 export const entityTypesApi = {
-  list: (params?: { q?: string; page?: number; page_size?: number }, signal?: AbortSignal) =>
-    http.get<EntityTypeBrief[]>('/entity-types', { params, signal }).then((r) => r.data),
+  list: (
+    params?: { q?: string; page?: number; page_size?: number; domain_id?: number },
+    signal?: AbortSignal,
+  ) => http.get<EntityTypeBrief[]>('/entity-types', { params, signal }).then((r) => r.data),
+  /** 库级统计：不受分页影响，统计条用它而不是拿当前页去数。 */
+  stats: (signal?: AbortSignal) =>
+    http.get<EntityTypeStats>('/entity-types/stats', { signal }).then((r) => r.data),
   get: (id: number, signal?: AbortSignal) =>
     http.get<EntityType>(`/entity-types/${id}`, { signal }).then((r) => r.data),
   create: (payload: EntityTypeCreate) =>

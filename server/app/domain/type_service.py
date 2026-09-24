@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -10,13 +12,15 @@ from app.core.errors import KGError
 from app.domain.enum_dictionary_service import lock_dictionary, resolve_reference
 from app.domain.iri_service import build_resource_iri, validate_name
 from app.domain.status_service import lock_resource_edit, publish_resource
-from app.models.enums import ResourceKind, ResourceStatus
+from app.models.domain import DomainMember
+from app.models.enums import ResourceKind, ResourceStatus, ValidationState
 from app.models.resource import (
     DatatypePropDetail,
     ModelResource,
     ResourceParent,
     ResourceRef,
 )
+from app.models.validation import ValidationReport, ValidationResult
 from app.schemas.type import (
     DataTypePropCreate,
     EntityTypeCreate,
@@ -203,20 +207,25 @@ def update_entity_type(
     return resource
 
 
-def get_entity_type(session: Session, type_id: int) -> ModelResource:
-    resource = session.get(ModelResource, type_id)
-    if resource is None or resource.kind != ResourceKind.ENTITY:
-        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"id": type_id})
-    return resource
-
-
 def list_entity_types(
-    session: Session, q: str = "", page: int = 1, page_size: int = 50
+    session: Session,
+    q: str = "",
+    page: int = 1,
+    page_size: int = 50,
+    domain_id: int | None = None,
 ) -> tuple[list[ModelResource], int]:
-    """分页列表 + 名称/IRI 搜索。"""
+    """分页列表 + 名称/IRI 搜索；可按业务域过滤（域成员表）。"""
     stmt = select(ModelResource).where(ModelResource.kind == ResourceKind.ENTITY)
     if q:
         stmt = stmt.where(ModelResource.name.ilike(f"%{q}%"))
+    if domain_id is not None:
+        stmt = stmt.where(
+            ModelResource.id.in_(
+                select(DomainMember.resource_id).where(
+                    DomainMember.domain_id == domain_id
+                )
+            )
+        )
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     stmt = (
         stmt.order_by(ModelResource.name)
@@ -225,6 +234,122 @@ def list_entity_types(
     )
     items = list(session.execute(stmt).scalars())
     return items, total
+
+
+def entity_type_metrics(
+    session: Session, resource_ids: Sequence[int]
+) -> dict[int, tuple[int, int]]:
+    """按资源 id 聚合「数据属性数」与「关系数」。
+
+    关系数按**不同关系**去重：一条对象属性会写 relation_domain 与 relation_range
+    两条引用，同一个类型既当定义域又当值域时不去重会算成 2。
+    """
+    if not resource_ids:
+        return {}
+    ids = list(resource_ids)
+    metrics: dict[int, tuple[int, int]] = dict.fromkeys(ids, (0, 0))
+    prop_rows = session.execute(
+        select(ResourceRef.source_id, func.count())
+        .where(
+            ResourceRef.role == "data_prop",
+            ResourceRef.source_id.in_(ids),
+        )
+        .group_by(ResourceRef.source_id)
+    ).all()
+    relation_rows = session.execute(
+        select(
+            ResourceRef.target_id,
+            func.count(func.distinct(ResourceRef.source_id)),
+        )
+        .where(
+            ResourceRef.role.in_(("relation_domain", "relation_range")),
+            ResourceRef.target_id.in_(ids),
+        )
+        .group_by(ResourceRef.target_id)
+    ).all()
+    for rid, count in prop_rows:
+        metrics[rid] = (count, metrics.get(rid, (0, 0))[1])
+    for rid, count in relation_rows:
+        metrics[rid] = (metrics.get(rid, (0, 0))[0], count)
+    return metrics
+
+
+def _violation_iris(session: Session) -> set[str]:
+    """最近一次资产层（scope=ontology）校验报告里判为 VIOLATION 的焦点节点 IRI。
+
+    从未跑过资产层校验时返回空集 —— 没校验过就是没校验过，不伪装成通过。
+    """
+    latest = session.scalar(
+        select(func.max(ValidationReport.id)).where(
+            ValidationReport.scope == "ontology"
+        )
+    )
+    if latest is None:
+        return set()
+    nodes = session.scalars(
+        select(ValidationResult.focus_node).where(
+            ValidationResult.report_id == latest,
+            ValidationResult.state == ValidationState.VIOLATION,
+            ValidationResult.focus_node.is_not(None),
+        )
+    ).all()
+    return {node for node in nodes if node}
+
+
+def entity_type_stats(session: Session) -> dict[str, int]:
+    """实体类型库的库级统计（统计条用，不受分页影响）。"""
+    counts: dict[str, int] = {}
+    for status in (
+        ResourceStatus.PUBLISHED,
+        ResourceStatus.DRAFT,
+        ResourceStatus.ARCHIVED,
+    ):
+        counts[status.value.lower()] = (
+            session.scalar(
+                select(func.count())
+                .select_from(ModelResource)
+                .where(
+                    ModelResource.kind == ResourceKind.ENTITY,
+                    ModelResource.status == status,
+                )
+            )
+            or 0
+        )
+    counts["total"] = (
+        session.scalar(
+            select(func.count())
+            .select_from(ModelResource)
+            .where(ModelResource.kind == ResourceKind.ENTITY)
+        )
+        or 0
+    )
+    iris = _violation_iris(session)
+    counts["violation"] = 0
+    if iris:
+        counts["violation"] = (
+            session.scalar(
+                select(func.count())
+                .select_from(ModelResource)
+                .where(
+                    ModelResource.kind == ResourceKind.ENTITY,
+                    ModelResource.iri.in_(iris),
+                )
+            )
+            or 0
+        )
+    return counts
+
+
+def entity_type_violation_iris(session: Session) -> set[str]:
+    """列表页判断逐行「校验违反」徽标用；与库级统计同源。"""
+    return _violation_iris(session)
+
+
+def get_entity_type(session: Session, type_id: int) -> ModelResource:
+    resource = session.get(ModelResource, type_id)
+    if resource is None or resource.kind != ResourceKind.ENTITY:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"id": type_id})
+    return resource
 
 
 def get_data_props(session: Session, resource: ModelResource) -> list[ModelResource]:
