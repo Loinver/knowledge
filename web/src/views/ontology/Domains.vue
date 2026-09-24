@@ -14,7 +14,7 @@ import {
   NSpace,
   NSpin,
 } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { DomainBrief, DomainDetail, DomainMember, PublishCheckResult } from '@/api/domains'
@@ -296,15 +296,39 @@ async function publish() {
 }
 
 const formData = ref({ name: '', iri: '', labelZh: '', labelEn: '' })
+const createFormRef = ref<FormInst | null>(null)
+
+/** 业务域的机读名同样走 PascalCase；IRI 必填，格式由后端校验。 */
+const createRules = computed<FormRules>(() => ({
+  name: [
+    { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+    {
+      pattern: /^[A-Z][A-Za-z0-9]*$/,
+      message: t('domain.namePattern'),
+      trigger: ['blur', 'input'],
+    },
+  ],
+  iri: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+}))
+
+/** 打开抽屉即重置表单与校验态。 */
+watch(showCreate, (open) => {
+  if (!open) return
+  formData.value = { name: '', iri: '', labelZh: '', labelEn: '' }
+  createError.value = ''
+  createFormRef.value?.restoreValidation()
+})
 
 async function handleCreate() {
   if (!alive || creating.value) return
   createError.value = ''
-  const f = formData.value
-  if (!f.name || !f.iri || !f.labelZh) {
-    createError.value = t('domain.createIncomplete')
+  try {
+    await createFormRef.value?.validate()
+  } catch {
     return
   }
+  const f = formData.value
   creating.value = true
   try {
     await domainsApi.create({
@@ -609,29 +633,36 @@ onBeforeUnmount(() => {
       :close-on-esc="!creating"
     >
       <NDrawerContent :title="t('domain.create')" :closable="!creating">
-        <NForm label-placement="top" :disabled="creating">
-          <NFormItem :label="t('common.name')">
+        <NForm
+          ref="createFormRef"
+          :model="formData"
+          :rules="createRules"
+          label-placement="top"
+          :disabled="creating"
+        >
+          <NFormItem :label="t('common.name')" path="name">
             <NInput v-model:value="formData.name" placeholder="HumanResources" />
+            <template #feedback>{{ t('domain.nameHint') }}</template>
           </NFormItem>
-          <NFormItem :label="t('common.iri')">
+          <NFormItem :label="t('common.iri')" path="iri">
             <NInput v-model:value="formData.iri" placeholder="urn:knowledge:domain:hr" />
           </NFormItem>
-          <NFormItem :label="t('common.labelZh')">
+          <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
           </NFormItem>
-          <NFormItem :label="t('common.labelEn')">
+          <NFormItem :label="t('common.labelEn')" path="labelEn">
             <NInput v-model:value="formData.labelEn" />
           </NFormItem>
         </NForm>
-        <p v-if="createError" class="action-error">{{ createError }}</p>
+        <NAlert v-if="createError" type="error" class="action-error">{{ createError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
+            <NButton :disabled="creating" @click="showCreate = false">
+              {{ t('common.cancel') }}
+            </NButton>
             <NButton type="primary" :loading="creating" @click="handleCreate">
               {{ t('common.save') }}
             </NButton>
-            <NButton :disabled="creating" @click="showCreate = false">{{
-              t('common.cancel')
-            }}</NButton>
           </div>
         </template>
       </NDrawerContent>
@@ -827,9 +858,7 @@ onBeforeUnmount(() => {
 }
 
 .action-error {
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--font-small);
+  margin-bottom: var(--space-3);
 }
 
 .member-card {
@@ -911,6 +940,7 @@ onBeforeUnmount(() => {
 .drawer-actions {
   display: flex;
   gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 @media (max-width: 900px) {

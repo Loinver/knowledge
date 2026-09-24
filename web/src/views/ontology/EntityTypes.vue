@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
 import {
+  NAlert,
   NButton,
   NDataTable,
   NDrawer,
@@ -12,7 +13,7 @@ import {
   NSelect,
   NSpin,
 } from 'naive-ui'
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -112,6 +113,29 @@ function renderStatus(status: ResourceStatus) {
 }
 
 const formData = ref({ name: '', namespace_id: null as number | null, labelZh: '', labelEn: '' })
+const formRef = ref<FormInst | null>(null)
+
+/**
+ * 字段级校验：错误贴着字段显示，blur 即校验，校验不通过不发请求。
+ * 机读名沿用后端的 PascalCase 约定（与属性编辑器同一套规则）。
+ */
+const rules = computed<FormRules>(() => ({
+  name: [
+    { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+    {
+      pattern: /^[A-Z][A-Za-z0-9]*$/,
+      message: t('entityType.namePattern'),
+      trigger: ['blur', 'input'],
+    },
+  ],
+  namespace_id: {
+    required: true,
+    type: 'number',
+    message: t('common.required'),
+    trigger: ['blur', 'change'],
+  },
+  labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+}))
 
 const nsOptions = computed(() => namespaces.value.map((ns) => ({ label: ns.prefix, value: ns.id })))
 
@@ -140,15 +164,17 @@ async function loadNamespaces() {
 
 async function handleCreate() {
   createError.value = ''
-  if (!formData.value.name || !formData.value.namespace_id || !formData.value.labelZh) {
-    createError.value = t('entityType.createIncomplete')
+  try {
+    await formRef.value?.validate()
+  } catch {
+    // 校验失败时 naive 已在字段下方给出提示，不再补一条汇总文案
     return
   }
   creating.value = true
   try {
     await entityTypesApi.create({
       name: formData.value.name,
-      namespace_id: formData.value.namespace_id,
+      namespace_id: formData.value.namespace_id as number,
       label_i18n: {
         'zh-CN': formData.value.labelZh,
         'en-US': formData.value.labelEn || formData.value.name,
@@ -156,6 +182,7 @@ async function handleCreate() {
     })
     showCreate.value = false
     formData.value = { name: '', namespace_id: null, labelZh: '', labelEn: '' }
+    formRef.value?.restoreValidation()
     await loadList()
   } catch (err) {
     createError.value = (err as { code?: string }).code || t('common.save')
@@ -163,6 +190,14 @@ async function handleCreate() {
     creating.value = false
   }
 }
+
+/** 打开抽屉即重置表单与校验态，避免上一轮的报错残留到下一次新建。 */
+watch(showCreate, (open) => {
+  if (!open) return
+  formData.value = { name: '', namespace_id: null, labelZh: '', labelEn: '' }
+  createError.value = ''
+  formRef.value?.restoreValidation()
+})
 
 onMounted(async () => {
   await Promise.all([loadList(), loadNamespaces()])
@@ -269,27 +304,28 @@ onMounted(async () => {
 
     <NDrawer v-model:show="showCreate" :width="460">
       <NDrawerContent :title="t('entityType.create')" closable>
-        <NForm>
-          <NFormItem :label="t('common.name')">
+        <NForm ref="formRef" :model="formData" :rules="rules" label-placement="top">
+          <NFormItem :label="t('common.name')" path="name">
             <NInput v-model:value="formData.name" placeholder="Employee" />
+            <template #feedback>{{ t('entityType.nameHint') }}</template>
           </NFormItem>
-          <NFormItem :label="t('common.namespace')">
+          <NFormItem :label="t('common.namespace')" path="namespace_id">
             <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
           </NFormItem>
-          <NFormItem :label="t('common.labelZh')">
+          <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
           </NFormItem>
-          <NFormItem :label="t('common.labelEn')">
+          <NFormItem :label="t('common.labelEn')" path="labelEn">
             <NInput v-model:value="formData.labelEn" />
           </NFormItem>
         </NForm>
-        <p v-if="createError" class="create-error">{{ createError }}</p>
+        <NAlert v-if="createError" type="error" class="create-error">{{ createError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
+            <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
             <NButton type="primary" :loading="creating" @click="handleCreate">
               {{ t('common.save') }}
             </NButton>
-            <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
           </div>
         </template>
       </NDrawerContent>
@@ -495,14 +531,13 @@ onMounted(async () => {
 
 /* ── 抽屉 ───────────────────────────────────────────────── */
 .create-error {
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--font-small);
+  margin-bottom: var(--space-3);
 }
 
 .drawer-actions {
   display: flex;
   gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 @media (max-width: 720px) {

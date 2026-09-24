@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
 import {
   NAlert,
   NButton,
@@ -62,6 +62,28 @@ const createForm = ref({
   display_name: '',
   role: 'EDITOR' as Role,
 })
+const createFormRef = ref<FormInst | null>(null)
+
+/** 与注册页同一套账号规则，文案复用 auth.rules.*，避免两处口径漂移。 */
+const createRules = computed<FormRules>(() => ({
+  username: [
+    { required: true, message: t('auth.rules.usernameRequired'), trigger: ['blur', 'input'] },
+    {
+      pattern: /^[A-Za-z0-9_]{3,32}$/,
+      message: t('auth.rules.usernamePattern'),
+      trigger: ['blur', 'input'],
+    },
+  ],
+  email: [
+    { required: true, message: t('auth.rules.emailRequired'), trigger: ['blur', 'input'] },
+    { type: 'email', message: t('auth.rules.emailPattern'), trigger: ['blur', 'input'] },
+  ],
+  password: [
+    { required: true, message: t('auth.rules.passwordRequired'), trigger: ['blur', 'input'] },
+    { min: 8, message: t('auth.rules.passwordMin'), trigger: ['blur', 'input'] },
+  ],
+  role: { required: true, message: t('common.required'), trigger: ['blur', 'change'] },
+}))
 
 function openCreate() {
   createForm.value = {
@@ -73,15 +95,17 @@ function openCreate() {
   }
   createError.value = ''
   showCreate.value = true
+  createFormRef.value?.restoreValidation()
 }
 
 async function submitCreate() {
   createError.value = ''
-  const form = createForm.value
-  if (form.password.length < 8) {
-    createError.value = t('auth.rules.passwordMin')
+  try {
+    await createFormRef.value?.validate()
+  } catch {
     return
   }
+  const form = createForm.value
   creating.value = true
   try {
     await authApi.createUser({
@@ -297,18 +321,24 @@ onMounted(load)
       <NAlert v-if="createError" type="error" role="alert" class="modal-alert">
         {{ createError }}
       </NAlert>
-      <NForm label-placement="top" @submit.prevent="submitCreate">
-        <NFormItem :label="t('auth.username')">
+      <NForm
+        ref="createFormRef"
+        :model="createForm"
+        :rules="createRules"
+        label-placement="top"
+        @submit.prevent="submitCreate"
+      >
+        <NFormItem :label="t('auth.username')" path="username">
           <NInput
             v-model:value="createForm.username"
             :placeholder="t('system.usernamePlaceholder')"
             autocomplete="off"
           />
         </NFormItem>
-        <NFormItem :label="t('auth.email')">
+        <NFormItem :label="t('auth.email')" path="email">
           <NInput v-model:value="createForm.email" autocomplete="off" />
         </NFormItem>
-        <NFormItem :label="t('auth.password')">
+        <NFormItem :label="t('auth.password')" path="password">
           <NInput
             v-model:value="createForm.password"
             type="password"
@@ -316,10 +346,10 @@ onMounted(load)
             autocomplete="new-password"
           />
         </NFormItem>
-        <NFormItem :label="t('account.displayName')">
+        <NFormItem :label="t('account.displayName')" path="display_name">
           <NInput v-model:value="createForm.display_name" />
         </NFormItem>
-        <NFormItem :label="t('account.role')">
+        <NFormItem :label="t('account.role')" path="role">
           <NSelect v-model:value="createForm.role" :options="roleOptions" />
         </NFormItem>
       </NForm>

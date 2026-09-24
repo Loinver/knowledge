@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DataTableColumns } from 'naive-ui'
+import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
 import {
   NAlert,
   NButton,
@@ -194,6 +194,49 @@ const typeOptions = computed(() =>
   typeList.value.map((tp) => ({ label: pickLabel(tp.label_i18n, tp.name), value: tp.id })),
 )
 
+const createFormRef = ref<FormInst | null>(null)
+const editFormRef = ref<FormInst | null>(null)
+
+/** 定义域与值域都是必选的实体类型引用；基数在创建时固定为 0:N，编辑不改。 */
+const endpointRules: FormRules = {
+  domainType: {
+    required: true,
+    type: 'number',
+    message: t('common.required'),
+    trigger: ['blur', 'change'],
+  },
+  rangeType: {
+    required: true,
+    type: 'number',
+    message: t('common.required'),
+    trigger: ['blur', 'change'],
+  },
+}
+
+const createRules = computed<FormRules>(() => ({
+  name: [
+    { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+    {
+      pattern: /^[A-Z][A-Za-z0-9]*$/,
+      message: t('relation.namePattern'),
+      trigger: ['blur', 'input'],
+    },
+  ],
+  namespace_id: {
+    required: true,
+    type: 'number',
+    message: t('common.required'),
+    trigger: ['blur', 'change'],
+  },
+  labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  ...endpointRules,
+}))
+
+const editRules = computed<FormRules>(() => ({
+  labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  ...endpointRules,
+}))
+
 async function load() {
   loading.value = true
   try {
@@ -239,19 +282,20 @@ watch(view, (v) => {
 
 async function handleCreate() {
   createError.value = ''
-  const f = formData.value
-  if (!f.name || !f.namespace_id || !f.labelZh || !f.domainType || !f.rangeType) {
-    createError.value = t('relation.createIncomplete')
+  try {
+    await createFormRef.value?.validate()
+  } catch {
     return
   }
+  const f = formData.value
   creating.value = true
   try {
     await relationsApi.create({
       name: f.name,
-      namespace_id: f.namespace_id,
+      namespace_id: f.namespace_id as number,
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
-      domain_spec: { type_id: f.domainType, cardinality: { min: 0, max: -1 } },
-      range_spec: { type_id: f.rangeType, cardinality: { min: 0, max: -1 } },
+      domain_spec: { type_id: f.domainType as number, cardinality: { min: 0, max: -1 } },
+      range_spec: { type_id: f.rangeType as number, cardinality: { min: 0, max: -1 } },
       enable_attributes: f.enableAttrs,
     })
     showCreate.value = false
@@ -295,18 +339,20 @@ async function openEdit(id: number) {
 
 async function handleEdit() {
   const detail = editingDetail.value
-  const f = formData.value
-  if (!detail || !f.labelZh || !f.domainType || !f.rangeType) {
-    editError.value = t('relation.editIncomplete')
+  editError.value = ''
+  try {
+    await editFormRef.value?.validate()
+  } catch {
     return
   }
+  const f = formData.value
+  if (!detail) return
   editing.value = true
-  editError.value = ''
   try {
     const updated = await relationsApi.update(detail.id, {
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
-      domain_spec: { ...detail.domain_spec, type_id: f.domainType },
-      range_spec: { ...detail.range_spec, type_id: f.rangeType },
+      domain_spec: { ...detail.domain_spec, type_id: f.domainType as number },
+      range_spec: { ...detail.range_spec, type_id: f.rangeType as number },
       enable_attributes: f.enableAttrs,
       owl: detail.owl,
       if_match: detail.current_revision,
@@ -342,6 +388,18 @@ async function publish(row: RelationTypeBrief) {
     publishingId.value = null
   }
 }
+
+/** 打开抽屉即重置校验态，避免上一轮报错残留。 */
+watch(showCreate, (open) => {
+  if (!open) return
+  createError.value = ''
+  createFormRef.value?.restoreValidation()
+})
+watch(showEdit, (open) => {
+  if (!open) return
+  editError.value = ''
+  editFormRef.value?.restoreValidation()
+})
 
 onMounted(async () => {
   await Promise.all([
@@ -530,36 +588,45 @@ onMounted(async () => {
 
     <NDrawer v-model:show="showCreate" :width="520">
       <NDrawerContent :title="t('relation.create')" closable>
-        <NForm label-placement="top">
-          <NFormItem :label="t('common.name')">
+        <NForm
+          ref="createFormRef"
+          :model="formData"
+          :rules="createRules"
+          :disabled="creating"
+          label-placement="top"
+        >
+          <NFormItem :label="t('common.name')" path="name">
             <NInput v-model:value="formData.name" placeholder="WorksIn" />
+            <template #feedback>{{ t('relation.nameHint') }}</template>
           </NFormItem>
-          <NFormItem :label="t('common.namespace')">
+          <NFormItem :label="t('common.namespace')" path="namespace_id">
             <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
           </NFormItem>
-          <NFormItem :label="t('common.labelZh')">
+          <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
           </NFormItem>
-          <NFormItem :label="t('common.labelEn')">
+          <NFormItem :label="t('common.labelEn')" path="labelEn">
             <NInput v-model:value="formData.labelEn" />
           </NFormItem>
-          <NFormItem :label="t('relation.domain')">
+          <NFormItem :label="t('relation.domain')" path="domainType">
             <NSelect v-model:value="formData.domainType" :options="typeOptions" filterable />
           </NFormItem>
-          <NFormItem :label="t('relation.range')">
+          <NFormItem :label="t('relation.range')" path="rangeType">
             <NSelect v-model:value="formData.rangeType" :options="typeOptions" filterable />
           </NFormItem>
-          <NFormItem :label="t('relation.enableAttributes')">
+          <NFormItem :label="t('relation.enableAttributes')" path="enableAttrs">
             <NCheckbox v-model:checked="formData.enableAttrs" />
           </NFormItem>
         </NForm>
-        <p v-if="createError" class="create-error">{{ createError }}</p>
+        <NAlert v-if="createError" type="error" class="create-error">{{ createError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
+            <NButton :disabled="creating" @click="showCreate = false">
+              {{ t('common.cancel') }}
+            </NButton>
             <NButton type="primary" :loading="creating" @click="handleCreate">
               {{ t('common.save') }}
             </NButton>
-            <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
           </div>
         </template>
       </NDrawerContent>
@@ -567,30 +634,39 @@ onMounted(async () => {
 
     <NDrawer v-model:show="showEdit" :width="520">
       <NDrawerContent :title="t('relation.edit')" closable>
-        <NForm label-placement="top">
-          <NFormItem :label="t('common.name')"
-            ><NInput v-model:value="formData.name" disabled
-          /></NFormItem>
-          <NFormItem :label="t('common.labelZh')"
-            ><NInput v-model:value="formData.labelZh"
-          /></NFormItem>
-          <NFormItem :label="t('common.labelEn')"
-            ><NInput v-model:value="formData.labelEn"
-          /></NFormItem>
-          <NFormItem :label="t('relation.domain')"
-            ><NSelect v-model:value="formData.domainType" :options="typeOptions" filterable
-          /></NFormItem>
-          <NFormItem :label="t('relation.range')"
-            ><NSelect v-model:value="formData.rangeType" :options="typeOptions" filterable
-          /></NFormItem>
+        <NForm
+          ref="editFormRef"
+          :model="formData"
+          :rules="editRules"
+          :disabled="editing"
+          label-placement="top"
+        >
+          <NFormItem :label="t('common.name')">
+            <NInput v-model:value="formData.name" disabled />
+            <template #feedback>{{ t('entityType.nameImmutable') }}</template>
+          </NFormItem>
+          <NFormItem :label="t('common.labelZh')" path="labelZh">
+            <NInput v-model:value="formData.labelZh" />
+          </NFormItem>
+          <NFormItem :label="t('common.labelEn')" path="labelEn">
+            <NInput v-model:value="formData.labelEn" />
+          </NFormItem>
+          <NFormItem :label="t('relation.domain')" path="domainType">
+            <NSelect v-model:value="formData.domainType" :options="typeOptions" filterable />
+          </NFormItem>
+          <NFormItem :label="t('relation.range')" path="rangeType">
+            <NSelect v-model:value="formData.rangeType" :options="typeOptions" filterable />
+          </NFormItem>
         </NForm>
-        <p v-if="editError" class="create-error">{{ editError }}</p>
+        <NAlert v-if="editError" type="error" class="create-error">{{ editError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
-            <NButton type="primary" :loading="editing" @click="handleEdit">{{
-              t('common.save')
-            }}</NButton>
-            <NButton @click="showEdit = false">{{ t('common.cancel') }}</NButton>
+            <NButton :disabled="editing" @click="showEdit = false">
+              {{ t('common.cancel') }}
+            </NButton>
+            <NButton type="primary" :loading="editing" @click="handleEdit">
+              {{ t('common.save') }}
+            </NButton>
           </div>
         </template>
       </NDrawerContent>
@@ -809,9 +885,7 @@ onMounted(async () => {
 }
 
 .create-error {
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--font-small);
+  margin-bottom: var(--space-3);
 }
 
 .action-alert {
@@ -821,6 +895,7 @@ onMounted(async () => {
 .drawer-actions {
   display: flex;
   gap: var(--space-2);
+  justify-content: flex-end;
 }
 
 @media (max-width: 720px) {
