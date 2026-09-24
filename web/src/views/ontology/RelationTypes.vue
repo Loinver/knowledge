@@ -47,6 +47,8 @@ const publishingId = ref<number | null>(null)
 const editingDetail = ref<RelationTypeDetail | null>(null)
 const statusFilter = ref<ResourceStatus | ''>('')
 const view = ref<'table' | 'card'>('table')
+/** 列表搜索词。后端 /relations 支持 q（按机读名过滤），此前页面没接。 */
+const searchQuery = ref('')
 
 const STATUS_ORDER: ResourceStatus[] = ['PUBLISHED', 'DRAFT', 'ARCHIVED']
 const STATUS_VAR: Record<ResourceStatus, string> = {
@@ -250,7 +252,7 @@ const editRules = computed<FormRules>(() => ({
 async function load() {
   loading.value = true
   try {
-    items.value = await relationsApi.list()
+    items.value = await relationsApi.list({ q: searchQuery.value })
   } catch {
     items.value = []
   } finally {
@@ -469,6 +471,22 @@ onMounted(async () => {
     </div>
 
     <div class="toolbar">
+      <NFormItem
+        :label="t('common.search')"
+        label-placement="left"
+        :label-width="72"
+        :show-feedback="false"
+        class="search-field"
+      >
+        <NInput
+          v-model:value="searchQuery"
+          :placeholder="t('common.search')"
+          clearable
+          class="search"
+          @keyup.enter="load"
+          @clear="load"
+        />
+      </NFormItem>
       <span class="spacer" />
       <div class="seg" role="group" :aria-label="t('common.viewMode')">
         <button type="button" :class="{ on: view === 'table' }" @click="view = 'table'">
@@ -744,6 +762,14 @@ onMounted(async () => {
   gap: var(--space-2);
   align-items: center;
   margin-bottom: var(--space-3);
+}
+
+.search-field {
+  min-width: 0;
+}
+
+.search {
+  max-width: 280px;
 }
 
 .spacer {

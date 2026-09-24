@@ -74,7 +74,12 @@ async function search() {
         <NRadioButton value="entity">{{ t('graph.byEntity') }}</NRadioButton>
         <NRadioButton value="fact">{{ t('graph.byFact') }}</NRadioButton>
       </NRadioGroup>
-      <NFormItem v-if="mode === 'entity'" :label="t('common.iri')">
+      <NFormItem
+        v-if="mode === 'entity'"
+        :label="t('common.iri')"
+        label-placement="left"
+        :label-width="72"
+      >
         <NInput
           v-model:value="iri"
           :aria-label="t('common.iri')"
@@ -82,19 +87,19 @@ async function search() {
         />
       </NFormItem>
       <template v-else>
-        <NFormItem :label="t('graph.subject')"
+        <NFormItem :label="t('graph.subject')" label-placement="left" :label-width="72"
           ><NInput
             v-model:value="subject"
             :aria-label="t('graph.subject')"
             :placeholder="t('graph.subject')"
         /></NFormItem>
-        <NFormItem :label="t('graph.predicate')"
+        <NFormItem :label="t('graph.predicate')" label-placement="left" :label-width="72"
           ><NInput
             v-model:value="predicate"
             :aria-label="t('graph.predicate')"
             :placeholder="t('graph.predicate')"
         /></NFormItem>
-        <NFormItem :label="t('graph.object')"
+        <NFormItem :label="t('graph.object')" label-placement="left" :label-width="72"
           ><NInput
             v-model:value="object"
             :aria-label="t('graph.object')"

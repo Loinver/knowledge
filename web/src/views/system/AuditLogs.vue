@@ -112,8 +112,13 @@ onMounted(load)
   <section>
     <PageHeader :title="t('page.systemAuditLogs')" :description="t('system.auditHint')" />
     <NCard size="small">
-      <NSpace class="filters" align="end">
-        <NFormItem :label="t('common.search')" :show-feedback="false">
+      <NSpace class="filters" align="center">
+        <NFormItem
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
           <NInput
             v-model:value="query"
             clearable
@@ -122,7 +127,12 @@ onMounted(load)
           />
         </NFormItem>
         <NButton @click="search">{{ t('common.search') }}</NButton>
-        <NFormItem :label="t('system.action')" :show-feedback="false">
+        <NFormItem
+          :label="t('system.action')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
           <NSelect
             v-model:value="actionFilter"
             :options="actionOptions"

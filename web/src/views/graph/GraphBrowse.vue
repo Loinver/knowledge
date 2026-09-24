@@ -209,12 +209,27 @@ p {
 }
 .controls {
   display: grid;
-  grid-template-columns: minmax(220px, 2fr) minmax(130px, 1fr) minmax(170px, 1fr);
+  /* 标签在控件左侧，各列要预留标签宽度 */
+  grid-template-columns: minmax(260px, 2fr) minmax(170px, 1fr) minmax(215px, 1fr);
   gap: 16px;
 }
+/* 筛选字段：标签在左、控件在右，横向一行读完 */
 label {
-  display: grid;
+  display: flex;
   gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+label > span {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
+  white-space: nowrap;
+}
+label :deep(.n-select),
+label :deep(.n-input-number) {
+  flex: 1;
+  min-width: 0;
 }
 @media (max-width: 900px) {
   .controls {

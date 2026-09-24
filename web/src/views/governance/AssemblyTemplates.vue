@@ -335,14 +335,22 @@ onBeforeUnmount(() => {
     }}</NAlert>
     <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
     <NCard size="small"
-      ><NSpace class="filters" align="end"
-        ><NFormItem :label="t('common.search')" :show-feedback="false"
+      ><NSpace class="filters" align="center"
+        ><NFormItem
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
           ><NInput
             v-model:value="query"
             clearable
             @keyup.enter="search = query.trim()" /></NFormItem
         ><NButton @click="search = query.trim()">{{ t('common.search') }}</NButton
-        ><NFormItem :label="t('templates.kind')" :show-feedback="false"
+        ><NFormItem
+          :label="t('templates.kind')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
           ><NSelect
             v-model:value="filter"
             :options="filterOptions"
@@ -405,14 +413,22 @@ onBeforeUnmount(() => {
           ></template>
           <template v-else
             ><h3>{{ t('templates.resources') }}</h3>
-            <NSpace v-if="resourcesEditable" align="end" class="filters"
-              ><NFormItem :label="t('templates.resource')" :show-feedback="false"
+            <NSpace v-if="resourcesEditable" align="center" class="filters"
+              ><NFormItem
+                :label="t('templates.resource')"
+                label-placement="left"
+                :label-width="72"
+                :show-feedback="false"
                 ><NSelect
                   v-model:value="resourceId"
                   :options="resourceOptions"
                   filterable
                   style="width: 280px" /></NFormItem
-              ><NFormItem :label="t('templates.pinnedRevision')" :show-feedback="false"
+              ><NFormItem
+                :label="t('templates.pinnedRevision')"
+                label-placement="left"
+                :label-width="96"
+                :show-feedback="false"
                 ><NSelect
                   v-model:value="resourceRevision"
                   :options="versionOptions"

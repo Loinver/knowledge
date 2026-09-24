@@ -6,6 +6,7 @@ import {
   NDrawer,
   NDrawerContent,
   NEmpty,
+  NFormItem,
   NInput,
   NPagination,
   NPopconfirm,
@@ -218,14 +219,21 @@ const columns = computed(() => [
     </PageHeader>
     <n-card :bordered="false">
       <n-space class="toolbar" align="center">
-        <n-input
-          v-model:value="search"
-          :placeholder="t('clauses.searchPlaceholder')"
-          clearable
-          style="width: 280px"
-          @keyup.enter="doSearch"
-          @clear="doSearch"
-        />
+        <n-form-item
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
+          <n-input
+            v-model:value="search"
+            :placeholder="t('clauses.searchPlaceholder')"
+            clearable
+            style="width: 280px"
+            @keyup.enter="doSearch"
+            @clear="doSearch"
+          />
+        </n-form-item>
         <n-button @click="doSearch">{{ t('common.search') }}</n-button>
       </n-space>
       <n-empty v-if="!loading && items.length === 0" :description="t('clauses.empty')" />

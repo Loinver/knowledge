@@ -238,8 +238,13 @@ onMounted(load)
       </template>
     </PageHeader>
     <NCard size="small">
-      <NSpace class="filters" align="end">
-        <NFormItem :label="t('common.search')" :show-feedback="false">
+      <NSpace class="filters" align="center">
+        <NFormItem
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
           <NInput
             v-model:value="query"
             clearable
@@ -248,7 +253,12 @@ onMounted(load)
           />
         </NFormItem>
         <NButton @click="search">{{ t('common.search') }}</NButton>
-        <NFormItem :label="t('account.role')" :show-feedback="false">
+        <NFormItem
+          :label="t('account.role')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
           <NSelect
             v-model:value="roleFilter"
             :options="roleOptions"
@@ -257,7 +267,12 @@ onMounted(load)
             @update:value="search"
           />
         </NFormItem>
-        <NFormItem :label="t('account.status')" :show-feedback="false">
+        <NFormItem
+          :label="t('account.status')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
           <NSelect
             v-model:value="statusFilter"
             :options="statusOptions"

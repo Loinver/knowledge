@@ -302,12 +302,20 @@ async function remove() {
     <NAlert v-if="error && !showEditor" type="error" role="alert">{{ error }}</NAlert>
     <NAlert v-if="notice && !showEditor" type="success" role="status">{{ notice }}</NAlert>
     <NCard size="small">
-      <NSpace class="filters" align="end">
-        <NFormItem :label="t('common.search')" :show-feedback="false"
+      <NSpace class="filters" align="center">
+        <NFormItem
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="80"
+          :show-feedback="false"
           ><NInput v-model:value="query" clearable @keyup.enter="search = query.trim()"
         /></NFormItem>
         <NButton @click="search = query.trim()">{{ t('common.search') }}</NButton>
-        <NFormItem :label="t('rules.source')" :show-feedback="false"
+        <NFormItem
+          :label="t('rules.source')"
+          label-placement="left"
+          :label-width="80"
+          :show-feedback="false"
           ><NSelect
             v-model:value="sourceKind"
             :options="sourceOptions"

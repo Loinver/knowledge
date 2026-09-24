@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
-import { NAlert, NButton, NDataTable, NInput, NPagination, NSelect, NSpace } from 'naive-ui'
+import {
+  NAlert,
+  NButton,
+  NDataTable,
+  NFormItem,
+  NInput,
+  NPagination,
+  NSelect,
+  NSpace,
+} from 'naive-ui'
 import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
@@ -67,23 +76,37 @@ function search() {
     </PageHeader>
     <form @submit.prevent="search">
       <NSpace align="center">
-        <NInput
-          v-model:value="input"
-          :placeholder="t('graph.searchHint')"
-          :aria-label="t('graph.searchHint')"
-          clearable
-        />
+        <NFormItem
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
+          <NInput
+            v-model:value="input"
+            :placeholder="t('graph.searchHint')"
+            :aria-label="t('graph.searchHint')"
+            clearable
+          />
+        </NFormItem>
         <NButton attr-type="submit" type="primary">{{ t('common.search') }}</NButton>
-        <NSelect
-          v-model:value="sort"
-          style="width: 180px"
-          :aria-label="t('graph.sort')"
-          :options="[
-            { label: t('graph.ascending'), value: 'iri' },
-            { label: t('graph.descending'), value: '-iri' },
-          ]"
-          @update:value="page = 1"
-        />
+        <NFormItem
+          :label="t('graph.sort')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
+          <NSelect
+            v-model:value="sort"
+            style="width: 180px"
+            :aria-label="t('graph.sort')"
+            :options="[
+              { label: t('graph.ascending'), value: 'iri' },
+              { label: t('graph.descending'), value: '-iri' },
+            ]"
+            @update:value="page = 1"
+          />
+        </NFormItem>
         <NButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</NButton>
       </NSpace>
     </form>

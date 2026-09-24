@@ -352,22 +352,36 @@ const referenceColumns = computed(() => [
     </PageHeader>
     <n-card :bordered="false">
       <n-space class="toolbar" align="center">
-        <n-input
-          v-model:value="search"
-          :aria-label="t('common.search')"
-          :placeholder="t('enumDictionaries.search')"
-          clearable
-          @keyup.enter="doSearch"
-          @clear="clearSearch"
-        />
+        <n-form-item
+          :label="t('common.search')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
+          <n-input
+            v-model:value="search"
+            :aria-label="t('common.search')"
+            :placeholder="t('enumDictionaries.search')"
+            clearable
+            @keyup.enter="doSearch"
+            @clear="clearSearch"
+          />
+        </n-form-item>
         <n-button @click="doSearch">{{ t('common.search') }}</n-button>
-        <n-select
-          :value="sort"
-          :options="sortOptions"
-          :aria-label="t('enumDictionaries.sort')"
-          style="width: 180px"
-          @update:value="changeSort"
-        />
+        <n-form-item
+          :label="t('enumDictionaries.sort')"
+          label-placement="left"
+          :label-width="72"
+          :show-feedback="false"
+        >
+          <n-select
+            :value="sort"
+            :options="sortOptions"
+            :aria-label="t('enumDictionaries.sort')"
+            style="width: 180px"
+            @update:value="changeSort"
+          />
+        </n-form-item>
       </n-space>
       <n-alert v-if="error" type="error" class="feedback"
         >{{ error }}

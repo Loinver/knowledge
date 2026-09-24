@@ -245,14 +245,22 @@ onMounted(async () => {
     </div>
 
     <div class="toolbar">
-      <NInput
-        v-model:value="searchQuery"
-        :placeholder="t('common.search')"
-        clearable
-        class="search"
-        @keyup.enter="loadList"
-        @clear="loadList"
-      />
+      <NFormItem
+        :label="t('common.search')"
+        label-placement="left"
+        :label-width="72"
+        :show-feedback="false"
+        class="search-field"
+      >
+        <NInput
+          v-model:value="searchQuery"
+          :placeholder="t('common.search')"
+          clearable
+          class="search"
+          @keyup.enter="loadList"
+          @clear="loadList"
+        />
+      </NFormItem>
       <span class="spacer" />
       <div class="seg" role="group" :aria-label="t('common.viewMode')">
         <button type="button" :class="{ on: view === 'table' }" @click="view = 'table'">
@@ -401,6 +409,10 @@ onMounted(async () => {
   gap: var(--space-2);
   align-items: center;
   margin-bottom: var(--space-3);
+}
+
+.search-field {
+  min-width: 0;
 }
 
 .search {
