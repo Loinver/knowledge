@@ -64,7 +64,9 @@
       "REVISION_NOT_FOUND": "The requested resource revision does not exist",
       "VALIDATION_VIOLATION": "Semantic validation failed. Review the validation details.",
       "SOURCE_UNREACHABLE": "The data source is unavailable",
-      "REASONER_UNAVAILABLE": "The reasoning or validation engine is unavailable. Please retry later."
+      "REASONER_UNAVAILABLE": "The reasoning or validation engine is unavailable. Please retry later.",
+      "DATABASE_ERROR": "The metadata database is unavailable or its schema is behind this build. Make sure migrations have been applied (alembic upgrade head).",
+      "INTERNAL_ERROR": "Server error. Please retry later or contact an administrator."
     },
     "network": "Network error, please retry later",
     "unknown": "Unknown error: {code}",

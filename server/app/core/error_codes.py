@@ -35,6 +35,16 @@ class ErrorCode(StrEnum):
     SOURCE_UNREACHABLE = "KG.SOURCE_UNREACHABLE"
     REASONER_UNAVAILABLE = "KG.REASONER_UNAVAILABLE"
 
+    # 503 元数据库异常。最常见的成因是本地库结构落后于代码（没跑迁移），
+    # 表现为查询报 `no such column: xxx`。给它一个专门的码，界面才能提示
+    # 「请执行数据库迁移」，而不是笼统的「服务端内部错误」。
+    DATABASE_ERROR = "KG.DATABASE_ERROR"
+
+    # 500 未预期异常。兜底码的意义是「连错误响应都要是统一外壳」：
+    # 否则客户端只能拿到 Starlette 的纯文本 500，前端的错误翻译层会把
+    # axios 自己的 code（如 ERR_BAD_RESPONSE）当业务码渲染出来。
+    INTERNAL_ERROR = "KG.INTERNAL_ERROR"
+
     # --- 账号体系：独立 AUTH 命名空间 ---
     # 认证失败与语义错误是两类事故，分开命名便于前端按域组织 i18n，
     # 也避免把「口令错」混进 KG.INVALID_REQUEST 这种泛化码里。
@@ -65,6 +75,8 @@ HTTP_STATUS: dict[ErrorCode, int] = {
     ErrorCode.VALIDATION_VIOLATION: 422,
     ErrorCode.SOURCE_UNREACHABLE: 503,
     ErrorCode.REASONER_UNAVAILABLE: 503,
+    ErrorCode.DATABASE_ERROR: 503,
+    ErrorCode.INTERNAL_ERROR: 500,
     ErrorCode.INVALID_CREDENTIALS: 401,
     ErrorCode.TOKEN_EXPIRED: 401,
     ErrorCode.FORBIDDEN: 403,

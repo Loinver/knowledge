@@ -64,7 +64,9 @@
       "REVISION_NOT_FOUND": "指定的资源版本不存在",
       "VALIDATION_VIOLATION": "语义校验未通过，请检查校验明细",
       "SOURCE_UNREACHABLE": "数据源暂不可用",
-      "REASONER_UNAVAILABLE": "推理或校验执行器暂不可用，请稍后重试"
+      "REASONER_UNAVAILABLE": "推理或校验执行器暂不可用，请稍后重试",
+      "DATABASE_ERROR": "元数据库不可用或结构落后于当前版本，请确认已执行数据库迁移（alembic upgrade head）",
+      "INTERNAL_ERROR": "服务端内部错误，请稍后重试或联系管理员"
     },
     "network": "网络异常，请稍后重试",
     "unknown": "未知错误：{code}",

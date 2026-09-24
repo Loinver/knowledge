@@ -134,6 +134,16 @@ http.interceptors.response.use(
     if (data?.code) {
       return Promise.reject({ ...data, status })
     }
-    return Promise.reject(err)
+    // 没有统一外壳的失败（断网、超时、网关错误）归一成同一形状，且**不带 code**，
+    // 交给 useApiError 走 errors.network 兜底。不能原样抛 AxiosError：它的
+    // `code`（ERR_BAD_RESPONSE / ECONNABORTED …）会被错误翻译层当成业务码，
+    // 渲染成「未知错误：ERR_BAD_RESPONSE」——那是 axios 的内部标识，不该给用户看。
+    return Promise.reject({
+      code: '',
+      message: err.message,
+      params: { status: status ?? 0 },
+      data: null,
+      status,
+    })
   },
 )
