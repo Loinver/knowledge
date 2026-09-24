@@ -25,8 +25,10 @@ import { namespacesApi } from '@/api/namespaces'
 import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
+const { toMessage } = useApiError()
 
 const loading = ref(false)
 const detailsLoading = ref(false)
@@ -96,6 +98,9 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
   {
     title: t('common.displayName'),
     key: 'name',
+    // 固定列宽合计 + 这两列的 minWidth = scroll-x。窗口变窄时表格在容器内
+    // 横向滚动，而不是把「名称」列压到几十像素逐字换行、末列被切掉。
+    minWidth: 180,
     render(row) {
       const label = pickLabel(row.label_i18n, row.name)
       return h('div', { class: 'cell-name' }, [
@@ -104,7 +109,12 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
       ])
     },
   },
-  { title: t('common.iri'), key: 'iri', render: (row) => h('span', { class: 'iri' }, row.iri) },
+  {
+    title: t('common.iri'),
+    key: 'iri',
+    minWidth: 300,
+    render: (row) => h('span', { class: 'iri' }, row.iri),
+  },
   {
     title: t('relation.owl'),
     key: 'owl',
@@ -311,7 +321,7 @@ async function handleCreate() {
     await load()
     await loadDetails()
   } catch (err) {
-    createError.value = (err as { code?: string }).code || t('common.save')
+    createError.value = toMessage(err)
   } finally {
     creating.value = false
   }
@@ -362,7 +372,7 @@ async function handleEdit() {
     showEdit.value = false
     await load()
   } catch (err) {
-    editError.value = (err as { code?: string }).code || t('common.save')
+    editError.value = toMessage(err)
   } finally {
     editing.value = false
   }
@@ -383,7 +393,7 @@ async function publish(row: RelationTypeBrief) {
     await load()
     await loadDetails()
   } catch (err) {
-    actionError.value = (err as { code?: string }).code || t('relation.publishFailed')
+    actionError.value = toMessage(err)
   } finally {
     publishingId.value = null
   }
@@ -477,6 +487,7 @@ onMounted(async () => {
           :data="filtered"
           :bordered="false"
           :pagination="{ pageSize: 20 }"
+          :scroll-x="1040"
           :row-key="(row: RelationTypeBrief) => row.id"
         >
           <template #empty>
@@ -710,7 +721,11 @@ onMounted(async () => {
 
 .stat.active {
   background: var(--accent-soft);
-  box-shadow: var(--glow);
+  /*
+   * 用 1px 实描边而不是 --glow。--glow 带 14px 扩散光晕，那是图谱节点/画布
+   * 的「星图」语义色，用在卡片上会向外晕开、压到上方页面说明文字上。
+   */
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .stat-value {

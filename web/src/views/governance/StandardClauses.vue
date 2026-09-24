@@ -173,6 +173,7 @@ const columns = computed(() => [
   {
     title: t('clauses.title'),
     key: 'title',
+    minWidth: 240,
     render: (row: Clause) => row.title_i18n[locale.value] ?? row.title_i18n['zh-CN'] ?? '',
   },
   {
@@ -234,6 +235,7 @@ const columns = computed(() => [
         :data="items"
         :loading="loading"
         :row-key="(row: Clause) => row.id"
+        :scroll-x="1000"
         remote
       />
       <n-pagination

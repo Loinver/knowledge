@@ -22,8 +22,10 @@ import { entityTypesApi } from '@/api/entity-types'
 import type { Namespace } from '@/api/namespaces'
 import { namespacesApi } from '@/api/namespaces'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
+const { toMessage } = useApiError()
 const router = useRouter()
 
 const loading = ref(false)
@@ -67,6 +69,9 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
     title: t('common.displayName'),
     key: 'name',
+    // 固定列宽合计 + 这两列的 minWidth 就是 scroll-x：窗口变窄时表格在容器内
+    // 横向滚动，而不是把「名称」列压到只剩几十像素、逐字换行。
+    minWidth: 200,
     render(row) {
       const label = displayLabel(row)
       return h('div', { class: 'cell-name' }, [
@@ -78,6 +83,7 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
     title: t('common.iri'),
     key: 'iri',
+    minWidth: 320,
     render: (row) => h('span', { class: 'iri' }, row.iri),
   },
   {
@@ -185,7 +191,7 @@ async function handleCreate() {
     formRef.value?.restoreValidation()
     await loadList()
   } catch (err) {
-    createError.value = (err as { code?: string }).code || t('common.save')
+    createError.value = toMessage(err)
   } finally {
     creating.value = false
   }
@@ -265,6 +271,7 @@ onMounted(async () => {
           :data="filtered"
           :bordered="false"
           :pagination="{ pageSize: 20 }"
+          :scroll-x="860"
           :row-key="(row: EntityTypeBrief) => row.id"
         >
           <template #empty>
@@ -370,7 +377,11 @@ onMounted(async () => {
 
 .stat.active {
   background: var(--accent-soft);
-  box-shadow: var(--glow);
+  /*
+   * 用 1px 实描边而不是 --glow。--glow 带 14px 扩散光晕，那是图谱节点/画布
+   * 的「星图」语义色，用在卡片上会向外晕开、压到上方页面说明文字上。
+   */
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .stat-value {

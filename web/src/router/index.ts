@@ -13,6 +13,14 @@ declare module 'vue-router' {
     public?: boolean
     /** 仅管理员可访问；路由守卫与侧栏菜单可见性共用同一判定 */
     adminOnly?: boolean
+    /**
+     * 全屏页面：内容区不施加统一留白，由页面自己铺满。
+     *
+     * 必须走这个开关，而不是在页面里用负边距「顶出」留白——naive 在
+     * NLayoutContent 内部套了一层 `overflow: hidden` 的滚动容器，
+     * 负边距会让内容超出这层容器，被裁掉一条（设计器的顶部工具条就被裁过）。
+     */
+    fullBleed?: boolean
   }
 }
 
@@ -64,6 +72,7 @@ const routes: RouteRecordRaw[] = [
         path: 'ontology/designer',
         name: 'designer',
         component: () => import('@/views/ontology/Designer.vue'),
+        meta: { fullBleed: true },
       },
 
       {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { NLayout, NLayoutContent } from 'naive-ui'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 
 import AppHeader from '@/layout/components/AppHeader.vue'
 import AppSider from '@/layout/components/AppSider.vue'
@@ -9,6 +10,10 @@ import { useUiStore } from '@/stores/ui'
 
 const ui = useUiStore()
 const { t } = useI18n()
+const route = useRoute()
+
+/** 全屏页面（如本体设计器）不要统一留白，由页面自己铺满内容区。 */
+const fullBleed = computed(() => route.meta.fullBleed === true)
 </script>
 
 <template>
@@ -23,7 +28,10 @@ const { t } = useI18n()
     />
     <NLayout class="admin-main">
       <AppHeader />
-      <NLayoutContent class="content" :native-scrollbar="false">
+      <NLayoutContent
+        :class="['content', { 'content--bleed': fullBleed }]"
+        :native-scrollbar="false"
+      >
         <RouterView />
       </NLayoutContent>
     </NLayout>
@@ -70,6 +78,12 @@ const { t } = useI18n()
   min-height: 0;
   padding: var(--space-5);
 }
+
+/* 全屏页面（route.meta.fullBleed）自己铺满内容区，不吃统一留白 */
+.content--bleed {
+  padding: 0;
+}
+
 .mobile-backdrop {
   display: none;
 }
@@ -77,6 +91,10 @@ const { t } = useI18n()
 @media (max-width: 767px) {
   .content {
     padding: var(--space-4);
+  }
+
+  .content--bleed {
+    padding: 0;
   }
 
   .mobile-backdrop {
