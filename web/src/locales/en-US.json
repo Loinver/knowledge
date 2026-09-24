@@ -44,6 +44,9 @@
   "ontology": {
     "description": "An ontology is the assembled artifact: entity types, relation types and business domains pinned to fixed revisions, forming one semantic graph. Create one and assemble it in the designer; publishing freezes every referenced revision.",
     "create": "New Ontology",
+    "edit": "Edit Ontology",
+    "nameImmutable": "The machine name and IRI are the ontology identity and cannot change after creation.",
+    "updated": "Ontology updated.",
     "createHint": "You will be taken to the designer right away, where you drag entity and relation types onto the canvas.",
     "namePattern": "Machine name must start with an uppercase letter and contain only letters and digits",
     "nameHint": "PascalCase, e.g. EnterpriseOntology",
@@ -98,6 +101,7 @@
   "common": {
     "save": "Save",
     "cancel": "Cancel",
+    "close": "Close",
     "required": "This field is required",
     "confirm": "Confirm",
     "delete": "Delete",
@@ -133,6 +137,10 @@
     "selectOntology": "Select ontology",
     "saving": "Saving…",
     "autoLayout": "Auto layout",
+    "runValidation": "Validate",
+    "validationTitle": "Asset-layer validation",
+    "validationSummary": "Pass {pass} · Violation {violation} · N/A {na} · Not run {notRun}",
+    "moreProps": "… {count} more",
     "fitView": "Fit view",
     "resourcePool": "Resources",
     "inCanvas": "On canvas",

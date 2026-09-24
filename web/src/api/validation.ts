@@ -31,6 +31,9 @@ export interface GraphRevisionBrief {
 }
 
 export const validationApi = {
+  /** 资产层校验（A01–A08）。设计器装配完用它判断能不能发布。 */
+  validateOntology: (ontologyId: number) =>
+    http.post(`/validation/ontologies/${ontologyId}`).then((r) => r.data as ValidationReport),
   validateGraph: (graphRevisionId: number) =>
     http.post(`/validation/graph/${graphRevisionId}`).then((r) => r.data as ValidationReport),
   getReport: (reportId: number) =>

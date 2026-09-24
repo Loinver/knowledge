@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { NAlert, NButton, NEmpty, NSelect, NSpin, useMessage } from 'naive-ui'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import type { DomainBrief, DomainMember } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
-import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
+import type { EntityType, EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
 import type { CanvasPositions, Ontology, OntologyDetail, OntologyRef } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
 import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
+import type { ValidationReport, ValidationResultItem } from '@/api/validation'
+import { validationApi } from '@/api/validation'
 import { useApiError } from '@/composables/useApiError'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const message = useMessage()
 const { toMessage } = useApiError()
 const route = useRoute()
@@ -49,6 +51,17 @@ const relations = ref<RelationTypeBrief[]>([])
 const relationDetails = ref<Record<number, RelationTypeDetail>>({})
 const domains = ref<DomainBrief[]>([])
 const domainMembers = ref<Record<number, DomainMember[]>>({})
+
+/** 选中实体节点的详情（含数据属性）。列表接口只给 brief，属性要按需取。 */
+const typeDetail = ref<EntityType | null>(null)
+const typeDetailLoading = ref(false)
+
+/** 资产层校验（A01–A08）。装配完直接在设计器里看能不能发布。 */
+const validationReport = ref<ValidationReport | null>(null)
+const validationResults = ref<ValidationResultItem[]>([])
+const validating = ref(false)
+const validationError = ref('')
+const showValidation = ref(false)
 
 const canvasEl = ref<HTMLElement | null>(null)
 const worldEl = ref<HTMLElement | null>(null)
@@ -136,6 +149,70 @@ const nodes = computed(() =>
     }
   }),
 )
+
+/** 业务域分区：把域的成员节点圈成一块背景带，域因此在画布上可见。 */
+const BAND_PAD = 24
+const BAND_HEAD = 24
+const EMPTY_BAND_W = 220
+const EMPTY_BAND_H = 76
+
+const domainBands = computed(() => {
+  const bands: {
+    id: number
+    label: string
+    status: ResourceStatus
+    x: number
+    y: number
+    w: number
+    h: number
+    count: number
+  }[] = []
+  const empty: typeof bands = []
+
+  for (const id of canvasDomainIds.value) {
+    const domain = domainById.value[id]
+    if (!domain) continue
+    const memberIds = (domainMembers.value[id] ?? []).map((member) => member.resource_id)
+    const members = nodes.value.filter((node) => memberIds.includes(node.id))
+    const label = pickLabel(domain.label_i18n, domain.name)
+    if (!members.length) {
+      empty.push({
+        id,
+        label,
+        status: domain.status,
+        x: 0,
+        y: 0,
+        w: EMPTY_BAND_W,
+        h: EMPTY_BAND_H,
+        count: 0,
+      })
+      continue
+    }
+    const left = Math.min(...members.map((n) => n.x)) - BAND_PAD
+    const top = Math.min(...members.map((n) => n.y)) - BAND_PAD - BAND_HEAD
+    const right = Math.max(...members.map((n) => n.x + NODE_W)) + BAND_PAD
+    const bottom = Math.max(...members.map((n) => n.y + NODE_H)) + BAND_PAD
+    bands.push({
+      id,
+      label,
+      status: domain.status,
+      x: left,
+      y: top,
+      w: right - left,
+      h: bottom - top,
+      count: members.length,
+    })
+  }
+
+  // 成员还没上画布的域排在内容下方一行 —— 「已入画布」的域必须在画布上找得到，
+  // 否则列表说在、画布上没有，是明确的状态不一致。
+  const maxBottom = bands.length ? Math.max(...bands.map((b) => b.y + b.h)) : 0
+  empty.forEach((band, index) => {
+    band.x = 40 + index * (EMPTY_BAND_W + 24)
+    band.y = maxBottom + 48
+  })
+  return [...bands, ...empty]
+})
 
 /** 连线只画两端都在画布上的关系 —— 一端缺失时画不出来，也不该硬画。 */
 const edges = computed(() => {
@@ -442,19 +519,60 @@ async function persistLayout(context: OntologySelection) {
   }
 }
 
+/**
+ * 自动布局：按业务域分组排布。
+ *
+ * 每个域占一组列（组内竖排、列满换列），组间留出间距 —— 分区带才能把
+ * 同一域的成员圈在一起。不属于任何「已入画布」域的节点排在最后一组。
+ */
 function autoLayout() {
   if (!canEdit.value) return
   const list = nodes.value
   if (!list.length) return
   const next = { ...positions.value }
-  const radius = Math.min(430, 170 + list.length * 24)
-  list.forEach((node, i) => {
-    const angle = (2 * Math.PI * i) / list.length - Math.PI / 2
-    next[node.key] = {
-      x: Math.round(WORLD_W / 2 + radius * Math.cos(angle) - NODE_W / 2),
-      y: Math.round(WORLD_H / 2 + radius * Math.sin(angle) - NODE_H / 2),
+
+  const groups: number[][] = []
+  const assigned = new Set<number>()
+  for (const id of canvasDomainIds.value) {
+    const memberIds = (domainMembers.value[id] ?? []).map((member) => member.resource_id)
+    const ids = list
+      .filter((node) => memberIds.includes(node.id) && !assigned.has(node.id))
+      .map((node) => node.id)
+    if (!ids.length) continue
+    for (const nodeId of ids) assigned.add(nodeId)
+    groups.push(ids)
+  }
+  const rest = list.filter((node) => !assigned.has(node.id)).map((node) => node.id)
+  if (rest.length) groups.push(rest)
+
+  const COL_STEP = NODE_W + 40
+  const ROW_STEP = NODE_H + 34
+  const GROUP_GAP = 64
+  const MARGIN = 130
+  const ROWS_PER_COL = 3
+
+  let x = MARGIN
+  let y = MARGIN
+  let tallest = 1
+  for (const ids of groups) {
+    if (x + COL_STEP > WORLD_W - MARGIN) {
+      x = MARGIN
+      y += tallest * ROW_STEP + GROUP_GAP + BAND_HEAD
+      tallest = 1
     }
-  })
+    ids.forEach((id, index) => {
+      const col = Math.floor(index / ROWS_PER_COL)
+      const row = index % ROWS_PER_COL
+      next[String(id)] = {
+        x: Math.round(x + col * COL_STEP),
+        y: Math.round(y + row * ROW_STEP),
+      }
+    })
+    const cols = Math.ceil(ids.length / ROWS_PER_COL)
+    x += cols * COL_STEP + GROUP_GAP
+    tallest = Math.max(tallest, Math.min(ids.length, ROWS_PER_COL))
+  }
+
   positions.value = next
   fitView()
   void persist()
@@ -604,6 +722,77 @@ async function publish() {
   }
 }
 
+// ── 选中节点的数据属性 ─────────────────────────────────────
+
+/** 画布节点只带 brief，装配时要看这个类型有哪些属性，得按需取详情。 */
+watch(selectedKey, async (key) => {
+  typeDetail.value = null
+  const context = selection
+  if (!key || key.startsWith('rel-') || key.startsWith('domain-')) return
+  const id = Number(key)
+  if (!Number.isSafeInteger(id) || id <= 0) return
+  typeDetailLoading.value = true
+  try {
+    const info = await entityTypesApi.get(id)
+    if (alive && context === selection && selectedKey.value === key) typeDetail.value = info
+  } catch {
+    // 详情取不到不影响装配，检查器退化为不含属性清单
+  } finally {
+    typeDetailLoading.value = false
+  }
+})
+
+// ── 资产层校验（A01–A08）──────────────────────────────────
+
+/**
+ * 装配完最需要知道的是「能不能发布」。后端 `POST /validation/ontologies/{id}`
+ * 跑的就是资产层那 8 项检查，这里把四态结果直接摊在设计器里。
+ */
+async function runValidation() {
+  const id = ontologyId.value
+  if (id === null || validating.value) return
+  validating.value = true
+  validationError.value = ''
+  showValidation.value = true
+  try {
+    const report = await validationApi.validateOntology(id)
+    const results = await validationApi.getResults(report.report_id)
+    if (!alive) return
+    validationReport.value = report
+    validationResults.value = results
+  } catch (err) {
+    if (!alive) return
+    validationError.value = toMessage(err)
+    validationReport.value = null
+    validationResults.value = []
+  } finally {
+    if (alive) validating.value = false
+  }
+}
+
+const VALIDATION_STATE_VAR: Record<string, string> = {
+  PASS: 'var(--s-pass)',
+  VIOLATION: 'var(--s-violation)',
+  NA: 'var(--s-na)',
+  NOT_RUN: 'var(--s-notrun)',
+}
+
+function validationSummaryText(report: ValidationReport): string {
+  const s = report.summary
+  return t('designer.validationSummary', {
+    pass: s.pass,
+    violation: s.violation,
+    na: s.na,
+    notRun: s.not_run,
+  })
+}
+
+/** 校验项名称走 i18n（A01–A08 文案在 report.checks 里）；未见过的码原样显示。 */
+function checkLabel(code: string): string {
+  const key = `report.checks.${code}`
+  return te(key) ? t(key) : code
+}
+
 onMounted(() => {
   // 支持从本体列表带 ?ontology=<id> 进来，直接定位到那一个本体
   const requested = Number(route.query.ontology)
@@ -641,10 +830,46 @@ onBeforeUnmount(() => {
       <NButton size="small" :disabled="!canEdit || !nodes.length" @click="autoLayout">
         {{ t('designer.autoLayout') }}
       </NButton>
+      <NButton
+        size="small"
+        :disabled="ontologyId === null"
+        :loading="validating"
+        @click="runValidation"
+      >
+        {{ t('designer.runValidation') }}
+      </NButton>
       <NButton size="small" type="primary" :disabled="!canEdit" @click="publish">
         {{ t('common.publish') }}
       </NButton>
     </header>
+
+    <!-- 资产层校验结果：装配完在这里就能看出能不能发布 -->
+    <section v-if="showValidation" class="validation">
+      <header class="validation-head">
+        <b>{{ t('designer.validationTitle') }}</b>
+        <span v-if="validationReport" class="validation-summary mono">
+          {{ validationSummaryText(validationReport) }}
+        </span>
+        <span class="spacer" />
+        <button type="button" class="validation-close" @click="showValidation = false">
+          {{ t('common.close') }}
+        </button>
+      </header>
+      <NAlert v-if="validationError" type="error" role="alert">{{ validationError }}</NAlert>
+      <p v-else-if="validating && !validationResults.length" role="status">
+        {{ t('common.loading') }}
+      </p>
+      <ul v-else-if="validationResults.length" class="validation-list">
+        <li v-for="item in validationResults" :key="item.check_code">
+          <span class="check-tag" :style="{ '--dot': VALIDATION_STATE_VAR[item.state] }">
+            <i class="status-dot" />
+            {{ t(`report.states.${item.state}`) }}
+          </span>
+          <span class="check-name">{{ checkLabel(item.check_code) }}</span>
+          <span v-if="item.message" class="check-msg">{{ item.message }}</span>
+        </li>
+      </ul>
+    </section>
 
     <NAlert v-if="catalogError" type="error" role="alert">
       {{ catalogError }}
@@ -783,6 +1008,23 @@ onBeforeUnmount(() => {
                   />
                 </marker>
               </defs>
+
+              <!-- 业务域分区：画在连线与节点之下，让「域」在画布上可见 -->
+              <g v-for="band in domainBands" :key="`band-${band.id}`" class="band">
+                <rect
+                  :x="band.x"
+                  :y="band.y"
+                  :width="band.w"
+                  :height="band.h"
+                  rx="14"
+                  class="band-rect"
+                  :class="{ 'band-rect--empty': band.count === 0 }"
+                />
+                <text :x="band.x + 14" :y="band.y + 17" class="band-label">
+                  {{ band.label }} · {{ band.count }}
+                </text>
+              </g>
+
               <g v-for="edge in edges" :key="edge.key">
                 <path
                   class="edge-hit"
@@ -916,6 +1158,27 @@ onBeforeUnmount(() => {
               <dd class="mono">{{ selected.memberCount }}</dd>
             </template>
           </dl>
+
+          <!-- 数据属性清单：装配时最需要知道这个类型有哪些属性（映射阶段依赖它） -->
+          <div v-if="selected.kind === 'entity'" class="inspect-props">
+            <div class="inspect-props-head">
+              <span>{{ t('entityType.dataProps') }}</span>
+              <span class="mono">{{ typeDetail?.data_props?.length ?? 0 }}</span>
+            </div>
+            <p v-if="typeDetailLoading" class="inspect-empty">{{ t('common.loading') }}</p>
+            <template v-else-if="typeDetail?.data_props?.length">
+              <ul class="prop-list">
+                <li v-for="prop in typeDetail.data_props.slice(0, 4)" :key="prop.name">
+                  <span class="mono prop-name">{{ prop.name }}</span>
+                  <span class="prop-type">{{ t(`entityProps.datatypes.${prop.datatype}`) }}</span>
+                </li>
+              </ul>
+              <p v-if="typeDetail.data_props.length > 4" class="prop-more">
+                {{ t('designer.moreProps', { count: typeDetail.data_props.length - 4 }) }}
+              </p>
+            </template>
+            <p v-else class="inspect-empty">{{ t('common.empty') }}</p>
+          </div>
 
           <NButton size="small" block :disabled="!canEdit" @click="removeFromCanvas(selected.id)">
             {{ t('designer.removeFromCanvas') }}
@@ -1286,6 +1549,97 @@ onBeforeUnmount(() => {
   border-color: var(--border-strong);
 }
 
+/* ── 业务域分区 ─────────────────────────────────────────── */
+.band-rect {
+  fill: var(--accent-soft);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+/* 还没有成员上画布的域：虚线框，一眼看出「这个域还是空的」 */
+.band-rect--empty {
+  fill: transparent;
+  stroke-dasharray: 6 5;
+}
+
+.band-label {
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--text-secondary);
+}
+
+/* ── 资产层校验 ─────────────────────────────────────────── */
+.validation {
+  flex: none;
+  /* 8 项检查 + 标题刚好放得下，再多才滚动 */
+  max-height: 280px;
+  padding: 10px var(--space-4) 12px;
+  overflow: auto;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.validation-head {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: var(--font-small);
+}
+
+.validation-summary {
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
+}
+
+.validation-close {
+  padding: 2px 8px;
+  font: inherit;
+  font-size: var(--font-caption);
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.validation-list {
+  display: grid;
+  gap: 5px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  font-size: var(--font-caption);
+}
+
+.validation-list li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.check-tag {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+  width: 78px;
+  padding: 1px 8px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-pill);
+}
+
+.check-name {
+  flex: none;
+  min-width: 96px;
+  color: var(--text);
+}
+
+.check-msg {
+  color: var(--text-tertiary);
+}
+
 /* ── 检查器 ─────────────────────────────────────────────── */
 .inspect-body {
   display: flex;
@@ -1331,6 +1685,56 @@ onBeforeUnmount(() => {
   color: var(--text-tertiary);
   font-size: var(--font-caption);
   line-height: 1.7;
+}
+
+/* ── 检查器 · 数据属性清单 ──────────────────────────────── */
+.inspect-props {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.inspect-props-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-caption);
+  color: var(--text-secondary);
+}
+
+.prop-list {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.prop-list li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.prop-name {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-type {
+  flex: none;
+  color: var(--text-tertiary);
+}
+
+.prop-more {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 /* ── 共享 ───────────────────────────────────────────────── */

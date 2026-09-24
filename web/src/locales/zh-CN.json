@@ -44,6 +44,9 @@
   "ontology": {
     "description": "本体是装配产物：把实体类型、关系类型与业务域按固定版本组合成一张语义图。新建后进入设计器装配，发布即冻结全部引用资源的版本。",
     "create": "新建本体",
+    "edit": "编辑本体",
+    "nameImmutable": "机读名与 IRI 是本体身份，创建后不可修改。",
+    "updated": "本体已更新。",
     "createHint": "新建后直接进入设计器，在那里把实体类型与关系拖入画布完成装配。",
     "namePattern": "机读名须以大写字母开头，仅含字母与数字",
     "nameHint": "PascalCase，例如 EnterpriseOntology",
@@ -98,6 +101,7 @@
   "common": {
     "save": "保存",
     "cancel": "取消",
+    "close": "关闭",
     "required": "此项必填",
     "confirm": "确认",
     "delete": "删除",
@@ -133,6 +137,10 @@
     "selectOntology": "选择本体",
     "saving": "保存中…",
     "autoLayout": "自动布局",
+    "runValidation": "校验",
+    "validationTitle": "资产层校验",
+    "validationSummary": "通过 {pass} · 违反 {violation} · 不适用 {na} · 未执行 {notRun}",
+    "moreProps": "… 还有 {count} 项",
     "fitView": "适应窗口",
     "resourcePool": "资源",
     "inCanvas": "已入画布",

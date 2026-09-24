@@ -13,7 +13,7 @@ import {
   NSpace,
   NSpin,
 } from 'naive-ui'
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -45,6 +45,11 @@ const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
 const formRef = ref<FormInst | null>(null)
+/** 抽屉两用：新建 / 编辑。编辑时机读名与 IRI 是身份，只读展示。 */
+const mode = ref<'create' | 'edit'>('create')
+const editingId = ref<number | null>(null)
+const editingRevision = ref(0)
+const editingEditRevision = ref(0)
 const formData = ref({
   name: '',
   iri: '',
@@ -55,15 +60,22 @@ const formData = ref({
 })
 
 const rules = computed<FormRules>(() => ({
-  name: [
-    { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
-    {
-      pattern: /^[A-Z][A-Za-z0-9]*$/,
-      message: t('ontology.namePattern'),
-      trigger: ['blur', 'input'],
-    },
-  ],
-  iri: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  // 编辑态机读名只读，不再校验 pattern，避免禁用字段卡住提交
+  name:
+    mode.value === 'edit'
+      ? []
+      : [
+          { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+          {
+            pattern: /^[A-Z][A-Za-z0-9]*$/,
+            message: t('ontology.namePattern'),
+            trigger: ['blur', 'input'],
+          },
+        ],
+  iri:
+    mode.value === 'edit'
+      ? []
+      : [{ required: true, message: t('common.required'), trigger: ['blur', 'input'] }],
   labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
 }))
 
@@ -124,7 +136,7 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
   {
     title: t('common.actions'),
     key: 'actions',
-    width: 190,
+    width: 250,
     render: (row) =>
       h(NSpace, { size: 4, wrap: false }, () => [
         h(
@@ -132,7 +144,14 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
           { size: 'small', quaternary: true, onClick: () => openDesigner(row) },
           { default: () => t('ontology.openDesigner') },
         ),
-        // 草稿才能发布：发布即冻结，之后不可再改
+        // 草稿才能编辑/发布：发布即冻结，之后不可再改
+        row.status === 'DRAFT'
+          ? h(
+              NButton,
+              { size: 'small', quaternary: true, onClick: () => openEdit(row) },
+              { default: () => t('common.edit') },
+            )
+          : null,
         row.status === 'DRAFT'
           ? h(
               NButton,
@@ -180,22 +199,57 @@ async function publish(row: Ontology) {
   }
 }
 
+/** 机读名与 IRI 是资源身份，编辑态只读；两种模式下的说明文案不同。 */
+const nameFeedback = computed(() =>
+  mode.value === 'edit' ? t('ontology.nameImmutable') : t('ontology.nameHint'),
+)
+
+function emptyForm() {
+  return { name: '', iri: '', labelZh: '', labelEn: '', definitionZh: '', definitionEn: '' }
+}
+
 /** 打开抽屉即重置表单与校验态，避免上一轮报错残留。 */
-watch(showCreate, (open) => {
-  if (!open) return
+function openCreate() {
+  mode.value = 'create'
+  editingId.value = null
+  formData.value = emptyForm()
+  createError.value = ''
+  showCreate.value = true
+  formRef.value?.restoreValidation()
+}
+
+/**
+ * 编辑本体：后端 `PUT /ontologies/{id}` 一直存在，此前没有任何入口
+ * —— 本体建好之后标签与定义就再也改不了，与实体类型同一类缺口。
+ */
+function openEdit(row: Ontology) {
+  mode.value = 'edit'
+  editingId.value = row.id
+  editingRevision.value = row.current_revision
+  editingEditRevision.value = row.edit_revision
   formData.value = {
-    name: '',
-    iri: '',
-    labelZh: '',
-    labelEn: '',
+    name: row.name,
+    iri: row.iri,
+    labelZh: row.label_i18n?.['zh-CN'] ?? '',
+    labelEn: row.label_i18n?.['en-US'] ?? '',
     definitionZh: '',
     definitionEn: '',
   }
   createError.value = ''
+  showCreate.value = true
   formRef.value?.restoreValidation()
-})
+  // 列表只返回 brief，定义要取详情
+  void ontologyApi
+    .get(row.id)
+    .then((info) => {
+      if (editingId.value !== row.id) return
+      formData.value.definitionZh = info.definition_i18n?.['zh-CN'] ?? ''
+      formData.value.definitionEn = info.definition_i18n?.['en-US'] ?? ''
+    })
+    .catch(() => undefined)
+}
 
-async function handleCreate() {
+async function handleSubmit() {
   createError.value = ''
   try {
     await formRef.value?.validate()
@@ -211,6 +265,18 @@ async function handleCreate() {
 
   creating.value = true
   try {
+    if (mode.value === 'edit' && editingId.value !== null) {
+      await ontologyApi.update(
+        editingId.value,
+        { label_i18n: label, definition_i18n: definition, if_match: editingRevision.value },
+        editingEditRevision.value,
+      )
+      showCreate.value = false
+      notice.value = t('ontology.updated')
+      await loadList()
+      return
+    }
+
     const created = await ontologyApi.create({
       name: f.name.trim(),
       iri: f.iri.trim(),
@@ -238,7 +304,7 @@ onMounted(() => void loadList())
   <section class="page">
     <PageHeader :title="t('page.ontologies')" :description="t('ontology.description')">
       <template #actions>
-        <NButton type="primary" @click="showCreate = true">{{ t('ontology.create') }}</NButton>
+        <NButton type="primary" @click="openCreate">{{ t('ontology.create') }}</NButton>
       </template>
     </PageHeader>
 
@@ -279,7 +345,7 @@ onMounted(() => void loadList())
           <template #empty>
             <NEmpty :description="t('ontology.empty')">
               <template #extra>
-                <NButton type="primary" size="small" @click="showCreate = true">
+                <NButton type="primary" size="small" @click="openCreate">
                   {{ t('ontology.create') }}
                 </NButton>
               </template>
@@ -295,7 +361,10 @@ onMounted(() => void loadList())
       :mask-closable="!creating"
       :close-on-esc="!creating"
     >
-      <NDrawerContent :title="t('ontology.create')" :closable="!creating">
+      <NDrawerContent
+        :title="mode === 'edit' ? t('ontology.edit') : t('ontology.create')"
+        :closable="!creating"
+      >
         <NAlert v-if="createError" type="error" class="create-error">{{ createError }}</NAlert>
         <NForm
           ref="formRef"
@@ -305,11 +374,19 @@ onMounted(() => void loadList())
           label-placement="top"
         >
           <NFormItem :label="t('common.name')" path="name">
-            <NInput v-model:value="formData.name" placeholder="EnterpriseOntology" />
-            <template #feedback>{{ t('ontology.nameHint') }}</template>
+            <NInput
+              v-model:value="formData.name"
+              :disabled="mode === 'edit'"
+              placeholder="EnterpriseOntology"
+            />
+            <template #feedback>{{ nameFeedback }}</template>
           </NFormItem>
           <NFormItem :label="t('common.iri')" path="iri">
-            <NInput v-model:value="formData.iri" placeholder="urn:knowledge:ontology:enterprise" />
+            <NInput
+              v-model:value="formData.iri"
+              :disabled="mode === 'edit'"
+              placeholder="urn:knowledge:ontology:enterprise"
+            />
           </NFormItem>
           <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
@@ -332,13 +409,13 @@ onMounted(() => void loadList())
             />
           </NFormItem>
         </NForm>
-        <p class="create-hint">{{ t('ontology.createHint') }}</p>
+        <p v-if="mode === 'create'" class="create-hint">{{ t('ontology.createHint') }}</p>
         <template #footer>
           <div class="drawer-actions">
             <NButton :disabled="creating" @click="showCreate = false">
               {{ t('common.cancel') }}
             </NButton>
-            <NButton type="primary" :loading="creating" @click="handleCreate">
+            <NButton type="primary" :loading="creating" @click="handleSubmit">
               {{ t('common.save') }}
             </NButton>
           </div>
