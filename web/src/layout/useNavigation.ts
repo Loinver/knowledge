@@ -48,6 +48,7 @@ export function useNavigation() {
         icon: 'ontology',
         label: t('menu.ontology'),
         items: [
+          { key: 'ontologies', label: t('page.ontologies') },
           { key: 'entity-types', label: t('page.entityTypes') },
           { key: 'relation-types', label: t('page.relationTypes') },
           { key: 'domains', label: t('page.domains') },

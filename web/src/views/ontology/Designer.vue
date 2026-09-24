@@ -2,6 +2,7 @@
 import { NAlert, NButton, NEmpty, NSelect, NSpin, useMessage } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { DomainBrief, DomainMember } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
@@ -16,6 +17,8 @@ import { useApiError } from '@/composables/useApiError'
 const { t, locale } = useI18n()
 const message = useMessage()
 const { toMessage } = useApiError()
+const route = useRoute()
+const router = useRouter()
 
 /** 画布世界尺寸固定，视口通过 transform 平移缩放 —— 拖动因此可以用纯 CSS 像素计算。 */
 const WORLD_W = 2200
@@ -601,7 +604,12 @@ async function publish() {
   }
 }
 
-onMounted(() => void loadCatalog())
+onMounted(() => {
+  // 支持从本体列表带 ?ontology=<id> 进来，直接定位到那一个本体
+  const requested = Number(route.query.ontology)
+  if (Number.isSafeInteger(requested) && requested > 0) ontologyId.value = requested
+  void loadCatalog()
+})
 
 onBeforeUnmount(() => {
   alive = false
@@ -655,7 +663,14 @@ onBeforeUnmount(() => {
     <p v-if="catalogLoading" role="status">{{ t('common.loading') }}</p>
 
     <div v-if="!catalogLoading && !catalogError && !ontologies.length" class="no-ontology">
-      <NEmpty :description="t('designer.noOntologyHint')" />
+      <!-- 空态要给出可执行动作，而不是只说「去创建一个」却没有入口 -->
+      <NEmpty :description="t('designer.noOntologyHint')">
+        <template #extra>
+          <NButton type="primary" size="small" @click="router.push({ name: 'ontologies' })">
+            {{ t('ontology.create') }}
+          </NButton>
+        </template>
+      </NEmpty>
     </div>
 
     <div v-else-if="ontologies.length" class="body">

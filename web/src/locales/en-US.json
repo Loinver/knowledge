@@ -15,6 +15,7 @@
   },
   "page": {
     "dashboard": "Dashboard",
+    "ontologies": "Ontologies",
     "entityTypes": "Entity Types",
     "entityDetail": "Entity Type Detail",
     "relationTypes": "Relation Types",
@@ -39,6 +40,17 @@
     "forbiddenHint": "Your account has no permission for this page. Contact an administrator.",
     "backToDashboard": "Back to dashboard",
     "governanceClauses": "Standard clauses"
+  },
+  "ontology": {
+    "description": "An ontology is the assembled artifact: entity types, relation types and business domains pinned to fixed revisions, forming one semantic graph. Create one and assemble it in the designer; publishing freezes every referenced revision.",
+    "create": "New Ontology",
+    "createHint": "You will be taken to the designer right away, where you drag entity and relation types onto the canvas.",
+    "namePattern": "Machine name must start with an uppercase letter and contain only letters and digits",
+    "nameHint": "PascalCase, e.g. EnterpriseOntology",
+    "openDesigner": "Designer",
+    "created": "Ontology created.",
+    "published": "Ontology published.",
+    "empty": "No ontologies yet. Create one, or start from a template in Assembly Templates."
   },
   "validation": {
     "PASS": "Pass",
@@ -137,7 +149,7 @@
     "layoutHint": "Dragging only changes the canvas layout and never creates a semantic revision.",
     "emptyCanvas": "The canvas is empty",
     "emptyCanvasHint": "Add entity types from the resource panel on the left",
-    "noOntologyHint": "No ontology yet. Pick a template in Assembly templates, or create one directly.",
+    "noOntologyHint": "No ontology yet. Pick a template in Assembly templates, or create one in Ontologies.",
     "legendRelation": "Object property",
     "legendDraft": "Not published",
     "saveFailed": "Failed to save the layout",

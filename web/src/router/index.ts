@@ -49,6 +49,11 @@ const routes: RouteRecordRaw[] = [
 
       { path: 'ontology', redirect: { name: 'entity-types' } },
       {
+        path: 'ontology/ontologies',
+        name: 'ontologies',
+        component: () => import('@/views/ontology/Ontologies.vue'),
+      },
+      {
         path: 'ontology/entity-types',
         name: 'entity-types',
         component: () => import('@/views/ontology/EntityTypes.vue'),
