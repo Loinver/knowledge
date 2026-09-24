@@ -43,6 +43,10 @@ class BusinessDomain(Base):
     edit_revision: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False
     )
+    # 可选父域：域可以按业务边界分层，也可以保持平铺（NULL）
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("business_domain.id", ondelete="SET NULL"), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -3649,6 +3649,8 @@ export interface components {
       current_revision: number
       /** Edit Revision */
       edit_revision: number
+      /** Parent Id */
+      parent_id?: number | null
     }
     /** DomainCreate */
     DomainCreate: {
@@ -3666,6 +3668,8 @@ export interface components {
       } | null
       /** Member Ids */
       member_ids?: number[]
+      /** Parent Id */
+      parent_id?: number | null
     }
     /**
      * DomainMemberAdd
@@ -3718,6 +3722,8 @@ export interface components {
       current_revision: number
       /** Edit Revision */
       edit_revision: number
+      /** Parent Id */
+      parent_id?: number | null
     }
     /** DomainUpdate */
     DomainUpdate: {
@@ -3729,6 +3735,8 @@ export interface components {
       definition_i18n?: {
         [key: string]: string
       } | null
+      /** Parent Id */
+      parent_id?: number | null
       /** If Match */
       if_match: number
       /** If Edit Match */

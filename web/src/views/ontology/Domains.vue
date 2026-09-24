@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FormInst, FormRules } from 'naive-ui'
+import type { FormInst, FormRules, TreeOption } from 'naive-ui'
 import {
   NAlert,
   NButton,
@@ -13,6 +13,7 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  NTree,
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -51,7 +52,13 @@ const notice = ref('')
 const showBasicEditor = ref(false)
 const basicError = ref('')
 const basicFormRef = ref<FormInst | null>(null)
-const basicForm = ref({ labelZh: '', labelEn: '', definitionZh: '', definitionEn: '' })
+const basicForm = ref({
+  labelZh: '',
+  labelEn: '',
+  definitionZh: '',
+  definitionEn: '',
+  parentId: null as number | null,
+})
 const actionError = ref('')
 const listError = ref('')
 const membersError = ref('')
@@ -295,8 +302,72 @@ async function publish() {
   await updateDomain((id, revision) => domainsApi.publish(id, revision))
 }
 
-const formData = ref({ name: '', iri: '', labelZh: '', labelEn: '' })
+const formData = ref({
+  name: '',
+  iri: '',
+  labelZh: '',
+  labelEn: '',
+  parentId: null as number | null,
+})
 const createFormRef = ref<FormInst | null>(null)
+
+/**
+ * 域树：按 parent_id 组装。
+ *
+ * 父域不在当前列表里的（数据异常或权限过滤）按根节点处理，
+ * 否则那些域会从树里凭空消失。
+ */
+const domainTree = computed<TreeOption[]>(() => {
+  const ids = new Set(items.value.map((domain) => domain.id))
+  const byParent = new Map<number | null, DomainBrief[]>()
+  for (const domain of items.value) {
+    const parent = domain.parent_id != null && ids.has(domain.parent_id) ? domain.parent_id : null
+    const bucket = byParent.get(parent)
+    if (bucket) bucket.push(domain)
+    else byParent.set(parent, [domain])
+  }
+  const build = (parentId: number | null): TreeOption[] =>
+    (byParent.get(parentId) ?? []).map((domain) => {
+      const children = build(domain.id)
+      return {
+        key: domain.id,
+        label: pickLabel(domain.label_i18n, domain.name),
+        children: children.length ? children : undefined,
+        suffix: () => t(`resourceStatus.${domain.status}`),
+      }
+    })
+  return build(null)
+})
+
+const treeSelectedKeys = computed(() => (selected.value ? [selected.value.id] : []))
+
+function onTreeSelect(keys: Array<string | number>) {
+  const id = Number(keys[0])
+  const domain = items.value.find((item) => item.id === id)
+  if (domain) void select(domain)
+}
+
+/** 父域候选：排除自己与自己的后代，否则会形成环（后端也会拒绝）。 */
+const parentOptions = computed(() => {
+  const blocked = new Set<number>()
+  const current = detail.value?.id
+  if (current != null) {
+    blocked.add(current)
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const domain of items.value) {
+        if (domain.parent_id != null && blocked.has(domain.parent_id) && !blocked.has(domain.id)) {
+          blocked.add(domain.id)
+          grew = true
+        }
+      }
+    }
+  }
+  return items.value
+    .filter((domain) => !blocked.has(domain.id))
+    .map((domain) => ({ label: pickLabel(domain.label_i18n, domain.name), value: domain.id }))
+})
 
 /** 业务域的机读名同样走 PascalCase；IRI 必填，格式由后端校验。 */
 const createRules = computed<FormRules>(() => ({
@@ -315,7 +386,7 @@ const createRules = computed<FormRules>(() => ({
 /** 打开抽屉即重置表单与校验态。 */
 watch(showCreate, (open) => {
   if (!open) return
-  formData.value = { name: '', iri: '', labelZh: '', labelEn: '' }
+  formData.value = { name: '', iri: '', labelZh: '', labelEn: '', parentId: null }
   createError.value = ''
   createFormRef.value?.restoreValidation()
 })
@@ -335,10 +406,11 @@ async function handleCreate() {
       name: f.name,
       iri: f.iri,
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
+      ...(f.parentId === null ? {} : { parent_id: f.parentId }),
     })
     if (!alive) return
     showCreate.value = false
-    formData.value = { name: '', iri: '', labelZh: '', labelEn: '' }
+    formData.value = { name: '', iri: '', labelZh: '', labelEn: '', parentId: null }
     await load()
   } catch (err) {
     if (alive) createError.value = toMessage(err)
@@ -356,6 +428,7 @@ function openBasicEditor() {
     labelEn: info.label_i18n?.['en-US'] ?? '',
     definitionZh: info.definition_i18n?.['zh-CN'] ?? '',
     definitionEn: info.definition_i18n?.['en-US'] ?? '',
+    parentId: info.parent_id ?? null,
   }
   basicError.value = ''
   showBasicEditor.value = true
@@ -379,11 +452,13 @@ async function saveBasic() {
   if (basicForm.value.definitionZh.trim()) definition['zh-CN'] = basicForm.value.definitionZh.trim()
   if (basicForm.value.definitionEn.trim()) definition['en-US'] = basicForm.value.definitionEn.trim()
 
-  // 走统一的写入口，沿用它的选中代次校验与冲突处理
+  // 走统一的写入口，沿用它的选中代次校验与冲突处理。
+  // parent_id 显式传 null 表示解除父域（后端按 model_fields_set 区分「没传」）。
   const updated = await updateDomain((id, revision) =>
     domainsApi.update(id, {
       label_i18n: label,
       definition_i18n: definition,
+      parent_id: basicForm.value.parentId,
       if_match: info.current_revision,
       if_edit_match: revision,
     }),
@@ -424,18 +499,15 @@ onBeforeUnmount(() => {
             <span class="mono count">{{ items.length }}</span>
           </header>
           <div v-if="items.length" class="list-body">
-            <button
-              v-for="d in items"
-              :key="d.id"
-              type="button"
-              class="domain-item"
-              :class="{ on: selected?.id === d.id }"
-              @click="select(d)"
-            >
-              <i class="dot" :style="{ background: STATUS_VAR[d.status] }" />
-              <span class="item-name">{{ pickLabel(d.label_i18n, d.name) }}</span>
-              <span class="mono rev">{{ `v${d.current_revision}` }}</span>
-            </button>
+            <!-- 域树：父域 → 子域，状态作为后缀显示 -->
+            <NTree
+              block-line
+              selectable
+              :data="domainTree"
+              :selected-keys="treeSelectedKeys"
+              :default-expand-all="true"
+              @update:selected-keys="onTreeSelect"
+            />
           </div>
           <div v-else-if="!loading && !listError" class="list-empty">
             <NEmpty :description="t('common.empty')" />
@@ -598,6 +670,14 @@ onBeforeUnmount(() => {
           <NFormItem :label="t('common.labelEn')" path="labelEn">
             <NInput v-model:value="basicForm.labelEn" />
           </NFormItem>
+          <NFormItem :label="t('domain.parent')" path="parentId">
+            <NSelect
+              v-model:value="basicForm.parentId"
+              :options="parentOptions"
+              clearable
+              :placeholder="t('domain.noParent')"
+            />
+          </NFormItem>
           <NFormItem :label="t('common.definitionZh')" path="definitionZh">
             <NInput
               v-model:value="basicForm.definitionZh"
@@ -652,6 +732,14 @@ onBeforeUnmount(() => {
           </NFormItem>
           <NFormItem :label="t('common.labelEn')" path="labelEn">
             <NInput v-model:value="formData.labelEn" />
+          </NFormItem>
+          <NFormItem :label="t('domain.parent')" path="parentId">
+            <NSelect
+              v-model:value="formData.parentId"
+              :options="parentOptions"
+              clearable
+              :placeholder="t('domain.noParent')"
+            />
           </NFormItem>
         </NForm>
         <NAlert v-if="createError" type="error" class="action-error">{{ createError }}</NAlert>

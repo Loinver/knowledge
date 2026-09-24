@@ -31,11 +31,14 @@ class DomainCreate(BaseModel):
     label_i18n: dict[str, str]
     definition_i18n: dict[str, str] | None = None
     member_ids: list[int] = Field(default_factory=list)
+    # 可选父域，用于域树；不填即平铺
+    parent_id: int | None = Field(default=None, gt=0)
 
 
 class DomainUpdate(BaseModel):
     label_i18n: dict[str, str] | None = None
     definition_i18n: dict[str, str] | None = None
+    parent_id: int | None = Field(default=None, gt=0)
     if_match: int
     if_edit_match: int | None = Field(default=None, ge=0)
 
@@ -50,6 +53,7 @@ class DomainOut(BaseModel):
     status: ResourceStatus
     current_revision: int
     edit_revision: int
+    parent_id: int | None = None
 
 
 class DomainBrief(BaseModel):
@@ -61,6 +65,7 @@ class DomainBrief(BaseModel):
     status: ResourceStatus
     current_revision: int
     edit_revision: int
+    parent_id: int | None = None
 
 
 class PublishCheckResult(BaseModel):

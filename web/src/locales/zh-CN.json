@@ -263,6 +263,8 @@
     "basicSaved": "业务域已保存。",
     "members": "成员",
     "addMember": "添加成员",
+    "parent": "父域",
+    "noParent": "无父域（顶层）",
     "asRef": "跨域引用",
     "publishCheck": "发布检查",
     "checkPassed": "检查通过，可发布",

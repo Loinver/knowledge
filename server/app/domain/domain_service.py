@@ -34,6 +34,7 @@ def create_domain(session: Session, payload: DomainCreate) -> BusinessDomain:
         label_i18n=payload.label_i18n,
         definition_i18n=payload.definition_i18n,
         status=ResourceStatus.DRAFT,
+        parent_id=_resolve_parent(session, payload.parent_id),
     )
     session.add(domain)
     session.flush()
@@ -41,6 +42,44 @@ def create_domain(session: Session, payload: DomainCreate) -> BusinessDomain:
         add_member(session, domain.id, DomainMemberAdd(resource_id=rid))
     session.flush()
     return domain
+
+
+def _resolve_parent(session: Session, parent_id: int | None) -> int | None:
+    """校验父域存在。不检查环路 —— 新建的域还没有子域，不可能成环。"""
+    if parent_id is None:
+        return None
+    if session.get(BusinessDomain, parent_id) is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"domain_id": parent_id})
+    return parent_id
+
+
+def _assert_no_cycle(
+    session: Session, domain: BusinessDomain, parent_id: int | None
+) -> None:
+    """把 domain 挂到 parent_id 下不能形成环。
+
+    沿父链往上走，遇到自己就说明目标是自己的后代 —— 直接拒绝，
+    否则域树会自引用，前端渲染成无限层级。
+    """
+    if parent_id is None:
+        return
+    if parent_id == domain.id:
+        raise KGError(
+            ErrorCode.INVALID_REQUEST,
+            {"reason": "domain_parent_cycle", "domain_id": domain.id},
+        )
+    seen: set[int] = {domain.id}
+    cursor = session.get(BusinessDomain, parent_id)
+    while cursor is not None:
+        if cursor.id in seen:
+            raise KGError(
+                ErrorCode.INVALID_REQUEST,
+                {"reason": "domain_parent_cycle", "domain_id": domain.id},
+            )
+        seen.add(cursor.id)
+        if cursor.parent_id is None:
+            return
+        cursor = session.get(BusinessDomain, cursor.parent_id)
 
 
 def add_member(
@@ -175,6 +214,14 @@ def update_domain(
         domain.label_i18n = payload.label_i18n
     if payload.definition_i18n is not None:
         domain.definition_i18n = payload.definition_i18n
+    # parent_id 用 model_fields_set 判断「显式传了」还是「没传」：
+    # 显式传 null 表示解除父域，没传则保持原值。
+    if "parent_id" in payload.model_fields_set:
+        if payload.parent_id is None:
+            domain.parent_id = None
+        else:
+            _assert_no_cycle(session, domain, payload.parent_id)
+            domain.parent_id = _resolve_parent(session, payload.parent_id)
     session.flush()
     return domain
 

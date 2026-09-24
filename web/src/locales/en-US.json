@@ -263,6 +263,8 @@
     "basicSaved": "Business domain saved.",
     "members": "Members",
     "addMember": "Add Member",
+    "parent": "Parent domain",
+    "noParent": "No parent (top level)",
     "asRef": "Cross-domain Reference",
     "publishCheck": "Publish Check",
     "checkPassed": "Check passed, ready to publish",
