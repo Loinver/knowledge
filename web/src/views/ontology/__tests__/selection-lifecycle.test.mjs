@@ -11,6 +11,7 @@ import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
 import { createRenderer, createSSRApp, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed = {
@@ -70,6 +71,7 @@ function state() {
     },
     domains: {
       list: async () => [resource(1), resource(2)],
+      get: async (id) => resource(id),
       members: async (id) => [member(id)],
       addMember: async () => {},
       removeMember: async () => {},
@@ -160,10 +162,19 @@ async function i18n(locale = 'en-US') {
   const messages = JSON.parse(await readFile(path.join(web, `src/locales/${locale}.json`), 'utf8'))
   return createI18n({ legacy: false, locale, messages: { [locale]: messages } })
 }
+function createTestRouter() {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: { render: () => null } }],
+  })
+}
 async function mount(t, name, api = state()) {
   const view = await compileView(name, api)
   const translations = await i18n()
-  const app = renderer.createApp({ ...view.component, render: () => null }).use(translations)
+  const app = renderer
+    .createApp({ ...view.component, render: () => null })
+    .use(translations)
+    .use(createTestRouter())
   const vm = app.mount({})
   let stopped = false
   const stop = () => {
@@ -582,7 +593,7 @@ test('selection pages render visible errors and translated refresh controls usin
     try {
       for (const locale of ['en-US', 'zh-CN']) {
         const translations = await i18n(locale)
-        const app = createSSRApp(view.component).use(translations)
+        const app = createSSRApp(view.component).use(translations).use(createTestRouter())
         setup(app)
         const html = await renderToString(app)
         assert.match(html, /role="alert"/)

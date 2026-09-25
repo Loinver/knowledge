@@ -267,6 +267,118 @@ const availableDomains = computed(() =>
   domains.value.filter((domain) => !canvasDomainIds.value.includes(domain.id)),
 )
 
+/** 端点没有全部在画布上的关系：画不出连线，标成「未配置」而不是静默丢掉。 */
+const unconfiguredRelationIds = computed(() =>
+  canvasRelationIds.value.filter((rid) => {
+    const info = relationDetails.value[rid]
+    if (!info) return true
+    return (
+      positions.value[String(info.domain_spec.type_id)] === undefined ||
+      positions.value[String(info.range_spec.type_id)] === undefined
+    )
+  }),
+)
+
+type PoolItem = { id: number; label: string; status: ResourceStatus; unconfigured: boolean }
+type PoolCategory = { kind: 'type' | 'relation' | 'domain'; label: string; items: PoolItem[] }
+
+function poolLabel(labels: Record<string, string> | null | undefined, fallback: string): string {
+  return pickLabel(labels, fallback)
+}
+
+/** 资源池按「类型 / 关系 / 域」分类并计数 —— 一眼看出还剩哪类没装配。 */
+const canvasCategories = computed<PoolCategory[]>(() => [
+  {
+    kind: 'type',
+    label: t('designer.categoryTypes'),
+    items: canvasTypeIds.value.map((id) => {
+      const tp = typeById.value[id]
+      return {
+        id,
+        label: poolLabel(tp?.label_i18n, String(id)),
+        status: tp?.status ?? 'DRAFT',
+        unconfigured: false,
+      }
+    }),
+  },
+  {
+    kind: 'relation',
+    label: t('designer.categoryRelations'),
+    items: canvasRelationIds.value.map((id) => {
+      const rel = relationById.value[id]
+      return {
+        id,
+        label: poolLabel(rel?.label_i18n, String(id)),
+        status: rel?.status ?? 'DRAFT',
+        unconfigured: unconfiguredRelationIds.value.includes(id),
+      }
+    }),
+  },
+  {
+    kind: 'domain',
+    label: t('designer.categoryDomains'),
+    items: canvasDomainIds.value.map((id) => {
+      const domain = domainById.value[id]
+      return {
+        id,
+        label: poolLabel(domain?.label_i18n, String(id)),
+        status: domain?.status ?? 'DRAFT',
+        unconfigured: false,
+      }
+    }),
+  },
+])
+
+const availableCategories = computed<PoolCategory[]>(() => [
+  {
+    kind: 'type',
+    label: t('designer.categoryTypes'),
+    items: availableTypes.value.map((tp) => ({
+      id: tp.id,
+      label: poolLabel(tp.label_i18n, tp.name),
+      status: tp.status,
+      unconfigured: false,
+    })),
+  },
+  {
+    kind: 'relation',
+    label: t('designer.categoryRelations'),
+    items: availableRelations.value.map((r) => ({
+      id: r.id,
+      label: poolLabel(r.label_i18n, r.name),
+      status: r.status,
+      unconfigured: false,
+    })),
+  },
+  {
+    kind: 'domain',
+    label: t('designer.categoryDomains'),
+    items: availableDomains.value.map((domain) => ({
+      id: domain.id,
+      label: poolLabel(domain.label_i18n, domain.name),
+      status: domain.status,
+      unconfigured: false,
+    })),
+  },
+])
+
+const canvasTotal = computed(() =>
+  canvasCategories.value.reduce((sum, cat) => sum + cat.items.length, 0),
+)
+
+/** 池子里点一下：类型/域直接选中，关系要补详情。 */
+function selectPoolItem(kind: PoolCategory['kind'], id: number) {
+  if (kind === 'relation') selectRelation(id)
+  else if (kind === 'domain') selectedKey.value = `domain-${id}`
+  else selectedKey.value = String(id)
+}
+
+function isPoolItemActive(kind: PoolCategory['kind'], id: number): boolean {
+  if (kind === 'relation') return selectedKey.value === `rel-${id}`
+  if (kind === 'domain') return selectedKey.value === `domain-${id}`
+  return selectedKey.value === String(id)
+}
+
 type SelectedInspector =
   | {
       kind: 'entity'
@@ -793,6 +905,12 @@ function checkLabel(code: string): string {
   return te(key) ? t(key) : code
 }
 
+const unconfiguredLabels = computed(() =>
+  unconfiguredRelationIds.value.map((rid) =>
+    poolLabel(relationById.value[rid]?.label_i18n, String(rid)),
+  ),
+)
+
 onMounted(() => {
   // 支持从本体列表带 ?ontology=<id> 进来，直接定位到那一个本体
   const requested = Number(route.query.ontology)
@@ -903,83 +1021,62 @@ onBeforeUnmount(() => {
       <aside class="panel pool">
         <div class="panel-head">{{ t('designer.resourcePool') }}</div>
         <div class="pool-body">
-          <div class="pool-group">{{ t('designer.inCanvas') }}</div>
-          <button
-            v-for="id in canvasTypeIds"
-            :key="`c-${id}`"
-            type="button"
-            class="pool-item on"
-            @click="selectedKey = String(id)"
-          >
-            <i class="dot" style="background: var(--g-entity)" />
-            <span class="pool-name">{{ pickLabel(typeById[id]?.label_i18n, String(id)) }}</span>
-          </button>
-          <button
-            v-for="id in canvasRelationIds"
-            :key="`cr-${id}`"
-            type="button"
-            class="pool-item"
-            :class="{ on: selectedKey === `rel-${id}` }"
-            @click="selectRelation(id)"
-          >
-            <i class="dot" style="background: var(--g-relation)" />
-            <span class="pool-name">{{ pickLabel(relationById[id]?.label_i18n, String(id)) }}</span>
-          </button>
-          <button
-            v-for="id in canvasDomainIds"
-            :key="`cd-${id}`"
-            type="button"
-            class="pool-item"
-            :class="{ on: selectedKey === `domain-${id}` }"
-            @click="selectedKey = `domain-${id}`"
-          >
-            <i class="dot" style="background: var(--text-secondary)" />
-            <span class="pool-name">{{ pickLabel(domainById[id]?.label_i18n, String(id)) }}</span>
-          </button>
-          <div
-            v-if="!canvasTypeIds.length && !canvasRelationIds.length && !canvasDomainIds.length"
-            class="pool-empty"
-          >
-            {{ t('common.empty') }}
+          <div class="pool-group">
+            <span>{{ t('designer.inCanvas') }}</span>
+            <span class="mono pool-count">{{ canvasTotal }}</span>
           </div>
+          <template v-for="cat in canvasCategories" :key="`c-${cat.kind}`">
+            <div v-if="cat.items.length" class="pool-subgroup">
+              <span>{{ cat.label }}</span>
+              <span class="mono">{{ cat.items.length }}</span>
+            </div>
+            <button
+              v-for="item in cat.items"
+              :key="`c-${cat.kind}-${item.id}`"
+              type="button"
+              class="pool-item on"
+              :class="{ active: isPoolItemActive(cat.kind, item.id) }"
+              @click="selectPoolItem(cat.kind, item.id)"
+            >
+              <i
+                class="dot"
+                :style="{
+                  background:
+                    cat.kind === 'type'
+                      ? 'var(--g-entity)'
+                      : cat.kind === 'relation'
+                        ? 'var(--g-relation)'
+                        : 'var(--text-secondary)',
+                }"
+              />
+              <span class="pool-name">{{ item.label }}</span>
+              <!-- 端点没全部入画布的关系画不出连线，明确标出来而不是静默消失 -->
+              <span v-if="item.unconfigured" class="pool-tag">
+                {{ t('designer.legendUnconfigured') }}
+              </span>
+            </button>
+          </template>
+          <div v-if="!canvasTotal" class="pool-empty">{{ t('common.empty') }}</div>
 
           <div class="pool-group">{{ t('designer.notInCanvas') }}</div>
-          <button
-            v-for="tp in availableTypes"
-            :key="`a-${tp.id}`"
-            type="button"
-            class="pool-item addable"
-            :disabled="!canEdit"
-            @click="addToCanvas(tp.id)"
-          >
-            <i class="dot" :style="{ background: STATUS_VAR[tp.status] }" />
-            <span class="pool-name">{{ pickLabel(tp.label_i18n, tp.name) }}</span>
-            <span class="plus" :aria-label="t('designer.addToCanvas')" />
-          </button>
-          <button
-            v-for="r in availableRelations"
-            :key="`ar-${r.id}`"
-            type="button"
-            class="pool-item addable"
-            :disabled="!canEdit"
-            @click="addToCanvas(r.id)"
-          >
-            <i class="dot" :style="{ background: STATUS_VAR[r.status] }" />
-            <span class="pool-name">{{ pickLabel(r.label_i18n, r.name) }}</span>
-            <span class="plus" :aria-label="t('designer.addToCanvas')" />
-          </button>
-          <button
-            v-for="domain in availableDomains"
-            :key="`ad-${domain.id}`"
-            type="button"
-            class="pool-item addable"
-            :disabled="!canEdit"
-            @click="addToCanvas(domain.id)"
-          >
-            <i class="dot" :style="{ background: STATUS_VAR[domain.status] }" />
-            <span class="pool-name">{{ pickLabel(domain.label_i18n, domain.name) }}</span>
-            <span class="plus" :aria-label="t('designer.addToCanvas')" />
-          </button>
+          <template v-for="cat in availableCategories" :key="`a-${cat.kind}`">
+            <div v-if="cat.items.length" class="pool-subgroup">
+              <span>{{ cat.label }}</span>
+              <span class="mono">{{ cat.items.length }}</span>
+            </div>
+            <button
+              v-for="item in cat.items"
+              :key="`a-${cat.kind}-${item.id}`"
+              type="button"
+              class="pool-item addable"
+              :disabled="!canEdit"
+              @click="addToCanvas(item.id)"
+            >
+              <i class="dot" :style="{ background: STATUS_VAR[item.status] }" />
+              <span class="pool-name">{{ item.label }}</span>
+              <span class="plus" :aria-label="t('designer.addToCanvas')" />
+            </button>
+          </template>
         </div>
         <div class="pool-foot">{{ t('designer.layoutHint') }}</div>
       </aside>
@@ -1088,6 +1185,10 @@ onBeforeUnmount(() => {
           </div>
         </NSpin>
 
+        <div v-if="unconfiguredLabels.length" class="canvas-warn">
+          {{ t('designer.unconfiguredHint', { names: unconfiguredLabels.join('、') }) }}
+        </div>
+
         <div class="canvas-tools">
           <button type="button" :aria-label="t('designer.zoomOut')" @click="stepZoom(-0.1)" />
           <span class="mono zoom-val">{{
@@ -1101,6 +1202,7 @@ onBeforeUnmount(() => {
         <div class="legend">
           <div><span class="lg-line solid" />{{ t('designer.legendRelation') }}</div>
           <div><span class="lg-line dashed" />{{ t('designer.legendDraft') }}</div>
+          <div><span class="lg-line warn" />{{ t('designer.legendUnconfigured') }}</div>
         </div>
       </div>
 
@@ -1276,9 +1378,27 @@ onBeforeUnmount(() => {
 }
 
 .pool-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 4px 6px;
   color: var(--text-tertiary);
   font-size: 10.5px;
+}
+
+/* 类型 / 关系 / 域 三个子分组，各带计数 */
+.pool-subgroup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 2px 10px;
+  color: var(--text-disabled);
+  font-size: 10px;
+}
+
+.pool-count {
+  color: var(--text-disabled);
+  font-size: 10px;
 }
 
 .pool-item {
@@ -1303,10 +1423,25 @@ onBeforeUnmount(() => {
   border-color: var(--accent);
 }
 
+/* on = 已在画布；active = 当前选中。两者语义不同，样式也分开 */
 .pool-item.on {
   color: var(--text);
   background: var(--accent-soft);
   border-color: transparent;
+}
+
+.pool-item.active {
+  border-color: var(--accent);
+}
+
+.pool-tag {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--s-notrun);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: var(--r-pill);
 }
 
 .pool-item.addable {
@@ -1460,6 +1595,20 @@ onBeforeUnmount(() => {
   font-size: var(--font-caption);
 }
 
+/* 未配置关系提示：贴在画布左下角，工具条之上 */
+.canvas-warn {
+  position: absolute;
+  bottom: 52px;
+  left: 14px;
+  max-width: min(520px, 60%);
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--s-notrun);
+  background: var(--bg-raised);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: var(--r-md);
+}
+
 .canvas-tools {
   position: absolute;
   bottom: 14px;
@@ -1547,6 +1696,12 @@ onBeforeUnmount(() => {
 .lg-line.dashed {
   border-top-style: dashed;
   border-color: var(--border-strong);
+}
+
+/* 未配置：端点没全在画布上，画不出连线 */
+.lg-line.warn {
+  border-top-style: dashed;
+  border-color: var(--s-notrun);
 }
 
 /* ── 业务域分区 ─────────────────────────────────────────── */
