@@ -362,6 +362,50 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   )
   await page.reload()
 
+  const workflowLabels = [
+    '实体类型',
+    '关系类型',
+    '业务域',
+    '本体',
+    '本体建模',
+    '规则',
+    '知识抽取',
+    '知识图谱',
+    '知识追溯',
+  ]
+  await expect(page.locator('.pipe-name')).toHaveText(workflowLabels)
+  await expect(page.locator('.pipe-action')).toHaveCount(3)
+  const sider = page.locator('.app-sider')
+  const menuLabels = await sider.locator('.n-menu-item-content-header').allTextContents()
+  expect(menuLabels.filter((label) => workflowLabels.includes(label))).toEqual(workflowLabels)
+  await expect(sider.getByText('系统管理', { exact: true })).toHaveCount(0)
+
+  await sider.getByText('知识抽取', { exact: true }).click()
+  await sider.getByText('数据源', { exact: true }).click()
+  await expect(page).toHaveURL(/\/datasources$/)
+  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['知识抽取', '数据源'])
+  await sider.getByText('知识追溯', { exact: true }).click()
+  await expect(page).toHaveURL(/\/graph\/evidence$/)
+  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['知识追溯'])
+  await page.goBack()
+  await expect(page).toHaveURL(/\/datasources$/)
+  await expect(sider.locator('.n-menu-item-content--selected')).toHaveText('数据源')
+  await page.locator('.brand').click()
+  await page.getByRole('button', { name: '切换语言', exact: true }).click()
+  await expect(page.locator('.pipe-name')).toHaveText([
+    'Entity Types',
+    'Relation Types',
+    'Business Domains',
+    'Ontology',
+    'Ontology Modeling',
+    'Rules',
+    'Knowledge Extraction',
+    'Knowledge Graph',
+    'Knowledge Tracing',
+  ])
+  await page.getByRole('button', { name: 'Switch language', exact: true }).click()
+  await expect(page.locator('.pipe-name')).toHaveText(workflowLabels)
+
   const ontology = await seedOntology(request)
   const datasourceId = await createSourceThroughUI(page, sourcePath)
   await captureCatalogThroughUI(page, datasourceId)
@@ -559,6 +603,31 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
         await expect(page.locator('#app')).toBeVisible()
         await expect(page.locator('body')).not.toContainText('页面不存在')
         if (route.pageHeader) await expect(page.locator('.page-header')).toBeVisible()
+        if (route.path === '/') {
+          await expect(page.locator('.pipe-step')).toHaveCount(9)
+          const backdrop = page.locator('.mobile-backdrop')
+          if (viewport.width < 767 && (await backdrop.isVisible())) {
+            await page.screenshot({
+              path: test.info().outputPath(`workflow-menu-${theme}-${viewport.width}.png`),
+              animations: 'disabled',
+            })
+            await backdrop.click({ position: { x: viewport.width - 10, y: 100 } })
+            await expect(backdrop).toBeHidden()
+          }
+          if (
+            viewport.width >= 767 &&
+            (await sider.evaluate((element) =>
+              element.classList.contains('n-layout-sider--collapsed'),
+            ))
+          ) {
+            await page.getByRole('button', { name: '展开侧栏', exact: true }).click()
+          }
+          await page.screenshot({
+            path: test.info().outputPath(`workflow-${theme}-${viewport.width}.png`),
+            fullPage: true,
+            animations: 'disabled',
+          })
+        }
         const width = await page.evaluate(() => ({
           viewport: window.innerWidth,
           document: document.documentElement.scrollWidth,

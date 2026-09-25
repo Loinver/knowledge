@@ -12,51 +12,72 @@ const { t } = useI18n()
 const { data: stats, loading, error, reload } = useAsyncData(dashboardApi.stats)
 
 /**
- * 主流程六步。这是产品的心脏，所以放在首屏最上方而不是塞进卡片网格。
- * `count` 为 0 时整步走「未开始」样式 —— 深空即未知：没做的事就该看起来是空的。
+ * 与完整性核验的九个环节一致。数量仅表示已有资产或运行记录，不能代表环节已通过。
+ * 暂无聚合统计的环节展示操作入口，不用零值推断其完成情况。
  */
 const pipeline = computed(() => [
   {
-    key: 'model',
-    step: t('dashboard.step1'),
+    key: 'entity-types',
+    step: t('menu.entityTypes'),
     count: stats.value?.entity_types ?? 0,
     link: 'entity-types',
     hint: t('dashboard.goEntityTypes'),
   },
   {
-    key: 'source',
-    step: t('dashboard.step2'),
-    count: stats.value?.datasources ?? 0,
-    link: 'datasources',
-    hint: t('dashboard.goDataSources'),
+    key: 'relation-types',
+    step: t('menu.relationTypes'),
+    count: stats.value?.relation_types ?? 0,
+    link: 'relation-types',
+    hint: t('page.relationTypes'),
   },
   {
-    key: 'mapping',
-    step: t('dashboard.step3'),
-    count: stats.value?.mappings ?? 0,
-    link: 'mapping-wizard',
-    hint: t('dashboard.goMappingWizard'),
+    key: 'domains',
+    step: t('menu.domains'),
+    count: stats.value?.domains ?? 0,
+    link: 'domains',
+    hint: t('dashboard.goDomains'),
   },
   {
-    key: 'run',
-    step: t('dashboard.step4'),
+    key: 'ontology',
+    step: t('menu.ontology'),
+    count: stats.value?.ontologies ?? 0,
+    link: 'ontologies',
+    hint: t('page.ontologies'),
+  },
+  {
+    key: 'designer',
+    step: t('menu.designer'),
+    count: null,
+    link: 'designer',
+    hint: t('dashboard.goDesigner'),
+  },
+  {
+    key: 'rules',
+    step: t('menu.rules'),
+    count: null,
+    link: 'governance-rules',
+    hint: t('dashboard.goRules'),
+  },
+  {
+    key: 'extraction',
+    step: t('menu.extraction'),
     count: stats.value?.runs ?? 0,
-    link: 'extraction-runs',
+    link: 'datasources',
     hint: t('dashboard.goExtractionRuns'),
   },
   {
     key: 'graph',
-    step: t('dashboard.step5'),
+    step: t('menu.graph'),
     count: stats.value?.result_set_count ?? 0,
     link: 'graph-browse',
     hint: t('dashboard.goGraphBrowse'),
   },
   {
-    key: 'report',
-    step: t('dashboard.step6'),
-    count: stats.value?.quarantine_count ?? 0,
-    link: 'graph-reports',
-    hint: t('dashboard.goGraphReports'),
+    key: 'evidence',
+    step: t('menu.evidence'),
+    count: null,
+    link: 'graph-evidence',
+    hint: t('dashboard.goEvidence'),
   },
 ])
 
@@ -71,6 +92,7 @@ const assets = computed(() => [
   { key: 'domains', label: t('dashboard.domains'), value: stats.value?.domains ?? 0 },
   { key: 'ontologies', label: t('dashboard.ontologies'), value: stats.value?.ontologies ?? 0 },
   { key: 'datasources', label: t('dashboard.datasources'), value: stats.value?.datasources ?? 0 },
+  { key: 'mappings', label: t('dashboard.mappings'), value: stats.value?.mappings ?? 0 },
   { key: 'runs', label: t('dashboard.runs'), value: stats.value?.runs ?? 0 },
 ])
 
@@ -94,17 +116,22 @@ const hasIssues = computed(
     </NSpin>
 
     <template v-else-if="stats">
-      <!-- 主流程：六步管线，未开始的步骤整步变暗 -->
+      <!-- 主流程：九个入口，已知数量与操作入口分开呈现 -->
       <section class="block">
         <h3 class="block-title">{{ t('dashboard.overview') }}</h3>
         <ol class="pipeline">
           <li v-for="(item, index) in pipeline" :key="item.key" class="pipe-cell">
-            <RouterLink :to="{ name: item.link }" class="pipe-step" :class="{ empty: !item.count }">
+            <RouterLink
+              :to="{ name: item.link }"
+              class="pipe-step"
+              :class="{ empty: item.count === 0 }"
+            >
               <span class="pipe-head">
                 <span class="pipe-no mono">{{ index + 1 }}</span>
-                <span class="pipe-name">{{ item.step.replace(/^\d+\.\s*/, '') }}</span>
+                <span class="pipe-name">{{ item.step }}</span>
               </span>
-              <span class="pipe-count mono">{{ item.count }}</span>
+              <span v-if="item.count !== null" class="pipe-count mono">{{ item.count }}</span>
+              <span v-else class="pipe-action">{{ t('dashboard.open') }}</span>
               <span class="pipe-hint">{{ item.hint }}</span>
             </RouterLink>
           </li>
@@ -226,7 +253,7 @@ const hasIssues = computed(
 /* ── 主流程管线 ─────────────────────────────────────────── */
 .pipeline {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
   padding: 0;
   margin: 0;
@@ -236,17 +263,6 @@ const hasIssues = computed(
 .pipe-cell {
   position: relative;
   min-width: 0;
-}
-
-/* 步骤之间的连接线：只在两个步骤都「已开始」时才亮起 */
-.pipe-cell:not(:last-child)::after {
-  position: absolute;
-  top: 50%;
-  right: calc(var(--space-3) / -2 - 3px);
-  width: 6px;
-  height: 1px;
-  content: '';
-  background: var(--border-strong);
 }
 
 .pipe-step {
@@ -311,6 +327,12 @@ const hasIssues = computed(
   font-size: 24px;
   font-weight: 500;
   line-height: 1.2;
+}
+
+.pipe-action {
+  font-size: var(--font-body);
+  line-height: 1.8;
+  color: var(--accent);
 }
 
 .pipe-step.empty .pipe-count {
@@ -414,14 +436,8 @@ const hasIssues = computed(
   gap: var(--space-3);
 }
 
-/* 窄屏：管线折成两行，指标卡竖排 */
+/* 窄屏：缩减每行入口数量，指标卡竖排 */
 @media (max-width: 1100px) {
-  .pipeline {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .pipe-cell:nth-child(3n)::after {
-    display: none;
-  }
   .result-row {
     grid-template-columns: 1fr;
   }
@@ -430,9 +446,6 @@ const hasIssues = computed(
 @media (max-width: 640px) {
   .pipeline {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .pipe-cell::after {
-    display: none;
   }
 }
 </style>

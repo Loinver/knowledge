@@ -191,11 +191,11 @@ test('one cancellable aggregate request renders totals beyond the list page limi
   assert.equal(calls.length, 1)
   assert.deepEqual(byClass(root, 'pipe-count').map(textContent), [
     '57',
-    '61',
-    '205',
+    '58',
+    '59',
+    '60',
     '64',
     '61',
-    '201',
   ])
   assert.deepEqual(byClass(root, 'asset-value').map(textContent), [
     '57',
@@ -203,6 +203,7 @@ test('one cancellable aggregate request renders totals beyond the list page limi
     '59',
     '60',
     '61',
+    '205',
     '64',
   ])
   assert.deepEqual(byClass(root, 'metric').map(textContent), ['61', '201'])
@@ -210,6 +211,20 @@ test('one cancellable aggregate request renders totals beyond the list page limi
   assert.ok(textContent(root).includes(i18n.global.t('dashboard.draftResources', { count: 80 })))
   assert.equal(byClass(root, 'loading-state').length, 0)
   assert.equal(byClass(root, 'empty-ok').length, 0)
+  assert.deepEqual(
+    byClass(root, 'pipe-step').map((element) => element.props.href),
+    [
+      'entity-types',
+      'relation-types',
+      'domains',
+      'ontologies',
+      'designer',
+      'governance-rules',
+      'datasources',
+      'graph-browse',
+      'graph-evidence',
+    ],
+  )
 })
 
 for (const locale of ['zh-CN', 'en-US']) {
@@ -247,6 +262,14 @@ for (const locale of ['zh-CN', 'en-US']) {
     requests[1].resolve({ data: empty })
     await settle()
     assert.deepEqual(byClass(root, 'metric').map(textContent), ['0', '0'])
+    assert.equal(byClass(root, 'pipe-step').length, 9)
+    assert.equal(byClass(root, 'pipe-action').length, 3)
+    for (const link of byClass(root, 'pipe-step')) {
+      if (byClass(link, 'pipe-action').length) {
+        assert.equal(byClass(link, 'empty').length, 0)
+        assert.equal(byClass(link, 'pipe-count').length, 0)
+      }
+    }
     assert.ok(textContent(root).includes(i18n.global.t('dashboard.noIssues')))
     assert.ok(textContent(root).includes(i18n.global.t('dashboard.noCurrentGraph')))
     assert.doesNotMatch(textContent(root), /(?:dashboard|common)\.[A-Za-z]+/)

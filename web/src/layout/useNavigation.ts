@@ -44,25 +44,49 @@ export function useNavigation() {
   const groups = computed<NavGroup[]>(() => {
     const tree: NavGroup[] = [
       {
+        group: 'entity-types',
+        icon: 'ontology',
+        label: t('menu.entityTypes'),
+        items: [
+          { key: 'entity-types', label: t('page.entityTypes') },
+          { key: 'enum-dictionaries', label: t('enumDictionaries.title') },
+        ],
+      },
+      {
+        group: 'relation-types',
+        icon: 'ontology',
+        label: t('menu.relationTypes'),
+        items: [{ key: 'relation-types', label: t('page.relationTypes') }],
+      },
+      {
+        group: 'domains',
+        icon: 'ontology',
+        label: t('menu.domains'),
+        items: [{ key: 'domains', label: t('page.domains') }],
+      },
+      {
         group: 'ontology',
         icon: 'ontology',
         label: t('menu.ontology'),
         items: [
           { key: 'ontologies', label: t('page.ontologies') },
-          { key: 'entity-types', label: t('page.entityTypes') },
-          { key: 'relation-types', label: t('page.relationTypes') },
-          { key: 'domains', label: t('page.domains') },
-          { key: 'designer', label: t('page.designer') },
+          { key: 'assembly-templates', label: t('templates.title') },
+          { key: 'ontology-export', label: t('export.title') },
         ],
       },
       {
-        group: 'datasources',
-        icon: 'datasource',
-        label: t('menu.datasources'),
+        group: 'designer',
+        icon: 'ontology',
+        label: t('menu.designer'),
+        items: [{ key: 'designer', label: t('page.designer') }],
+      },
+      {
+        group: 'rules',
+        icon: 'governance',
+        label: t('menu.rules'),
         items: [
-          { key: 'datasources', label: t('page.dataSources') },
-          { key: 'data-catalog', label: t('page.dataCatalog') },
-          { key: 'sample-preview', label: t('page.samplePreview') },
+          { key: 'governance-rules', label: t('page.governanceRules') },
+          { key: 'governance-clauses', label: t('page.governanceClauses') },
         ],
       },
       {
@@ -70,6 +94,9 @@ export function useNavigation() {
         icon: 'extraction',
         label: t('menu.extraction'),
         items: [
+          { key: 'datasources', label: t('page.dataSources') },
+          { key: 'data-catalog', label: t('page.dataCatalog') },
+          { key: 'sample-preview', label: t('page.samplePreview') },
           { key: 'mapping-wizard', label: t('page.mappingWizard') },
           { key: 'extraction-runs', label: t('page.extractionRuns') },
         ],
@@ -81,21 +108,14 @@ export function useNavigation() {
         items: [
           { key: 'graph-browse', label: t('page.graphBrowse') },
           { key: 'graph-entities', label: t('page.graphEntities') },
-          { key: 'graph-evidence', label: t('page.graphEvidence') },
           { key: 'graph-reports', label: t('page.graphReports') },
         ],
       },
       {
-        group: 'governance',
+        group: 'evidence',
         icon: 'governance',
-        label: t('menu.governance'),
-        items: [
-          { key: 'governance-rules', label: t('page.governanceRules') },
-          { key: 'governance-clauses', label: t('page.governanceClauses') },
-          { key: 'enum-dictionaries', label: t('enumDictionaries.title') },
-          { key: 'ontology-export', label: t('export.title') },
-          { key: 'assembly-templates', label: t('templates.title') },
-        ],
+        label: t('menu.evidence'),
+        items: [{ key: 'graph-evidence', label: t('page.graphEvidence') }],
       },
     ]
     // 系统管理仅管理员可见（前端改版计划 5.3）
@@ -122,9 +142,12 @@ export function useNavigation() {
     { label: () => t('menu.dashboard'), key: 'dashboard', icon: renderIcon('dashboard') },
     ...groups.value.map((group) => ({
       label: () => group.label,
-      key: `${GROUP_PREFIX}${group.group}`,
+      key: group.items.length === 1 ? group.items[0].key : `${GROUP_PREFIX}${group.group}`,
       icon: renderIcon(group.icon),
-      children: group.items.map((item) => ({ label: () => item.label, key: item.key })),
+      children:
+        group.items.length > 1
+          ? group.items.map((item) => ({ label: () => item.label, key: item.key }))
+          : undefined,
     })),
   ])
 
@@ -138,7 +161,7 @@ export function useNavigation() {
     activeKey,
     (key) => {
       const owner = ownerGroup(key)
-      expandedKeys.value = owner ? [`${GROUP_PREFIX}${owner.group}`] : []
+      expandedKeys.value = owner && owner.items.length > 1 ? [`${GROUP_PREFIX}${owner.group}`] : []
     },
     { immediate: true },
   )
@@ -150,6 +173,7 @@ export function useNavigation() {
     const owner = ownerGroup(key)
     const leaf = owner?.items.find((item) => item.key === key)
     if (!owner || !leaf) return []
+    if (owner.items.length === 1) return [{ key: leaf.key, label: leaf.label }]
     return [
       { key: owner.group, label: owner.label, to: owner.items[0].key },
       { key: leaf.key, label: leaf.label },
