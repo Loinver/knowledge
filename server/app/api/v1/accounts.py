@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.v1.deps import access_token, client_ip, current_user, require_admin
+from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.errors import KGError
 from app.domain import account_service
@@ -18,6 +19,7 @@ from app.schemas.account import (
     AuditLogOut,
     AuditLogPage,
     PasswordChange,
+    PasswordResetIssued,
     ProfileUpdate,
     RoleOut,
     UserCreate,
@@ -124,6 +126,27 @@ def patch_user(
     )
     session.commit()
     return UserOut.model_validate(user)
+
+
+@router.post(
+    "/users/{user_id}/password-reset",
+    response_model=ApiResponse[PasswordResetIssued],
+    status_code=201,
+)
+def issue_password_reset(
+    user_id: str,
+    request: Request,
+    admin: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+) -> PasswordResetIssued:
+    """为他人签发一次性重置令牌。没有邮件服务时，这是找回口令的途径。"""
+    token = account_service.issue_reset_for_user(
+        session, admin, user_id, client_ip(request)
+    )
+    session.commit()
+    return PasswordResetIssued(
+        reset_token=token, expires_in=get_settings().reset_token_ttl_seconds
+    )
 
 
 # --- 角色与操作日志（仅管理员） -------------------------------------------

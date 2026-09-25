@@ -155,7 +155,7 @@ def test_catalog_has_no_credentials(session, source_db):
     snap = capture_metadata(session, ds.id)
     session.commit()
     blob = str(snap.catalog)
-    assert "ignored-pwd" not in blob
+    assert "topsecret123" not in blob
     assert "password" not in blob.lower() or "password" not in str(
         snap.catalog.get("schemas", [])
     )
@@ -167,7 +167,7 @@ def _create_datasource_with_creds(session, source_db):
         DatasourceCreate(
             name="cred-db",
             kind="sqlite",
-            params={"database": source_db, "password": "topsecret123"},
+            params={"database": source_db},
             credential="topsecret123",
         ),
     )

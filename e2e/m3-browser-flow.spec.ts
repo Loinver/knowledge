@@ -26,6 +26,8 @@ type RelationSpec = {
   attributes?: Array<{ name: string; datatype: string; nullable: boolean }>
 }
 
+let apiHeaders: Record<string, string> = {}
+
 async function responseData<T>(response: APIResponse): Promise<T> {
   const body = (await response.json()) as ApiEnvelope<T> | T
   const errorDetail =
@@ -45,7 +47,7 @@ async function responseData<T>(response: APIResponse): Promise<T> {
 }
 
 async function getData<T>(request: APIRequestContext, path: string): Promise<T> {
-  return responseData<T>(await request.get('/api/v1' + path))
+  return responseData<T>(await request.get('/api/v1' + path, { headers: apiHeaders }))
 }
 
 async function postData<T>(
@@ -55,7 +57,7 @@ async function postData<T>(
 ): Promise<T> {
   const response = await request.post(
     '/api/v1' + path,
-    payload === undefined ? {} : { data: payload },
+    payload === undefined ? { headers: apiHeaders } : { data: payload, headers: apiHeaders },
   )
   return responseData<T>(response)
 }
@@ -303,6 +305,29 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   expect(tempDir, 'Playwright config provides an isolated temp directory').toBeTruthy()
   const sourcePath = join(tempDir!, 'enterprise-demo-copy.sqlite')
   copyFileSync(resolve('samples/enterprise_demo.sqlite'), sourcePath)
+  execFileSync(
+    resolve('server/.venv/bin/python'),
+    [
+      resolve('scripts/seed_admin.py'),
+      '--username',
+      'e2e_admin',
+      '--email',
+      'e2e_admin@example.org',
+      '--password',
+      'E2E-Admin-Password-2026!',
+    ],
+    {
+      cwd: resolve('server'),
+      env: {
+        ...process.env,
+        KG_ENVIRONMENT: 'development',
+        KG_DATABASE_URL: 'sqlite:///' + join(tempDir!, 'metadata.sqlite'),
+        KG_PASSWORD_ITERATIONS: '1000',
+      },
+      stdio: 'pipe',
+      timeout: 30_000,
+    },
+  )
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
 
@@ -313,6 +338,29 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await page.getByLabel('确认密码').fill('E2E-Password-2026!')
   await page.getByRole('button', { name: '注册', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
+
+  const accessToken = await page.evaluate(() => localStorage.getItem('kg-access-token'))
+  expect(accessToken, 'registration created an authenticated API session').toBeTruthy()
+  apiHeaders = { Authorization: 'Bearer ' + accessToken }
+  const registeredUser = await getData<{ id: string; role: string }>(request, '/auth/me')
+  expect(registeredUser.role).toBe('VIEWER')
+  const denied = await request.post('/api/v1/namespaces', {
+    headers: apiHeaders,
+    data: { prefix: 'forbidden', iri: 'https://example.org/forbidden/' },
+  })
+  expect(denied.status()).toBe(403)
+  const administrator = await responseData<{ access_token: string }>(
+    await request.post('/api/v1/auth/login', {
+      data: { account: 'e2e_admin', password: 'E2E-Admin-Password-2026!' },
+    }),
+  )
+  await responseData(
+    await request.patch('/api/v1/users/' + registeredUser.id, {
+      headers: { Authorization: 'Bearer ' + administrator.access_token },
+      data: { role: 'EDITOR' },
+    }),
+  )
+  await page.reload()
 
   const ontology = await seedOntology(request)
   const datasourceId = await createSourceThroughUI(page, sourcePath)

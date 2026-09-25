@@ -18,6 +18,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import type { AuthUser, Role, UserStatus } from '@/api/auth'
 import { authApi } from '@/api/auth'
@@ -26,6 +27,7 @@ import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
+const router = useRouter()
 const message = useMessage()
 const { toMessage } = useApiError()
 const auth = useAuthStore()
@@ -186,6 +188,47 @@ async function save() {
   }
 }
 
+/**
+ * 平台没有邮件服务，用户忘记密码时由管理员签发一次性链接并线下转交。
+ * 链接只在这个弹窗里展示，关闭即丢弃，不落任何前端存储。
+ */
+const resetIssuing = ref<string | null>(null)
+const resetLink = ref<{ username: string; url: string; minutes: number } | null>(null)
+const showResetLink = computed({
+  get: () => resetLink.value !== null,
+  set: (value: boolean) => {
+    if (!value) resetLink.value = null
+  },
+})
+
+async function issueResetLink(user: AuthUser) {
+  resetIssuing.value = user.id
+  try {
+    const issued = await authApi.issuePasswordReset(user.id)
+    const target = router.resolve({ name: 'reset-password', query: { token: issued.reset_token } })
+    resetLink.value = {
+      username: user.username,
+      url: new URL(target.href, window.location.origin).toString(),
+      minutes: Math.ceil(issued.expires_in / 60),
+    }
+  } catch (err) {
+    message.error(toMessage(err))
+  } finally {
+    resetIssuing.value = null
+  }
+}
+
+async function copyResetLink() {
+  if (!resetLink.value) return
+  try {
+    await navigator.clipboard.writeText(resetLink.value.url)
+    message.success(t('system.copied'))
+  } catch {
+    // 非安全上下文或权限被拒时剪贴板不可用，链接仍可在只读框里手动选中复制
+    message.warning(t('system.copyFailed'))
+  }
+}
+
 const columns = computed<DataTableColumns<AuthUser>>(() => [
   { title: t('auth.username'), key: 'username' },
   { title: t('auth.email'), key: 'email' },
@@ -209,18 +252,31 @@ const columns = computed<DataTableColumns<AuthUser>>(() => [
     key: 'actions',
     render: (row) => {
       // 后端不允许管理员把自己降级或禁用（最后一个管理员自锁就再也回不来），
-      // 这里同步禁用，避免点下去必然报错。
+      // 这里同步禁用，避免点下去必然报错。自己的密码走「账号安全」改密。
       const isSelf = row.id === auth.user?.id
-      return h(
-        NButton,
-        {
-          size: 'small',
-          disabled: isSelf,
-          title: isSelf ? t('system.cannotEditSelf') : undefined,
-          onClick: () => openEdit(row),
-        },
-        { default: () => t('common.edit') },
-      )
+      return h(NSpace, { size: 'small', wrap: false }, () => [
+        h(
+          NButton,
+          {
+            size: 'small',
+            disabled: isSelf,
+            title: isSelf ? t('system.cannotEditSelf') : undefined,
+            onClick: () => openEdit(row),
+          },
+          { default: () => t('common.edit') },
+        ),
+        h(
+          NButton,
+          {
+            size: 'small',
+            disabled: isSelf || row.status !== 'ACTIVE',
+            loading: resetIssuing.value === row.id,
+            title: isSelf ? t('system.cannotResetSelf') : undefined,
+            onClick: () => issueResetLink(row),
+          },
+          { default: () => t('system.resetLink') },
+        ),
+      ])
     },
   },
 ])
@@ -322,6 +378,28 @@ onMounted(load)
         <NSpace justify="end">
           <NButton :disabled="saving" @click="editing = null">{{ t('common.cancel') }}</NButton>
           <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
+    <NModal
+      v-model:show="showResetLink"
+      preset="card"
+      :title="t('system.resetLinkTitle')"
+      class="edit-modal"
+    >
+      <template v-if="resetLink">
+        <NAlert type="warning" class="modal-alert">
+          {{
+            t('system.resetLinkHint', { minutes: resetLink.minutes, username: resetLink.username })
+          }}
+        </NAlert>
+        <NInput :value="resetLink.url" readonly :aria-label="t('system.resetLink')" />
+      </template>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton @click="resetLink = null">{{ t('common.close') }}</NButton>
+          <NButton type="primary" @click="copyResetLink">{{ t('system.copy') }}</NButton>
         </NSpace>
       </template>
     </NModal>

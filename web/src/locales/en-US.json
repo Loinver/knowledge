@@ -95,6 +95,8 @@
       "WEAK_PASSWORD": "Password is too weak, at least {min_length} characters",
       "OLD_PASSWORD_INVALID": "Current password is incorrect",
       "RESET_TOKEN_INVALID": "This reset link is invalid or expired, request a new one",
+      "RESET_UNAVAILABLE": "Self-service password recovery is not available here, ask an administrator for a reset link",
+      "TOO_MANY_ATTEMPTS": "Too many failed sign-ins, try again in about {retry_after_minutes} minutes",
       "REGISTRATION_CLOSED": "Self-service registration is closed on this platform, contact an administrator"
     }
   },
@@ -634,8 +636,9 @@
     "forgotHint": "Enter your registered email and we will send a reset link.",
     "forgotSent": "If the email is registered, a reset message has been sent.",
     "resetHint": "Set a new password for your account.",
-    "resetTokenMissing": "The link has no reset credential, open it from the email.",
+    "resetTokenMissing": "The link has no reset credential, open the reset link you were given.",
     "resetSubmit": "Reset password",
+    "resetUnavailable": "Self-service password recovery is not available on this platform. Ask an administrator to create a one-time reset link for you under System → Users.",
     "registrationClosed": "Self-service registration is closed. Accounts are created by an administrator under System → Users.",
     "rules": {
       "accountRequired": "Account or email is required",
@@ -703,6 +706,13 @@
     "cannotEditSelf": "You cannot change your own role or status",
     "editUser": "Edit user",
     "userUpdated": "User updated",
+    "resetLink": "Reset link",
+    "resetLinkTitle": "One-time password reset link",
+    "resetLinkHint": "Valid for {minutes} minutes and usable once. Hand it to {username} through a trusted channel; resetting signs out all of their sessions.",
+    "cannotResetSelf": "Change your own password under Account security",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Clipboard is unavailable, select the link and copy it manually",
     "rolesHint": "Built-in roles and their permission scope.",
     "description": "Description",
     "memberCount": "Members",

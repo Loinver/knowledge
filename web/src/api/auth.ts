@@ -29,6 +29,7 @@ export type AuditAction = Schemas['AuditAction']
 export type AuditLog = Schemas['AuditLogOut']
 export type AuditLogPage = Schemas['AuditLogPage']
 export type ForgotPasswordResult = Schemas['ForgotPasswordResult']
+export type PasswordResetIssued = Schemas['PasswordResetIssued']
 
 export type UserListQuery = NonNullable<
   operations['list_users_api_v1_users_get']['parameters']['query']
@@ -70,6 +71,10 @@ export const authApi = {
 
   updateUser: (id: string, payload: UserPatchInput) =>
     http.patch<AuthUser>(`/users/${id}`, payload).then((r) => r.data),
+
+  /** 管理员为他人签发一次性重置令牌；平台没有邮件服务时由管理员线下转交。 */
+  issuePasswordReset: (id: string) =>
+    http.post<PasswordResetIssued>(`/users/${id}/password-reset`).then((r) => r.data),
 
   roles: () => http.get<RoleInfo[]>('/roles').then((r) => r.data),
 

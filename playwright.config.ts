@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
 
 const root = dirname(fileURLToPath(import.meta.url))
-const e2eTempDir = mkdtempSync(join(tmpdir(), 'knowledge-e2e-'))
+const e2eTempDir = process.env.KG_E2E_TEMP_DIR ?? mkdtempSync(join(tmpdir(), 'knowledge-e2e-'))
 const metadataDb = join(e2eTempDir, 'metadata.sqlite')
 const inheritedEnv = Object.fromEntries(
   Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
@@ -16,6 +16,8 @@ process.env.KG_E2E_TEMP_DIR = e2eTempDir
 
 const isolatedEnv = {
   ...inheritedEnv,
+  KG_ENVIRONMENT: 'development',
+  KG_CREATE_TABLES_ON_STARTUP: 'true',
   KG_DATABASE_URL: 'sqlite:///' + metadataDb,
   KG_E2E_TEMP_DIR: e2eTempDir,
   KG_ALLOW_PUBLIC_REGISTRATION: 'true',

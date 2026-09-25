@@ -21,8 +21,9 @@ import hmac
 import secrets
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -347,18 +348,83 @@ def bootstrap_admin(
     )
 
 
+def _failed_login_count(session: Session, since: datetime, *conditions: Any) -> int:
+    return (
+        session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(
+                AuditLog.action == str(AuditAction.LOGIN),
+                AuditLog.result == str(AuditResult.FAILED),
+                AuditLog.created_at >= since,
+                *conditions,
+            )
+        )
+        or 0
+    )
+
+
+def _ensure_login_allowed(
+    session: Session, user: User | None, account_key: str, ip: str | None
+) -> None:
+    """按审计表里的失败记录限流，多进程部署也共享同一份计数。
+
+    计数维度是「账号 + 来源」与「来源」，不单独按账号锁定：
+    否则任何人都能反复输错，把指定用户锁在门外。被拦下的尝试
+    不校验口令、也不再记失败，避免攻击者自己把窗口一直续上。
+    """
+    settings = get_settings()
+    window = timedelta(seconds=settings.login_failure_window_seconds)
+    since = _now() - window
+    if user is not None:
+        # 成功登录后重新计数，免得偶尔输错的用户被历史失败拖累
+        last_ok = session.scalar(
+            select(func.max(AuditLog.created_at)).where(
+                AuditLog.action == str(AuditAction.LOGIN),
+                AuditLog.result == str(AuditResult.OK),
+                AuditLog.actor_id == user.id,
+            )
+        )
+        if last_ok is not None and _as_utc(last_ok) > since:
+            since = _as_utc(last_ok)
+        account_condition = AuditLog.actor_id == user.id
+    else:
+        account_condition = and_(
+            AuditLog.actor_id.is_(None), AuditLog.actor == account_key
+        )
+    ip_condition = AuditLog.ip.is_(None) if ip is None else AuditLog.ip == ip
+
+    blocked = (
+        _failed_login_count(session, since, account_condition, ip_condition)
+        >= settings.login_max_failures_per_account
+    )
+    if not blocked and ip is not None:
+        blocked = (
+            _failed_login_count(session, _now() - window, ip_condition)
+            >= settings.login_max_failures_per_ip
+        )
+    if blocked:
+        seconds = settings.login_failure_window_seconds
+        raise KGError(
+            ErrorCode.TOO_MANY_ATTEMPTS,
+            {"retry_after": seconds, "retry_after_minutes": -(-seconds // 60)},
+        )
+
+
 def authenticate(session: Session, account: str, password: str, ip: str | None) -> User:
     """口令认证。
 
     「账号不存在」与「口令错误」返回同一个码，且都记一条失败审计，
-    不给出可用于枚举账号的差异。
+    不给出可用于枚举账号的差异。失败过多时先限流，再谈口令。
     """
     user = _find_user_by_account(session, account)
+    account_key = (account.strip() or "-")[:32]
+    _ensure_login_allowed(session, user, account_key, ip)
     if user is None:
         record_audit(
             session,
             AuditAction.LOGIN,
-            account.strip() or "-",
+            account_key,
             AuditResult.FAILED,
             ip=ip,
         )
@@ -454,14 +520,7 @@ def logout_session(
 # ---------------------------------------------------------------------------
 
 
-def request_password_reset(session: Session, email: str, ip: str | None) -> str | None:
-    """登记重置申请，返回原始令牌（由路由决定是否下发给前端）。
-
-    邮箱不存在时返回 None 且不报错：调用方无法据此判断账号是否存在。
-    """
-    user = session.scalar(select(User).where(User.email == email.strip().lower()))
-    if user is None or user.status != UserStatus.ACTIVE:
-        return None
+def _issue_reset_token(session: Session, user: User) -> str:
     raw = secrets.token_urlsafe(TOKEN_BYTES)
     session.add(
         PasswordResetToken(
@@ -471,12 +530,51 @@ def request_password_reset(session: Session, email: str, ip: str | None) -> str 
             + timedelta(seconds=get_settings().reset_token_ttl_seconds),
         )
     )
+    return raw
+
+
+def request_password_reset(session: Session, email: str, ip: str | None) -> str | None:
+    """登记重置申请，返回原始令牌（由路由决定是否下发给前端）。
+
+    邮箱不存在时返回 None 且不报错：调用方无法据此判断账号是否存在。
+    """
+    user = session.scalar(select(User).where(User.email == email.strip().lower()))
+    if user is None or user.status != UserStatus.ACTIVE:
+        return None
+    raw = _issue_reset_token(session, user)
     record_audit(
         session,
         AuditAction.RESET_REQUESTED,
         user.username,
         AuditResult.OK,
         actor_id=user.id,
+        ip=ip,
+    )
+    return raw
+
+
+def issue_reset_for_user(
+    session: Session, actor: User, user_id: str, ip: str | None
+) -> str:
+    """管理员为他人签发一次性重置令牌，由管理员线下转交。
+
+    没有邮件服务时，这是用户忘记口令后唯一的恢复途径。管理员拿到的
+    只是一次性链接而不是口令本身，用户重置后所有旧会话随之失效。
+    """
+    target = get_user(session, user_id)
+    if target.id == actor.id:
+        # 自己的口令走「账号安全」改密，需要旧口令，不开这个旁路
+        raise KGError(ErrorCode.FORBIDDEN, {"reason": "self_reset"})
+    if target.status != UserStatus.ACTIVE:
+        raise KGError(ErrorCode.USER_DISABLED, {"username": target.username})
+    raw = _issue_reset_token(session, target)
+    record_audit(
+        session,
+        AuditAction.RESET_REQUESTED,
+        actor.username,
+        AuditResult.OK,
+        actor_id=actor.id,
+        target=target.username,
         ip=ip,
     )
     return raw

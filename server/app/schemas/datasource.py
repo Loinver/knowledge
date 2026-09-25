@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.core.crypto import SENSITIVE_PARAM_KEYS
+
+
+def _public_params_only(params: dict | None) -> dict | None:
+    if params and any(str(name).lower() in SENSITIVE_PARAM_KEYS for name in params):
+        raise ValueError("Datasource secrets belong in the credential field")
+    return params
 
 
 class DatasourceCreate(BaseModel):
@@ -11,12 +19,16 @@ class DatasourceCreate(BaseModel):
     params: dict  # host/port/db_name 等
     credential: str | None = None  # 明文密码，后端加密后存
 
+    _validate_params = field_validator("params")(_public_params_only)
+
 
 class DatasourceUpdate(BaseModel):
     name: str | None = None
     params: dict | None = None
     credential: str | None = None
     if_match: int
+
+    _validate_params = field_validator("params")(_public_params_only)
 
 
 class DatasourceOut(BaseModel):
@@ -40,6 +52,8 @@ class TestConnectionRequest(BaseModel):
     kind: str
     params: dict
     credential: str | None = None
+
+    _validate_params = field_validator("params")(_public_params_only)
 
 
 class TestConnectionResponse(BaseModel):

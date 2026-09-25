@@ -95,6 +95,8 @@
       "WEAK_PASSWORD": "密码强度不足，至少 {min_length} 位",
       "OLD_PASSWORD_INVALID": "当前密码不正确",
       "RESET_TOKEN_INVALID": "重置链接无效或已过期，请重新申请",
+      "RESET_UNAVAILABLE": "本平台未开放自助找回密码，请联系管理员为你生成重置链接",
+      "TOO_MANY_ATTEMPTS": "登录失败次数过多，请约 {retry_after_minutes} 分钟后再试",
       "REGISTRATION_CLOSED": "本平台不开放自助注册，请联系管理员开通账号"
     }
   },
@@ -634,8 +636,9 @@
     "forgotHint": "填写注册邮箱，我们会发送一封重置密码邮件。",
     "forgotSent": "如果该邮箱已注册，重置邮件已发出，请查收。",
     "resetHint": "请设置新的登录密码。",
-    "resetTokenMissing": "链接缺少重置凭据，请从邮件中的链接进入。",
+    "resetTokenMissing": "链接缺少重置凭据，请使用收到的完整重置链接进入。",
     "resetSubmit": "确认重置",
+    "resetUnavailable": "本平台未开放自助找回密码。请联系管理员在「系统管理 → 用户管理」中为你生成一次性重置链接。",
     "registrationClosed": "本平台不开放自助注册，账号由管理员在「系统管理 → 用户管理」中创建。",
     "rules": {
       "accountRequired": "请输入账号或邮箱",
@@ -703,6 +706,13 @@
     "cannotEditSelf": "不能修改自己的角色或状态",
     "editUser": "编辑用户",
     "userUpdated": "用户已更新",
+    "resetLink": "重置链接",
+    "resetLinkTitle": "一次性密码重置链接",
+    "resetLinkHint": "链接 {minutes} 分钟内有效且只能使用一次。请通过可信渠道转交给 {username}；重置后其所有会话都会退出。",
+    "cannotResetSelf": "自己的密码请在「账号安全」中修改",
+    "copy": "复制",
+    "copied": "已复制",
+    "copyFailed": "无法访问剪贴板，请手动选中链接复制",
     "rolesHint": "系统内置角色及其权限范围。",
     "description": "说明",
     "memberCount": "成员数",

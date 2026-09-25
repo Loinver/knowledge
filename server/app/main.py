@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -21,6 +21,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.clauses import router as clauses_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.datasources import router as datasources_router
+from app.api.v1.deps import authorize_business_request
 from app.api.v1.domains import router as domains_router
 from app.api.v1.enum_dictionaries import (
     legacy_router as enum_legacy_router,
@@ -70,24 +71,28 @@ app = FastAPI(
 install_error_handler(app)
 
 
-app.include_router(namespaces_router, prefix=API_PREFIX)
+business_router = APIRouter(
+    prefix=API_PREFIX, dependencies=[Depends(authorize_business_request)]
+)
+business_router.include_router(namespaces_router)
+business_router.include_router(ontologies_router)
+business_router.include_router(datasources_router)
+business_router.include_router(domains_router)
+business_router.include_router(enum_dictionaries_router)
+business_router.include_router(enum_legacy_router)
+business_router.include_router(mappings_router)
+business_router.include_router(mapping_preview_router)
+business_router.include_router(metadata_router)
+business_router.include_router(preview_router)
+business_router.include_router(types_router)
+business_router.include_router(templates_router)
+business_router.include_router(relations_router)
+business_router.include_router(validation_router)
+business_router.include_router(extraction_router)
+business_router.include_router(governance_router)
+business_router.include_router(clauses_router)
+app.include_router(business_router)
 app.include_router(dashboard_router, prefix=API_PREFIX)
-app.include_router(ontologies_router, prefix=API_PREFIX)
-app.include_router(datasources_router, prefix=API_PREFIX)
-app.include_router(domains_router, prefix=API_PREFIX)
-app.include_router(enum_dictionaries_router, prefix=API_PREFIX)
-app.include_router(enum_legacy_router, prefix=API_PREFIX)
-app.include_router(mappings_router, prefix=API_PREFIX)
-app.include_router(mapping_preview_router, prefix=API_PREFIX)
-app.include_router(metadata_router, prefix=API_PREFIX)
-app.include_router(preview_router, prefix=API_PREFIX)
-app.include_router(types_router, prefix=API_PREFIX)
-app.include_router(templates_router, prefix=API_PREFIX)
-app.include_router(relations_router, prefix=API_PREFIX)
-app.include_router(validation_router, prefix=API_PREFIX)
-app.include_router(extraction_router, prefix=API_PREFIX)
-app.include_router(governance_router, prefix=API_PREFIX)
-app.include_router(clauses_router, prefix=API_PREFIX)
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(accounts_router, prefix=API_PREFIX)
 

@@ -10,7 +10,13 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.connectors.sql import readonly_engine
-from app.core.crypto import decrypt, encrypt, mask_credential
+from app.core.crypto import (
+    SENSITIVE_PARAM_KEYS,
+    decrypt,
+    encrypt,
+    is_legacy_ciphertext,
+    mask_credential,
+)
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.models.data_access import Datasource
@@ -107,3 +113,50 @@ def delete_datasource(session: Session, ds_id: int) -> None:
     ds = get_datasource(session, ds_id)
     session.delete(ds)
     session.flush()
+
+
+def reencrypt_datasources(session: Session, *, previous_key: str | None = None) -> int:
+    """Convert legacy ciphertext and embedded secrets in one caller-owned transaction.
+
+    Supplying the previous key also rotates existing AES-GCM records. A mismatch
+    between two stored secret locations aborts the whole transaction.
+    """
+    changed = 0
+    for ds in session.scalars(select(Datasource)):
+        params = ds.params or {}
+        embedded = [
+            value
+            for name, value in params.items()
+            if str(name).lower() in SENSITIVE_PARAM_KEYS
+        ]
+        if any(not isinstance(value, str) for value in embedded):
+            raise ValueError(f"Datasource {ds.id} has an invalid embedded secret")
+        if len(set(embedded)) > 1:
+            raise ValueError(f"Datasource {ds.id} has conflicting embedded secrets")
+        stored = (
+            decrypt(ds.credential_cipher, key=previous_key)
+            if ds.credential_cipher
+            else None
+        )
+        if stored is not None and embedded and stored != embedded[0]:
+            raise ValueError(f"Datasource {ds.id} has conflicting credentials")
+        if (
+            not embedded
+            and not previous_key
+            and (
+                not ds.credential_cipher
+                or not is_legacy_ciphertext(ds.credential_cipher)
+            )
+        ):
+            continue
+        secret = stored if stored is not None else (embedded[0] if embedded else None)
+        if secret is not None:
+            ds.credential_cipher = encrypt(secret)
+        ds.params = {
+            name: value
+            for name, value in params.items()
+            if str(name).lower() not in SENSITIVE_PARAM_KEYS
+        }
+        changed += 1
+    session.flush()
+    return changed

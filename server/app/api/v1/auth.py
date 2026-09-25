@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.deps import access_token, client_ip, current_user
 from app.core.config import get_settings
 from app.core.db import get_session
+from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain import account_service
 from app.models.account import User
@@ -35,9 +36,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.get("/config", response_model=ApiResponse[AuthConfigOut])
 def auth_config() -> AuthConfigOut:
-    """公开配置：前端据此决定是否展示注册入口、口令长度提示。"""
+    """公开配置：前端据此决定是否展示注册与找回入口、口令长度提示。"""
+    settings = get_settings()
     return AuthConfigOut(
-        registration_enabled=get_settings().allow_public_registration,
+        registration_enabled=settings.allow_public_registration,
+        password_reset_enabled=settings.expose_reset_token,
         password_min_length=MIN_PASSWORD_LENGTH,
     )
 
@@ -108,17 +111,21 @@ def forgot_password(
     request: Request,
     session: Session = Depends(get_session),
 ) -> ForgotPasswordResult:
-    """申请重置。邮箱是否存在都返回 200，避免账号枚举。
+    """申请重置。邮箱是否存在都返回同样的结果，避免账号枚举。
 
-    开发态没有邮件服务，`reset_token` 直接下发（`KG_EXPOSE_RESET_TOKEN=0` 关闭）；
-    生产由后端发信，响应里只有 `null`。
+    平台还没有邮件服务：只有开发态显式开启 `KG_EXPOSE_RESET_TOKEN` 时，
+    令牌才直接放在响应里。关闭时如实返回 `AUTH.RESET_UNAVAILABLE`，
+    不生成没人收得到的令牌，也不让界面谎称「邮件已发出」；
+    用户改由管理员在用户管理里签发一次性重置链接。
     """
     settings = get_settings()
+    if not settings.expose_reset_token:
+        raise KGError(ErrorCode.RESET_UNAVAILABLE)
     raw = account_service.request_password_reset(
         session, payload.email, client_ip(request)
     )
     session.commit()
-    if raw is None or not settings.expose_reset_token:
+    if raw is None:
         return ForgotPasswordResult(reset_token=None, expires_in=0)
     return ForgotPasswordResult(
         reset_token=raw, expires_in=settings.reset_token_ttl_seconds

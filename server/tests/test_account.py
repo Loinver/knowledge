@@ -23,11 +23,11 @@ from app.api.v1.auth import router as auth_router
 from app.core.config import get_settings
 from app.core.db import Base, get_session
 from app.domain import account_service
-from app.models.account import AuditLog, AuthToken, User
+from app.models.account import AuditLog, AuthToken, PasswordResetToken, User
 from app.models.enums import AuditAction, AuditResult, UserRole, UserStatus
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -490,7 +490,14 @@ def test_profile_update_only_touches_sent_fields(
 # ---------------------------------------------------------------------------
 
 
-def test_forgot_password_does_not_reveal_account_existence(
+@pytest.fixture()
+def exposed_reset_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """需要可用令牌的开发流程必须显式开启调试开关。"""
+    monkeypatch.setattr(get_settings(), "expose_reset_token", True)
+
+
+@pytest.mark.usefixtures("exposed_reset_tokens")
+def test_development_reset_token_requires_explicit_opt_in(
     client: TestClient, admin: User
 ) -> None:
     unknown = client.post(
@@ -507,6 +514,7 @@ def test_forgot_password_does_not_reveal_account_existence(
     assert known.json()["expires_in"] == 3600
 
 
+@pytest.mark.usefixtures("exposed_reset_tokens")
 def test_reset_password_consumes_token_and_revokes_sessions(
     client: TestClient, admin: User, sessions: sessionmaker[Session]
 ) -> None:
@@ -545,19 +553,20 @@ def test_reset_password_consumes_token_and_revokes_sessions(
     assert entry is not None and entry.result == AuditResult.OK
 
 
-def test_reset_token_is_hidden_when_not_exposed(
-    client: TestClient, admin: User, monkeypatch: pytest.MonkeyPatch
+def test_reset_is_unavailable_when_tokens_are_not_exposed(
+    client: TestClient, admin: User, sessions: sessionmaker[Session]
 ) -> None:
-    """生产把令牌交给邮件，响应里只能是 null。"""
-    monkeypatch.setenv("KG_EXPOSE_RESET_TOKEN", "0")
-    get_settings.cache_clear()
-    response = client.post(
-        f"{API}/auth/forgot-password", json={"email": "root@example.org"}
-    )
-    assert response.status_code == 200
-    assert response.json() == {"reset_token": None, "expires_in": 0}
+    """默认没有送达渠道：如实报不可用，不生成令牌，也不区分邮箱是否存在。"""
+    assert client.get(f"{API}/auth/config").json()["password_reset_enabled"] is False
+    for email in ("root@example.org", "nobody@example.org"):
+        response = client.post(f"{API}/auth/forgot-password", json={"email": email})
+        assert response.status_code == 503
+        assert response.json()["code"] == "AUTH.RESET_UNAVAILABLE"
+    with sessions() as session:
+        assert session.scalar(select(func.count()).select_from(PasswordResetToken)) == 0
 
 
+@pytest.mark.usefixtures("exposed_reset_tokens")
 def test_weak_password_on_reset_is_rejected_before_consuming_token(
     client: TestClient, admin: User
 ) -> None:
@@ -577,6 +586,190 @@ def test_weak_password_on_reset_is_rejected_before_consuming_token(
         ).status_code
         == 200
     )
+
+
+def test_admin_issues_one_time_reset_link_for_member(
+    client: TestClient, admin: User, sessions: sessionmaker[Session]
+) -> None:
+    """没有邮件服务时由管理员签发重置链接；成员用它改密，旧会话随之失效。"""
+    member = make_member(sessions, admin)
+    member_session = login(client, "editor", MEMBER_PASSWORD)
+    admin_tokens = login(client, "root", ADMIN_PASSWORD)
+
+    issued = client.post(
+        f"{API}/users/{member.id}/password-reset",
+        headers=auth_header(admin_tokens["access_token"]),
+    )
+    assert issued.status_code == 201
+    assert issued.json()["expires_in"] == 3600
+    reset = client.post(
+        f"{API}/auth/reset-password",
+        json={"token": issued.json()["reset_token"], "password": "fresh-password-1"},
+    )
+    assert reset.status_code == 200
+    assert (
+        client.get(
+            f"{API}/auth/me", headers=auth_header(member_session["access_token"])
+        ).status_code
+        == 401
+    )
+    assert login(client, "editor", "fresh-password-1")["access_token"]
+
+    with sessions() as session:
+        entry = session.scalar(
+            select(AuditLog).where(
+                AuditLog.action == AuditAction.RESET_REQUESTED,
+                AuditLog.target == "editor",
+            )
+        )
+    assert entry is not None and entry.actor == "root"
+
+
+def test_reset_link_requires_admin_and_excludes_self(
+    client: TestClient, admin: User, sessions: sessionmaker[Session]
+) -> None:
+    make_member(sessions, admin)
+    member_tokens = login(client, "editor", MEMBER_PASSWORD)
+    admin_tokens = login(client, "root", ADMIN_PASSWORD)
+
+    by_member = client.post(
+        f"{API}/users/{admin.id}/password-reset",
+        headers=auth_header(member_tokens["access_token"]),
+    )
+    assert by_member.status_code == 403
+    self_reset = client.post(
+        f"{API}/users/{admin.id}/password-reset",
+        headers=auth_header(admin_tokens["access_token"]),
+    )
+    assert self_reset.status_code == 403
+    assert self_reset.json()["params"] == {"reason": "self_reset"}
+    with sessions() as session:
+        assert session.scalar(select(func.count()).select_from(PasswordResetToken)) == 0
+
+
+# ---------------------------------------------------------------------------
+# 登录限流与来源地址
+# ---------------------------------------------------------------------------
+
+
+def _attempt(
+    client: TestClient, account: str, password: str, **headers: str
+) -> tuple[int, str]:
+    response = client.post(
+        f"{API}/auth/login",
+        json={"account": account, "password": password},
+        headers=headers,
+    )
+    return response.status_code, response.json().get("code", "")
+
+
+def test_repeated_failures_block_login_even_with_correct_password(
+    client: TestClient, admin: User, sessions: sessionmaker[Session]
+) -> None:
+    for _ in range(5):
+        assert _attempt(client, "root", "wrong-password") == (
+            401,
+            "AUTH.INVALID_CREDENTIALS",
+        )
+    blocked = client.post(
+        f"{API}/auth/login", json={"account": "root", "password": ADMIN_PASSWORD}
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["code"] == "AUTH.TOO_MANY_ATTEMPTS"
+    assert blocked.json()["params"] == {"retry_after": 900, "retry_after_minutes": 15}
+
+    # 被拦下的尝试不校验口令，也不再追加失败记录
+    with sessions() as session:
+        failed = session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.result == AuditResult.FAILED)
+        )
+    assert failed == 5
+
+
+def test_unknown_accounts_are_throttled_per_account(
+    client: TestClient, admin: User
+) -> None:
+    for _ in range(5):
+        assert _attempt(client, "ghost", "whatever-1")[0] == 401
+    assert _attempt(client, "ghost", "whatever-1") == (429, "AUTH.TOO_MANY_ATTEMPTS")
+    # 同一来源换一个账号仍可尝试：来源总上限远高于单账号上限
+    assert _attempt(client, "root", ADMIN_PASSWORD)[0] == 200
+
+
+def test_successful_login_resets_the_failure_count(
+    client: TestClient, admin: User
+) -> None:
+    for _ in range(4):
+        assert _attempt(client, "root", "wrong-password")[0] == 401
+    assert _attempt(client, "root", ADMIN_PASSWORD)[0] == 200
+    for _ in range(4):
+        assert _attempt(client, "root", "wrong-password")[0] == 401
+    assert _attempt(client, "root", ADMIN_PASSWORD)[0] == 200
+
+
+def test_failures_outside_the_window_are_forgotten(
+    client: TestClient, admin: User, sessions: sessionmaker[Session]
+) -> None:
+    for _ in range(5):
+        assert _attempt(client, "root", "wrong-password")[0] == 401
+    with sessions() as session:
+        session.execute(
+            text("UPDATE audit_log SET created_at = :old"),
+            {"old": "2000-01-01 00:00:00"},
+        )
+        session.commit()
+    assert _attempt(client, "root", ADMIN_PASSWORD)[0] == 200
+
+
+def test_per_source_cap_spans_accounts(
+    client: TestClient, admin: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(get_settings(), "login_max_failures_per_ip", 3)
+    for name in ("alpha", "bravo", "charlie"):
+        assert _attempt(client, name, "whatever-1")[0] == 401
+    assert _attempt(client, "root", ADMIN_PASSWORD) == (429, "AUTH.TOO_MANY_ATTEMPTS")
+
+
+def test_forwarded_for_is_ignored_without_trusted_proxy(
+    client: TestClient, admin: User, sessions: sessionmaker[Session]
+) -> None:
+    """直连部署里伪造 X-Forwarded-For 既不能绕过限流，也不能改写审计地址。"""
+    for index in range(5):
+        status, _ = _attempt(
+            client,
+            "root",
+            "wrong-password",
+            **{"X-Forwarded-For": f"203.0.113.{index}"},
+        )
+        assert status == 401
+    assert _attempt(
+        client, "root", ADMIN_PASSWORD, **{"X-Forwarded-For": "198.51.100.9"}
+    ) == (429, "AUTH.TOO_MANY_ATTEMPTS")
+    with sessions() as session:
+        ips = set(session.scalars(select(AuditLog.ip)))
+    assert ips == {"testclient"}
+
+
+def test_trusted_proxy_hop_selects_the_address_it_saw(
+    client: TestClient,
+    admin: User,
+    sessions: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(get_settings(), "trusted_proxy_count", 1)
+    login_response = client.post(
+        f"{API}/auth/login",
+        json={"account": "root", "password": ADMIN_PASSWORD},
+        headers={"X-Forwarded-For": "10.0.0.1, 198.51.100.7"},
+    )
+    assert login_response.status_code == 200
+    with sessions() as session:
+        entry = session.scalar(
+            select(AuditLog).where(AuditLog.action == AuditAction.LOGIN)
+        )
+    assert entry is not None and entry.ip == "198.51.100.7"
 
 
 # ---------------------------------------------------------------------------

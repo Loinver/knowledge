@@ -93,23 +93,6 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/api/v1/dashboard/stats': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /** Read Stats */
-    get: operations['read_stats_api_v1_dashboard_stats_get']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
   '/api/v1/ontologies': {
     parameters: {
       query?: never
@@ -1572,6 +1555,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/dashboard/stats': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Read Stats */
+    get: operations['read_stats_api_v1_dashboard_stats_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/auth/config': {
     parameters: {
       query?: never
@@ -1581,7 +1581,7 @@ export interface paths {
     }
     /**
      * Auth Config
-     * @description 公开配置：前端据此决定是否展示注册入口、口令长度提示。
+     * @description 公开配置：前端据此决定是否展示注册与找回入口、口令长度提示。
      */
     get: operations['auth_config_api_v1_auth_config_get']
     put?: never
@@ -1683,10 +1683,12 @@ export interface paths {
     put?: never
     /**
      * Forgot Password
-     * @description 申请重置。邮箱是否存在都返回 200，避免账号枚举。
+     * @description 申请重置。邮箱是否存在都返回同样的结果，避免账号枚举。
      *
-     *     开发态没有邮件服务，`reset_token` 直接下发（`KG_EXPOSE_RESET_TOKEN=0` 关闭）；
-     *     生产由后端发信，响应里只有 `null`。
+     *     平台还没有邮件服务：只有开发态显式开启 `KG_EXPOSE_RESET_TOKEN` 时，
+     *     令牌才直接放在响应里。关闭时如实返回 `AUTH.RESET_UNAVAILABLE`，
+     *     不生成没人收得到的令牌，也不让界面谎称「邮件已发出」；
+     *     用户改由管理员在用户管理里签发一次性重置链接。
      */
     post: operations['forgot_password_api_v1_auth_forgot_password_post']
     delete?: never
@@ -1818,6 +1820,26 @@ export interface paths {
      * @description 改角色或启停账号。管理员不能把自己降级或禁用。
      */
     patch: operations['patch_user_api_v1_users__user_id__patch']
+    trace?: never
+  }
+  '/api/v1/users/{user_id}/password-reset': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Issue Password Reset
+     * @description 为他人签发一次性重置令牌。没有邮件服务时，这是找回口令的途径。
+     */
+    post: operations['issue_password_reset_api_v1_users__user_id__password_reset_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
     trace?: never
   }
   '/api/v1/roles': {
@@ -2478,6 +2500,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['OntologyRefOut'] | null
+    }
+    /** ApiResponse[PasswordResetIssued] */
+    ApiResponse_PasswordResetIssued_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['PasswordResetIssued'] | null
     }
     /** ApiResponse[PreviewResponse] */
     ApiResponse_PreviewResponse_: {
@@ -3349,11 +3388,13 @@ export interface components {
     AuditResult: 'OK' | 'FAILED'
     /**
      * AuthConfigOut
-     * @description 公开的认证配置：前端据此决定是否展示注册入口。
+     * @description 公开的认证配置：前端据此决定是否展示注册与自助找回入口。
      */
     AuthConfigOut: {
       /** Registration Enabled */
       registration_enabled: boolean
+      /** Password Reset Enabled */
+      password_reset_enabled: boolean
       /** Password Min Length */
       password_min_length: number
     }
@@ -4836,6 +4877,16 @@ export interface components {
       /** New Password */
       new_password: string
     }
+    /**
+     * PasswordResetIssued
+     * @description 管理员签发的一次性重置令牌，由管理员线下转交。
+     */
+    PasswordResetIssued: {
+      /** Reset Token */
+      reset_token: string
+      /** Expires In */
+      expires_in: number
+    }
     /** PasswordResetRequest */
     PasswordResetRequest: {
       /** Email */
@@ -6078,26 +6129,6 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['HTTPValidationError']
-        }
-      }
-    }
-  }
-  read_stats_api_v1_dashboard_stats_get: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['ApiResponse_DashboardStatsOut_']
         }
       }
     }
@@ -9838,6 +9869,26 @@ export interface operations {
       }
     }
   }
+  read_stats_api_v1_dashboard_stats_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_DashboardStatsOut_']
+        }
+      }
+    }
+  }
   auth_config_api_v1_auth_config_get: {
     parameters: {
       query?: never
@@ -10252,6 +10303,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  issue_password_reset_api_v1_users__user_id__password_reset_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        user_id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_PasswordResetIssued_']
         }
       }
       /** @description Validation Error */

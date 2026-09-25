@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+
 import pytest
+from app.core.config import get_settings
 from app.core.crypto import decrypt, encrypt
 from app.core.db import Base
 from app.core.error_codes import ErrorCode
@@ -12,11 +16,14 @@ from app.domain.source_service import (
     delete_datasource,
     get_datasource,
     get_display_params,
+    reencrypt_datasources,
 )
 from app.domain.source_service import (
     test_connection as _test_connection,
 )
-from app.schemas.datasource import DatasourceCreate
+from app.models.data_access import Datasource
+from app.schemas.datasource import DatasourceCreate, TestConnectionRequest
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -40,16 +47,17 @@ def test_create_datasource_encrypts_credential(session):
         DatasourceCreate(
             name="hr-db",
             kind="sqlite",
-            params={"database": "/tmp/hr.db", "password": "secret123"},
+            params={"database": "/tmp/hr.db"},
             credential="secret123",
         ),
     )
     session.commit()
     assert ds.credential_cipher is not None
+    assert ds.credential_cipher.startswith("aesgcm:v1:")
     assert "secret123" not in ds.credential_cipher
     assert decrypt(ds.credential_cipher) == "secret123"
     display = get_display_params(ds)
-    assert display["password"] == "***"
+    assert "password" not in display
 
 
 def test_create_duplicate_rejected(session):
@@ -131,15 +139,100 @@ def test_credential_never_in_display(session):
         DatasourceCreate(
             name="secure-db",
             kind="sqlite",
-            params={"host": "localhost", "password": "topsecret", "user": "admin"},
+            params={"host": "localhost", "user": "admin"},
             credential="topsecret",
         ),
     )
     session.commit()
     display = get_display_params(ds)
     assert "topsecret" not in str(display)
-    assert display["password"] == "***"
     assert display["host"] == "localhost"
+
+
+@pytest.mark.parametrize("schema", [DatasourceCreate, TestConnectionRequest])
+def test_new_requests_reject_secrets_inside_params(schema):
+    payload = {
+        "kind": "sqlite",
+        "params": {"database": "/tmp/hr.db", "PaSsWoRd": "plain-secret"},
+    }
+    if schema is DatasourceCreate:
+        payload["name"] = "unsafe"
+    with pytest.raises(ValidationError, match="credential field"):
+        schema.model_validate(payload)
+
+
+def test_legacy_secrets_migrate_in_one_transaction(session):
+    old_key = hashlib.sha256(get_settings().crypto_key.encode()).digest()
+    secret = b"legacy-secret"
+    legacy = base64.b64encode(
+        bytes(value ^ old_key[i % len(old_key)] for i, value in enumerate(secret))
+    ).decode()
+    ds = Datasource(
+        name="legacy",
+        kind="sqlite",
+        params={"database": "/tmp/hr.db", "password": secret.decode()},
+        credential_cipher=legacy,
+    )
+    session.add(ds)
+    session.commit()
+
+    assert get_display_params(ds)["password"] == "***"
+    assert reencrypt_datasources(session) == 1
+    session.commit()
+    assert ds.params == {"database": "/tmp/hr.db"}
+    assert ds.credential_cipher.startswith("aesgcm:v1:")
+    assert decrypt(ds.credential_cipher) == secret.decode()
+    assert reencrypt_datasources(session) == 0
+
+
+def test_empty_legacy_secret_survives_key_rotation(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ds = Datasource(
+        name="empty-secret",
+        kind="sqlite",
+        params={"database": "/tmp/hr.db", "password": ""},
+    )
+    session.add(ds)
+    session.commit()
+    assert reencrypt_datasources(session) == 1
+    session.commit()
+    assert ds.params == {"database": "/tmp/hr.db"}
+    assert decrypt(ds.credential_cipher) == ""
+    previous_key = get_settings().crypto_key
+    previous_cipher = ds.credential_cipher
+    monkeypatch.setattr(get_settings(), "crypto_key", "test-rotated-key")
+    assert reencrypt_datasources(session, previous_key=previous_key) == 1
+    session.commit()
+    assert ds.credential_cipher != previous_cipher
+    assert decrypt(ds.credential_cipher) == ""
+
+
+def test_conflicting_legacy_secrets_abort_migration(session):
+    ds = Datasource(
+        name="conflict",
+        kind="sqlite",
+        params={"database": "/tmp/hr.db", "password": "different"},
+        credential_cipher=encrypt("original"),
+    )
+    session.add(ds)
+    session.commit()
+    with pytest.raises(ValueError, match="conflicting credentials"):
+        reencrypt_datasources(session)
+    session.rollback()
+    session.refresh(ds)
+    assert ds.params["password"] == "different"
+
+
+def test_authenticated_ciphertext_is_randomized_and_tamper_detected():
+    first = encrypt("my-password-123")
+    second = encrypt("my-password-123")
+    assert first != second
+    payload = bytearray(base64.b64decode(first.split(":", 2)[2]))
+    payload[-1] ^= 1
+    tampered = "aesgcm:v1:" + base64.b64encode(payload).decode()
+    with pytest.raises(ValueError, match="Invalid credential ciphertext"):
+        decrypt(tampered)
 
 
 def test_encrypt_decrypt_roundtrip():

@@ -47,13 +47,42 @@
 理由：这是企业内部数据治理平台，账号应当由管理员发放而不是自助注册。默认关闭意味着
 「忘记配开关」的结果是安全的一侧，而不是开放注册。
 
-### 4. 重置口令的开发态妥协
+### 4. 重置口令：没有邮件服务时不假装能找回
 
-开发态没有邮件服务，`KG_EXPOSE_RESET_TOKEN` 默认 `true`，`POST /auth/forgot-password`
-把重置令牌直接放在响应里，便于端到端联调；**生产必须置 0**，由后端发信送达。
+> 2026-09-24 修订：原方案让 `KG_EXPOSE_RESET_TOKEN` 默认为 `true`，未显式关闭的部署里，
+> 任何知道管理员邮箱的人都能拿到重置令牌并接管账号。现改为默认关闭，并在生产环境强制关闭。
 
-无论邮箱是否存在，接口都返回 200（不存在的邮箱返回 `reset_token: null`），
-避免把「该邮箱是否注册过」变成可枚举的信息。
+- `KG_EXPOSE_RESET_TOKEN` 默认 `false`。开启时 `POST /auth/forgot-password` 把重置令牌直接放在
+  响应里，只用于本地联调与端到端测试；`KG_ENVIRONMENT=production` 下开启会拒绝启动。
+- 关闭时该接口对任何邮箱都返回 `AUTH.RESET_UNAVAILABLE`（503），不生成令牌，也不区分邮箱是否
+  存在；`GET /auth/config` 下发 `password_reset_enabled`，找回页据此提示联系管理员，而不是谎称
+  「邮件已发出」。
+- 恢复途径改为管理员签发：`POST /users/{id}/password-reset`（仅管理员，不能对自己使用）返回
+  一次性令牌，由管理员线下转交；复用同一张重置令牌表，签发与使用都记审计。接入邮件服务后，
+  再由后端发信替代线下转交。
+
+### 4.1 登录失败限流
+
+按审计表中的 `LOGIN/FAILED` 记录计数，不新增表，多进程部署共享同一份计数：
+
+- 窗口 `KG_LOGIN_FAILURE_WINDOW_SECONDS`（默认 900 秒）内，同一账号在同一来源失败
+  `KG_LOGIN_MAX_FAILURES_PER_ACCOUNT`（默认 5）次，或同一来源失败 `KG_LOGIN_MAX_FAILURES_PER_IP`
+  （默认 30）次，即返回 `AUTH.TOO_MANY_ATTEMPTS`（429）。被拦下的请求不校验口令，也不追加失败记录。
+- 不单独按账号锁定：那样任何人都能反复输错，把指定用户锁在门外。代价是分散在大量来源地址上的
+  慢速猜测只受单来源上限约束，需要时由网关或 WAF 补充。
+- 来源地址只在 `KG_TRUSTED_PROXY_COUNT` 大于 0 时才读 `X-Forwarded-For`（取倒数第 N 段）；
+  直连部署读这个头等于让客户端自报地址，限流与审计都会失效。
+
+### 4.2 生产环境配置与驱动
+
+生产元数据库使用 PostgreSQL。在 `server/` 运行 `.venv/bin/pip install -e '.[production]'`
+安装 BSD-3-Clause 许可的 `pg8000` 驱动，连接地址使用 `postgresql+pg8000://` 前缀。
+`cryptography` 使用 Apache-2.0 或 BSD-3-Clause 双许可。
+
+设置 `KG_ENVIRONMENT=production`、`KG_DATABASE_URL`、独立的 `KG_CRYPTO_KEY`（至少 32 字符）、
+`KG_CREATE_TABLES_ON_STARTUP=false` 与 `KG_EXPOSE_RESET_TOKEN=false`；密钥通过部署环境注入。
+启动前需在备份后执行 Alembic 迁移，应用不会自动迁移生产库。安装驱动与配置加载检查不等同于
+真实 PostgreSQL 连接、迁移或生产部署验收。
 
 ### 5. 角色是单角色枚举，权限判断留在后端
 
@@ -73,5 +102,5 @@
 - **禁用账号即吊销其全部令牌**，在线会话立刻作废：此时请求得到 `AUTH.TOKEN_EXPIRED`（401），
   重新登录才给出 `AUTH.USER_DISABLED`（403）的具体原因。
 - **开发态元数据库不入库**：`knowledge.db` 含口令哈希与审计记录，已在 `.gitignore` 排除。
-- 缺少的能力（不在本次范围）：登录失败次数限制与验证码、会话列表与「登出其他设备」、
+- 缺少的能力（不在本次范围）：验证码、会话列表与「登出其他设备」、
   邮件服务实现、多角色与权限点。

@@ -80,10 +80,19 @@ class TokenPair(BaseModel):
 
 
 class AuthConfigOut(BaseModel):
-    """公开的认证配置：前端据此决定是否展示注册入口。"""
+    """公开的认证配置：前端据此决定是否展示注册与自助找回入口。"""
 
     registration_enabled: bool
+    # 当前没有邮件服务，自助找回只在开发态下发令牌时可用
+    password_reset_enabled: bool
     password_min_length: int
+
+
+class PasswordResetIssued(BaseModel):
+    """管理员签发的一次性重置令牌，由管理员线下转交。"""
+
+    reset_token: str
+    expires_in: int
 
 
 # ---------------------------------------------------------------------------

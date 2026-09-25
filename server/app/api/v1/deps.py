@@ -10,6 +10,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
@@ -29,10 +30,21 @@ def semantic_backend() -> SemanticBackend:
 
 
 def client_ip(request: Request) -> str | None:
-    """审计用的来源地址。经反向代理时取 X-Forwarded-For 的第一段。"""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip() or None
+    """审计与登录限流用的来源地址。
+
+    只有配置了可信代理层数时才读 X-Forwarded-For，并取倒数第 N 段——
+    那是最外层可信代理亲眼看到的地址；更靠左的段都可能由客户端伪造。
+    直连部署读头部等于让客户端自报地址，限流与审计都会失效。
+    """
+    hops = get_settings().trusted_proxy_count
+    if hops > 0:
+        forwarded = [
+            part.strip()
+            for part in request.headers.get("x-forwarded-for", "").split(",")
+            if part.strip()
+        ]
+        if len(forwarded) >= hops:
+            return forwarded[-hops]
     return request.client.host if request.client else None
 
 
@@ -56,5 +68,17 @@ def current_user(
 def require_admin(user: User = Depends(current_user)) -> User:
     """系统管理接口的访问控制。"""
     if user.role != UserRole.ADMIN:
+        raise KGError(ErrorCode.FORBIDDEN, {"role": str(user.role)})
+    return user
+
+
+def authorize_business_request(
+    request: Request, user: User = Depends(current_user)
+) -> User:
+    """Business reads require a session; writes require an editor or administrator."""
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and user.role not in {
+        UserRole.EDITOR,
+        UserRole.ADMIN,
+    }:
         raise KGError(ErrorCode.FORBIDDEN, {"role": str(user.role)})
     return user
