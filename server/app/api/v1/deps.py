@@ -73,12 +73,16 @@ def require_admin(user: User = Depends(current_user)) -> User:
 
 
 def authorize_business_request(
-    request: Request, user: User = Depends(current_user)
-) -> User:
-    """Business reads require a session; writes require an editor or administrator."""
-    if request.method not in {"GET", "HEAD", "OPTIONS"} and user.role not in {
-        UserRole.EDITOR,
-        UserRole.ADMIN,
-    }:
-        raise KGError(ErrorCode.FORBIDDEN, {"role": str(user.role)})
-    return user
+    request: Request,
+    token: str = Depends(access_token),
+    session: Session = Depends(get_session),
+) -> None:
+    """Authenticate without starting the business route's transaction."""
+    # SELECT 会触发 autobegin；鉴权使用独立短会话，让业务路由自行管理事务。
+    with Session(bind=session.get_bind()) as auth_session:
+        user = resolve_session(auth_session, token)
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and user.role not in {
+            UserRole.EDITOR,
+            UserRole.ADMIN,
+        }:
+            raise KGError(ErrorCode.FORBIDDEN, {"role": str(user.role)})
