@@ -394,6 +394,63 @@ def _apply_transform(
     return value, None
 
 
+def _load_compile_via(
+    engine: Engine, spec: dict, table_set: set[str]
+) -> dict[str, dict] | None:
+    """预览用经由表载入；表缺失返回 None（与抽取的整表隔离口径一致）。"""
+    via = (spec or {}).get("via") if spec else None
+    if not via:
+        return None
+    via_table = via.get("table", "")
+    if not _table_in_catalog(via_table, "main", table_set):
+        return None
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(select_source_rows(via_table, "main"))
+            rows = [dict(r._mapping) for r in result.fetchall()]
+    except Exception:
+        return None
+    ref_field = via.get("ref_field", "id") or "id"
+    return {str(row.get(ref_field)): row for row in rows}
+
+
+def _compile_endpoint(
+    spec: dict, raw: dict, via_rows: dict[str, dict] | None = None
+) -> tuple[str, str, str]:
+    """端点候选选择（与抽取一致）：二跳经由 → 判别字段 → 列非空顺序。"""
+    via = (spec or {}).get("via") if spec else None
+    if via and via_rows is not None:
+        join_value = raw.get(via.get("field", ""))
+        eval_row = via_rows.get(str(join_value)) if join_value is not None else None
+    elif via:
+        eval_row = None
+    else:
+        eval_row = raw
+    if eval_row is None:
+        return "", "", ""
+    raw = eval_row
+    cands = spec.get("candidates") or []
+    type_field = spec.get("type_field")
+    if cands:
+        if type_field:
+            type_value = raw.get(type_field)
+            for cand in cands:
+                if cand.get("when") == str(type_value) and raw.get(
+                    cand.get("field", "")
+                ) not in (None, ""):
+                    return (
+                        cand["field"],
+                        cand.get("ref_table", ""),
+                        f"when={cand.get('when')}",
+                    )
+            return "", "", ""
+        for cand in cands:
+            if raw.get(cand.get("field", "")) not in (None, ""):
+                return cand["field"], cand.get("ref_table", ""), ""
+        return "", "", ""
+    return spec.get("field", ""), spec.get("ref_table", ""), ""
+
+
 def _compile_relation(
     rm: dict,
     engine: Engine,
@@ -481,8 +538,10 @@ def _compile_relation(
         else:
             src = rm.get("source") or {}
             tgt = rm.get("target") or {}
-            src_field = src.get("field")
-            tgt_field = tgt.get("field")
+            src_via = _load_compile_via(engine, src, table_set)
+            tgt_via = _load_compile_via(engine, tgt, table_set)
+            src_field, src_ref, src_note = _compile_endpoint(src, raw, src_via)
+            tgt_field, tgt_ref, tgt_note = _compile_endpoint(tgt, raw, tgt_via)
             if not src_field or not tgt_field:
                 errs.append(
                     {
@@ -530,6 +589,9 @@ def _compile_relation(
                     "row_index": idx,
                     "source": src_val,
                     "target": tgt_val,
+                    "source_ref_table": src_ref,
+                    "target_ref_table": tgt_ref,
+                    "endpoint_notes": [n for n in (src_note, tgt_note) if n],
                     "attributes": attrs,
                 }
             )

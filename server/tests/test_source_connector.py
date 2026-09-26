@@ -307,6 +307,7 @@ def test_query_errors_do_not_leak_through_preview_or_quarantine(
             {"records"},
             "https://example.org/",
             {},
+            {},
         )
         assert counts[:2] == (0, 1)
         quarantine = session.add.call_args.args[0]

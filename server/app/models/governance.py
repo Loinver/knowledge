@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Integer,
     String,
     Text,
@@ -33,7 +34,8 @@ class Rule(Base):
             name="ck_governance_rule_severity",
         ),
         CheckConstraint(
-            "language IN ('SHACL', 'OWL')", name="ck_governance_rule_language"
+            "language IN ('SHACL', 'OWL', 'DATA', 'DERIVATION')",
+            name="ck_governance_rule_language",
         ),
         CheckConstraint(
             "execution IN ('AUTO', 'MANUAL')", name="ck_governance_rule_execution"
@@ -54,6 +56,32 @@ class Rule(Base):
     positive_example: Mapped[str] = mapped_column(Text, nullable=False)
     negative_example: Mapped[str] = mapped_column(Text, nullable=False)
     revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+
+class ViewTemplate(Base):
+    """图谱视图模板：形态 + 配置 + 钉住的本体版本。
+
+    模板与本体版本绑定：本体发布新版本后 stale=True，前端必须显式
+    提示失效，不得静默沿用旧语义渲染。
+    """
+
+    __tablename__ = "view_template"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name_i18n: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False)
+    layout_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    config: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    ontology_id: Mapped[int] = mapped_column(ForeignKey("ontology.id"), nullable=False)
+    ontology_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 class StandardClause(Base):

@@ -52,21 +52,62 @@ class FieldMap(BaseModel):
 
 
 class EntityMapCreate(BaseModel):
-    """实体映射。一表可生成多类型，一类型可来自多表。"""
+    """实体映射。一表可生成多类型，一类型可来自多表。
+
+    match_keys 是跨表业务键（如统一社会信用代码）：多张表映射到同一
+    entity_type 时，按业务键值生成同一稳定 IRI，实现跨表实体融合；
+    每张来源表各自保留 FactEvidence，证据不合并。
+    """
 
     entity_type: str
     table: str
     db_schema: str = Field(default="main", alias="schema")
     field_maps: list[FieldMap]
     key_fields: list[str] = []
+    match_keys: list[str] = []
 
 
-class RelEndpointSpec(BaseModel):
-    """关系端点：字段 → 引用表/字段。"""
+class RelEndpointCandidate(BaseModel):
+    """多态端点候选：一列值 → 一张引用表。
+
+    when 与端点 spec 的 type_field 配合：type_field 的行值等于 when
+    时启用该候选；不配 type_field 时按列非空顺序取第一个候选。
+    """
 
     field: str
     ref_table: str
-    ref_field: str
+    ref_field: str | None = None
+    when: str | None = None
+    # 引用实体在本体中的类型名；提供时优先按业务键匹配已建实体
+    ref_entity_type: str | None = None
+
+
+class RelEndpointVia(BaseModel):
+    """二跳端点：先按本行连接列找到经由表的行，再在该行上判别端点。
+
+    典型结构：持股表的 shareholder_id → 股东表（多态）→ 按
+    shareholder_type 判别引用自然人表或企业表。
+    """
+
+    table: str
+    field: str  # 本行提供连接值的列（如 shareholder_id）
+    ref_field: str = "id"  # 经由表的查找列
+
+
+class RelEndpointSpec(BaseModel):
+    """关系端点：字段 → 引用表/字段，支持多态候选与二跳经由。
+
+    单候选端点等价于 candidates=[{field, ref_table, ref_field}]；
+    多候选 + type_field 表达"判别字段决定端点表"的多态结构；
+    via 声明时，判别字段与候选列都在经由表的行上求值。
+    """
+
+    field: str = ""
+    ref_table: str = ""
+    ref_field: str = ""
+    candidates: list[RelEndpointCandidate] = []
+    type_field: str | None = None
+    via: RelEndpointVia | None = None
 
 
 class RelMapCreate(BaseModel):

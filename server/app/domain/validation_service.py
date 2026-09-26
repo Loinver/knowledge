@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,8 +15,15 @@ from app.domain.ontology_snapshot import (
     load_resource_snapshot,
     relation_endpoints,
 )
-from app.models.domain import Ontology, OntologyResourceRef
+from app.domain.template_service import template_resources
+from app.models.domain import (
+    AssemblyTemplate,
+    Ontology,
+    OntologyResourceRef,
+    OntologyRuleRef,
+)
 from app.models.enums import ResourceKind, ResourceStatus, ValidationState
+from app.models.governance import Rule
 from app.models.resource import ModelResource, Namespace
 from app.models.validation import ValidationReport, ValidationResult
 from app.semantics.backend import SemanticBackend
@@ -68,7 +77,7 @@ def run_ontology_validation(
         _check_a03_property_range(session, resources),
         _check_a04_relation_endpoints(session, resources),
         _check_a05_rule_set(session, onto),
-        _check_a06_core_template(session, onto),
+        _check_a06_core_template(session, onto, referenced_ids),
         _check_a07_namespace(session, resources),
         _check_a08_owl_consistency(backend),
     ]
@@ -192,21 +201,93 @@ def _check_a04_relation_endpoints(
 
 
 def _check_a05_rule_set(session: Session, onto: Ontology) -> ValidationResult:
-    """A05 规则集：规则引用的资源存在。M1 规则集为空 → NA。"""
-    return ValidationResult(
-        check_code="A05",
-        state=ValidationState.NA,
-        message="no rules defined",
+    """A05 规则集：钉扎规则存在、版本未漂移、DATA/DERIVATION 表达式可解析。
+
+    本体未挂任何规则 → NA（无规则集可查，不是通过也不是未执行）。
+    """
+    refs = list(
+        session.scalars(
+            select(OntologyRuleRef).where(OntologyRuleRef.ontology_id == onto.id)
+        )
     )
+    if not refs:
+        return ValidationResult(
+            check_code="A05",
+            state=ValidationState.NA,
+            message="no rules defined",
+        )
+    changed: list[int] = []
+    broken: list[dict] = []
+    for ref in refs:
+        rule = session.get(Rule, ref.rule_id)
+        if rule is None:
+            changed.append(ref.rule_id)
+            continue
+        if rule.revision != ref.pinned_revision:
+            broken.append(
+                {
+                    "rule_id": rule.id,
+                    "pinned": ref.pinned_revision,
+                    "current": rule.revision,
+                }
+            )
+            continue
+        if rule.language in ("DATA", "DERIVATION"):
+            try:
+                config = json.loads(rule.expression)
+            except ValueError:
+                broken.append({"rule_id": rule.id, "reason": "invalid_json"})
+                continue
+            if not isinstance(config, dict) or not config.get("op"):
+                broken.append({"rule_id": rule.id, "reason": "missing_op"})
+    if changed or broken:
+        return ValidationResult(
+            check_code="A05",
+            state=ValidationState.VIOLATION,
+            detail={"missing_rules": changed, "broken_rules": broken},
+            message="rule set inconsistent with pinned revisions",
+        )
+    return ValidationResult(check_code="A05", state=ValidationState.PASS)
 
 
-def _check_a06_core_template(session: Session, onto: Ontology) -> ValidationResult:
-    """A06 核心模板必需类型：M1 无模板实现 → NA。"""
-    return ValidationResult(
-        check_code="A06",
-        state=ValidationState.NA,
-        message="no template validation",
-    )
+def _check_a06_core_template(
+    session: Session, onto: Ontology, referenced_ids: list[int]
+) -> ValidationResult:
+    """A06 核心模板：模板来源的本体必须保留模板成员资源且种类一致。
+
+    非模板装配的本体 → NA（无模板契约可核对）。
+    """
+    if onto.template_id is None:
+        return ValidationResult(
+            check_code="A06",
+            state=ValidationState.NA,
+            message="ontology not instantiated from a template",
+        )
+    template = session.get(AssemblyTemplate, onto.template_id)
+    if template is None:
+        return ValidationResult(
+            check_code="A06",
+            state=ValidationState.VIOLATION,
+            detail={"template_id": onto.template_id},
+            message="template origin missing",
+        )
+    referenced = set(referenced_ids)
+    missing: list[str] = []
+    for member in template_resources(template):
+        resource = session.get(ModelResource, member.resource_id)
+        if resource is None:
+            missing.append(f"resource:{member.resource_id}")
+            continue
+        if member.resource_id not in referenced:
+            missing.append(resource.name)
+    if missing:
+        return ValidationResult(
+            check_code="A06",
+            state=ValidationState.VIOLATION,
+            detail={"missing_members": missing},
+            message="template core members not preserved in ontology",
+        )
+    return ValidationResult(check_code="A06", state=ValidationState.PASS)
 
 
 def _check_a07_namespace(

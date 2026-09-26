@@ -1,7 +1,7 @@
 """抽取引擎（H-32）。
 
-四阶段：实体映射 → 关系映射 → 规则检查 → 隔离。
-幂等：基于稳定 IRI（namespace + entity_type + row_key），重跑 IRI 集合一致。
+四阶段：实体映射 → 关系映射 → 规则校验 → 派生推导。
+幂等：基于稳定 IRI（namespace + entity_type + row_key/业务键），重跑 IRI 集合一致。
 失败保护：零产出判 FAILED，is_current 不动；可从历史成功运行切回。
 """
 
@@ -17,10 +17,13 @@ from sqlalchemy.orm import Session
 from app.connectors.sql import select_source_rows
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.derivation_service import run_derivation_stage
+from app.domain.extraction_rule_stage import run_rule_stage
 from app.domain.mapping_compiler import _apply_transform
 from app.domain.metadata_service import get_latest_snapshot
 from app.domain.source_service import datasource_engine, get_datasource
-from app.models.data_access import Datasource, MappingRevision
+from app.models.data_access import Datasource, Mapping, MappingRevision
+from app.models.domain import OntologyRevision, OntologyRuleRef
 from app.models.enums import RunResult
 from app.models.extraction import (
     DerivedEdge,
@@ -31,6 +34,43 @@ from app.models.extraction import (
     GraphTriple,
     Quarantine,
 )
+from app.models.governance import Rule
+
+
+def _load_frozen_pins(session: Session, rev: MappingRevision) -> dict:
+    """抽取运行级冻结引用：映射/本体/资源/规则版本，写入每条证据。
+
+    规则钉扎取本体发布时的 pinned_revision；资源版本取本体版本的
+    resource_versions 快照。上游改版不会静默改变证据解释口径。
+    """
+    mapping = session.get(Mapping, rev.mapping_id)
+    if mapping is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"mapping_id": rev.mapping_id})
+    onto_rev = (
+        session.execute(
+            select(OntologyRevision).where(
+                OntologyRevision.ontology_id == mapping.ontology_id,
+                OntologyRevision.revision == rev.onto_version,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    resource_versions: dict = dict(onto_rev.resource_versions or {}) if onto_rev else {}
+    rule_refs = session.execute(
+        select(OntologyRuleRef, Rule.identifier)
+        .join(Rule, Rule.id == OntologyRuleRef.rule_id)
+        .where(OntologyRuleRef.ontology_id == mapping.ontology_id)
+    ).all()
+    return {
+        "mapping_revision_id": rev.id,
+        "ontology_revision": rev.onto_version,
+        "ontology_id": mapping.ontology_id,
+        "resource_versions": resource_versions,
+        "rule_revisions": {
+            identifier: ref.pinned_revision for ref, identifier in rule_refs
+        },
+    }
 
 
 def start_run(
@@ -59,11 +99,13 @@ def start_run(
             {"datasource_id": datasource_id, "reason": "no_metadata_snapshot"},
         )
 
+    pins = _load_frozen_pins(session, rev)
     cfg = {
         "mapping_revision_id": mapping_revision_id,
         "datasource_id": datasource_id,
         "namespace": namespace,
         "onto_version": rev.onto_version,
+        "pins": pins,
     }
     run = ExtractionRun(
         mapping_revision_id=mapping_revision_id,
@@ -121,7 +163,11 @@ def _execute_four_phases(
     catalog: dict,
     namespace: str,
 ) -> dict:
-    """四阶段执行。返回计数。"""
+    """四阶段执行。返回计数。
+
+    阶段1/2 在源库上抽取；阶段3 规则校验与阶段4 派生推导在本库
+    刚建好的候选图（gr）上执行，不回读源库。
+    """
     table_set = _index_catalog_tables(catalog)
     # 先建一个临时 graph_revision 给 entity/triple 挂（run 结束时统一发布）
     gr = GraphRevision(run_id=run.id, is_current=False, publishable=False)
@@ -129,6 +175,8 @@ def _execute_four_phases(
     session.flush()
 
     entity_iri_index: dict[str, dict] = {}  # IRI -> {type, row_key}
+    # (table, row_key) / ("type:<entity_type>", 业务键) -> IRI，端点解析索引
+    key_index: dict[tuple[str, str], str] = {}
     quarantine_count = 0
     evidence_count = 0
 
@@ -138,7 +186,15 @@ def _execute_four_phases(
         # 阶段1：实体映射
         for em in rev.entity_maps or []:
             n, q = _phase1_entity(
-                session, run, gr, em, engine, table_set, namespace, entity_iri_index
+                session,
+                run,
+                gr,
+                em,
+                engine,
+                table_set,
+                namespace,
+                entity_iri_index,
+                key_index,
             )
             quarantine_count += q
             evidence_count += n
@@ -146,7 +202,15 @@ def _execute_four_phases(
         # 阶段2：关系映射
         for rm in rev.rel_maps or []:
             t, q, e = _phase2_relation(
-                session, run, gr, rm, engine, table_set, namespace, entity_iri_index
+                session,
+                run,
+                gr,
+                rm,
+                engine,
+                table_set,
+                namespace,
+                entity_iri_index,
+                key_index,
             )
             triple_count += t
             quarantine_count += q
@@ -154,14 +218,23 @@ def _execute_four_phases(
 
     entity_count = len(entity_iri_index)
 
+    # 阶段3：规则校验（实例校验报告 + DATA 规则执行，命中写隔离）
+    rule_stage = run_rule_stage(session, run, gr, rev)
+    quarantine_count += rule_stage["quarantined_by_rule"]
+
+    # 阶段4：派生推导（DERIVATION 规则执行，写 DerivedEdge）
+    derived_count = run_derivation_stage(session, run, gr, rev)
+
     counts = {
         "entity_count": entity_count,
         "triple_count": triple_count,
         "quarantine_count": quarantine_count,
         "evidence_count": evidence_count + rel_evidence,
-        "derived_edge_count": 0,
+        "derived_edge_count": derived_count,
+        "rule_violation_count": rule_stage["rule_violation_count"],
+        "validation_summary": rule_stage["validation_summary"],
+        "rule_results": rule_stage["rule_results"],
     }
-    # 阶段3 + 4 已在 phase1/phase2 内联（违规进 quarantine）
     return counts
 
 
@@ -194,13 +267,19 @@ def _phase1_entity(
     table_set: set[str],
     namespace: str,
     entity_iri_index: dict,
+    key_index: dict[tuple[str, str], str],
 ) -> tuple[int, int]:
-    """阶段1：实体映射。返回 (evidence_count, quarantine_count)。"""
+    """阶段1：实体映射。返回 (evidence_count, quarantine_count)。
+
+    match_keys 存在时按业务键生成 IRI：多张来源表映射到同一 entity_type
+    且业务键值相同 → 融合为同一实体，但每张来源表各自保留证据。
+    """
     table = em.get("table", "")
     schema = em.get("schema", "main")
     entity_type = em.get("entity_type", "")
     field_maps = em.get("field_maps", [])
     key_fields = em.get("key_fields", [])
+    match_keys = em.get("match_keys") or []
     evidence_n = 0
     quarantine_n = 0
 
@@ -255,7 +334,30 @@ def _phase1_entity(
             )
             quarantine_n += 1
 
-        iri = _stable_iri(namespace, entity_type, row_key)
+        # 业务键（跨表融合）检查与 IRI 选择
+        match_value = ""
+        for mk in match_keys:
+            value = raw.get(mk)
+            if value is None or value == "":
+                session.add(
+                    _make_quarantine(
+                        run,
+                        table,
+                        row_key,
+                        mk,
+                        str(value),
+                        ["match_key"],
+                        "empty_business_key",
+                    )
+                )
+                quarantine_n += 1
+            else:
+                match_value = f"{match_value}|{value}" if match_value else str(value)
+        identity_key = match_value if match_value else row_key
+        iri = _stable_iri(namespace, entity_type, identity_key)
+        key_index[(table, row_key)] = iri
+        if match_value:
+            key_index[(f"type:{entity_type}", match_value)] = iri
         # 转换字段
         attrs: dict = {}
         for fm in field_maps:
@@ -324,21 +426,19 @@ def _phase1_entity(
                 "table": table,
             }
         # 证据
-        ev = FactEvidence(
-            graph_revision_id=gr.id,
-            subject=iri,
-            predicate="_entity_attrs",
-            object_=iri,
-            source_id=run.cfg_snapshot.get("datasource_id", 0)
-            if isinstance(run.cfg_snapshot, dict)
-            else 0,
-            table_name=table,
-            row_key=row_key,
-            columns=[fm.get("source_field") for fm in field_maps],
-            run_id=run.id,
-            evidence_type="ENTITY",
+        session.add(
+            _make_evidence(
+                gr,
+                run,
+                iri,
+                "_entity_attrs",
+                iri,
+                table,
+                row_key,
+                [fm.get("source_field") for fm in field_maps],
+                "ENTITY",
+            )
         )
-        session.add(ev)
         evidence_n += 1
     session.flush()
     return evidence_n, quarantine_n
@@ -353,8 +453,14 @@ def _phase2_relation(
     table_set: set[str],
     namespace: str,
     entity_iri_index: dict,
+    key_index: dict[tuple[str, str], str],
 ) -> tuple[int, int, int]:
-    """阶段2：关系映射。返回 (triple_count, quarantine_count, evidence_count)。"""
+    """阶段2：关系映射。返回 (triple_count, quarantine_count, evidence_count)。
+
+    端点支持多候选（多态）：candidates 按列非空或 type_field 判别值选表，
+    如股东表按 shareholder_type 决定引用自然人表或企业表。
+    ASSOCIATIVE 关联属性写入边 props，使持股比例/金额/角色在图上可读。
+    """
     table = rm.get("table", "")
     schema = rm.get("schema", "main")
     rel_type = rm.get("relation_type", "")
@@ -362,11 +468,6 @@ def _phase2_relation(
     triple_n = 0
     quarantine_n = 0
     evidence_n = 0
-    ds_id = (
-        run.cfg_snapshot.get("datasource_id", 0)
-        if isinstance(run.cfg_snapshot, dict)
-        else 0
-    )
 
     if not _table_in_catalog(table, schema, table_set):
         session.add(
@@ -400,6 +501,33 @@ def _phase2_relation(
         )
         return 0, 1, 0
 
+    attr_fields = [
+        a.get("field", "") for a in rm.get("attributes", []) if a.get("field")
+    ]
+    # 二跳端点：预先把经由表整表载入（多态股东等结构），键为连接值
+    src_via_rows = _load_via_rows(engine, rm.get("source"), table_set)
+    tgt_via_rows = _load_via_rows(engine, rm.get("target"), table_set)
+
+    def _quarantine_via_table(table_name: str) -> tuple[int, int, int]:
+        # 经由表不在目录：整表隔离，不逐行报
+        session.add(
+            _make_quarantine(
+                run,
+                table_name,
+                "N/A",
+                "_table",
+                None,
+                ["table_check"],
+                "table_not_in_catalog",
+            )
+        )
+        return triple_n, quarantine_n + 1, evidence_n
+
+    if isinstance(src_via_rows, str):
+        return _quarantine_via_table(src_via_rows)
+    if isinstance(tgt_via_rows, str):
+        return _quarantine_via_table(tgt_via_rows)
+
     for idx, raw in enumerate(raw_rows):
         row_key = (
             "|".join(str(raw[key]) for key in key_fields)
@@ -426,7 +554,7 @@ def _phase2_relation(
             # FK: subject 是当前表实体，object 是被引用表实体
             subject_key = str(raw.get("id", f"fk-{idx}"))
             subject_iri = _lookup_or_stub(
-                entity_iri_index, namespace, table, subject_key, session, gr
+                entity_iri_index, namespace, table, subject_key, session, gr, key_index
             )
             object_iri = _resolve_ref_iri(
                 entity_iri_index, namespace, src_val, session, gr
@@ -445,7 +573,6 @@ def _phase2_relation(
                     subject_iri,
                     rel_type,
                     object_iri,
-                    ds_id,
                     table,
                     row_key,
                     [fk_field],
@@ -457,67 +584,72 @@ def _phase2_relation(
         else:  # JUNCTION / ASSOCIATIVE
             src = rm.get("source") or {}
             tgt = rm.get("target") or {}
-            src_field = src.get("field", "")
-            tgt_field = tgt.get("field", "")
-            src_val = raw.get(src_field)
-            tgt_val = raw.get(tgt_field)
-            if src_val is None or src_val == "":
+            src_eval = _endpoint_eval_row(src, raw, src_via_rows)
+            tgt_eval = _endpoint_eval_row(tgt, raw, tgt_via_rows)
+            src_cand = _pick_endpoint(src, src_eval) if src_eval else None
+            tgt_cand = _pick_endpoint(tgt, tgt_eval) if tgt_eval else None
+            if src_cand is None or tgt_cand is None:
+                missing_spec = src if src_cand is None else tgt
+                missing_eval = src_eval if src_cand is None else tgt_eval
+                field = (
+                    missing_spec.get("type_field")
+                    or _endpoint_candidates(missing_spec)[0]["field"]
+                )
                 session.add(
                     _make_quarantine(
                         run,
                         table,
                         row_key,
-                        src_field,
-                        str(src_val),
+                        field,
+                        str(missing_eval.get(field)) if missing_eval else None,
                         ["endpoint"],
                         "empty_endpoint",
                     )
                 )
                 quarantine_n += 1
-            if tgt_val is None or tgt_val == "":
-                session.add(
-                    _make_quarantine(
-                        run,
-                        table,
-                        row_key,
-                        tgt_field,
-                        str(tgt_val),
-                        ["endpoint"],
-                        "empty_endpoint",
-                    )
-                )
-                quarantine_n += 1
-            if src_val is None or tgt_val is None:
                 continue
+            src_val = src_eval.get(src_cand["field"]) if src_eval else None
+            tgt_val = tgt_eval.get(tgt_cand["field"]) if tgt_eval else None
             src_iri = _lookup_or_stub(
                 entity_iri_index,
                 namespace,
-                src.get("ref_table", ""),
+                src_cand["ref_table"],
                 str(src_val),
                 session,
                 gr,
+                key_index,
+                src_cand.get("ref_entity_type"),
             )
             tgt_iri = _lookup_or_stub(
                 entity_iri_index,
                 namespace,
-                tgt.get("ref_table", ""),
+                tgt_cand["ref_table"],
                 str(tgt_val),
                 session,
                 gr,
+                key_index,
+                tgt_cand.get("ref_entity_type"),
             )
+            props: dict = {}
+            if mode == "ASSOCIATIVE":
+                for a in rm.get("attributes", []):
+                    af = a.get("field", "")
+                    if af and raw.get(af) is not None:
+                        props[a.get("attr", af)] = raw.get(af)
             triple = GraphTriple(
                 graph_revision_id=gr.id,
                 subject=src_iri,
                 predicate=rel_type,
                 object_=tgt_iri,
+                props=props or None,
             )
             session.add(triple)
-            cols = [src_field, tgt_field]
-            if mode == "ASSOCIATIVE":
-                for a in rm.get("attributes", []):
-                    af = a.get("field", "")
-                    if af:
-                        cols.append(af)
+            cols = [src_cand["field"], tgt_cand["field"]]
+            if src.get("type_field"):
+                cols.append(src["type_field"])
+            if tgt.get("type_field"):
+                cols.append(tgt["type_field"])
+            cols.extend(f for f in attr_fields if f not in cols)
             session.add(
                 _make_evidence(
                     gr,
@@ -525,7 +657,6 @@ def _phase2_relation(
                     src_iri,
                     rel_type,
                     tgt_iri,
-                    ds_id,
                     table,
                     row_key,
                     cols,
@@ -538,6 +669,81 @@ def _phase2_relation(
     return triple_n, quarantine_n, evidence_n
 
 
+def _endpoint_candidates(spec: dict) -> list[dict]:
+    """端点候选归一：显式 candidates 优先，缺省回退单候选 field/ref_table。"""
+    cands = spec.get("candidates") or []
+    if cands:
+        return list(cands)
+    return [
+        {
+            "field": spec.get("field", ""),
+            "ref_table": spec.get("ref_table", ""),
+            "ref_field": spec.get("ref_field") or None,
+            "when": None,
+            "ref_entity_type": None,
+        }
+    ]
+
+
+def _pick_endpoint(spec: dict, raw: dict) -> dict | None:
+    """按判别字段或列非空顺序选出本行端点候选；无可用候选返回 None。"""
+    cands = _endpoint_candidates(spec)
+    type_field = spec.get("type_field")
+    if type_field:
+        type_value = raw.get(type_field)
+        for cand in cands:
+            if cand.get("when") == str(type_value) and raw.get(
+                cand.get("field", "")
+            ) not in (
+                None,
+                "",
+            ):
+                return cand
+        return None
+    for cand in cands:
+        if raw.get(cand.get("field", "")) not in (None, ""):
+            return cand
+    return None
+
+
+def _load_via_rows(
+    engine: Engine, spec: dict | None, table_set: set[str]
+) -> dict[str, dict] | str | None:
+    """预载二跳端点的经由表：{连接值: 经由行}。
+
+    返回 None 表示无 via；返回字符串表示经由表不在目录（调用方整表隔离）。
+    """
+    via = (spec or {}).get("via") if spec else None
+    if not via:
+        return None
+    via_table = via.get("table", "")
+    via_schema = "main"
+    if not _table_in_catalog(via_table, via_schema, table_set):
+        return via_table
+    sql = select_source_rows(via_table, via_schema)
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(sql)
+            rows = [dict(r._mapping) for r in result.fetchall()]
+    except Exception:
+        return via_table
+    ref_field = via.get("ref_field", "id") or "id"
+    return {str(row.get(ref_field)): row for row in rows}
+
+
+def _endpoint_eval_row(
+    spec: dict, raw: dict, via_rows: dict[str, dict] | None
+) -> dict | None:
+    """二跳端点求值行：有 via 时取经由行，无 via 用本行；找不到经行返回 None。"""
+    via = (spec or {}).get("via") if spec else None
+    if not via or via_rows is None:
+        return raw
+    join_value = raw.get(via.get("field", ""))
+    if join_value is None:
+        return None
+    return via_rows.get(str(join_value))
+
+
 def _lookup_or_stub(
     entity_index: dict,
     namespace: str,
@@ -545,15 +751,22 @@ def _lookup_or_stub(
     key: str,
     session: Session,
     gr: GraphRevision,
+    key_index: dict[tuple[str, str], str] | None = None,
+    ref_entity_type: str | None = None,
 ) -> str:
-    """查已建实体 IRI（同表 + 同 row_key），找不到建 stub。"""
+    """查已建实体 IRI：优先 (表, 行键) / (类型, 业务键) 索引，找不到建 stub。"""
     key_str = str(key)
-    # 先在已建实体里找同表同 row_key
-    for iri_ex, info in entity_index.items():
-        if info.get("table") == table and info.get("row_key") == key_str:
-            return iri_ex
-    safe_key = key_str.replace(" ", "_")
-    iri = f"{namespace}{table}/{safe_key}"
+    idx = key_index if key_index is not None else {}
+    iri = idx.get((table, key_str))
+    if iri is None and ref_entity_type:
+        iri = idx.get((f"type:{ref_entity_type}", key_str))
+    if iri is None:
+        # 兼容旧路径：线性扫描（索引未覆盖的历史条目）
+        for iri_ex, info in entity_index.items():
+            if info.get("table") == table and info.get("row_key") == key_str:
+                return iri_ex
+        safe_key = key_str.replace(" ", "_")
+        iri = f"{namespace}{table}/{safe_key}"
     if iri not in entity_index:
         ei = EntityIdentity(
             graph_revision_id=gr.id,
@@ -570,6 +783,7 @@ def _lookup_or_stub(
             "table": table,
             "stub": True,
         }
+        idx[(table, key_str)] = iri
     return iri
 
 
@@ -631,23 +845,29 @@ def _make_evidence(
     subject: str,
     predicate: str,
     object_: str,
-    source_id: int,
     table: str,
     row_key: str,
     columns: list[str],
     ev_type: str,
 ) -> FactEvidence:
+    """构造证据行并冻结当时的映射/本体/资源/规则版本。"""
+    cfg = run.cfg_snapshot if isinstance(run.cfg_snapshot, dict) else {}
+    pins = cfg.get("pins") or {}
     return FactEvidence(
         graph_revision_id=gr.id,
         subject=subject,
         predicate=predicate,
         object_=object_,
-        source_id=source_id,
+        source_id=cfg.get("datasource_id", 0),
         table_name=table,
         row_key=str(row_key),
         columns=list(columns),
         run_id=run.id,
         evidence_type=ev_type,
+        mapping_revision_id=pins.get("mapping_revision_id"),
+        ontology_revision=pins.get("ontology_revision"),
+        resource_revisions=pins.get("resource_versions") or None,
+        rule_revisions=pins.get("rule_revisions") or None,
     )
 
 

@@ -20,6 +20,7 @@ from app.schemas.mapping import (
     EntityMapCreate,
     MappingCreate,
     MappingRevisionCreate,
+    RelEndpointSpec,
     RelMapCreate,
 )
 
@@ -167,6 +168,11 @@ def _validate_entity_map(em: EntityMapCreate) -> None:
         raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "table_empty"})
     if not em.field_maps:
         raise KGError(ErrorCode.INVALID_REQUEST, {"reason": "field_maps_empty"})
+    if em.match_keys and len(set(em.match_keys)) != len(em.match_keys):
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {"reason": "duplicate_match_key", "entity_type": em.entity_type},
+        )
     targets = [fm.target_attr for fm in em.field_maps]
     if len(set(targets)) != len(targets):
         raise KGError(
@@ -179,6 +185,55 @@ def _validate_entity_map(em: EntityMapCreate) -> None:
                 ErrorCode.VALIDATION_VIOLATION,
                 {"reason": "required_field_missing_source", "attr": fm.target_attr},
             )
+
+
+def _validate_endpoint_spec(spec: RelEndpointSpec, side: str, relation: str) -> None:
+    """端点校验：单候选（field/ref_table）与多候选（candidates）二选一。"""
+    if spec.via is not None and (not spec.via.table or not spec.via.field):
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {"reason": "endpoint_via_incomplete", "relation": relation, "side": side},
+        )
+    if spec.candidates:
+        for cand in spec.candidates:
+            if not cand.field or not cand.ref_table:
+                raise KGError(
+                    ErrorCode.VALIDATION_VIOLATION,
+                    {
+                        "reason": "endpoint_candidate_incomplete",
+                        "relation": relation,
+                        "side": side,
+                    },
+                )
+        whens = [c.when for c in spec.candidates if c.when is not None]
+        if spec.type_field and len(whens) != len(spec.candidates):
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {
+                    "reason": "discriminator_requires_when_on_all_candidates",
+                    "relation": relation,
+                    "side": side,
+                },
+            )
+        if len(whens) != len(set(whens)):
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {
+                    "reason": "duplicate_endpoint_discriminator",
+                    "relation": relation,
+                    "side": side,
+                },
+            )
+        return
+    if not spec.field or not spec.ref_table:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {
+                "reason": "endpoint_requires_field_and_ref_table",
+                "relation": relation,
+                "side": side,
+            },
+        )
 
 
 def _validate_rel_map(rm: RelMapCreate) -> None:
@@ -198,6 +253,8 @@ def _validate_rel_map(rm: RelMapCreate) -> None:
                 ErrorCode.VALIDATION_VIOLATION,
                 {"reason": "mode_requires_endpoints", "mode": rm.mode},
             )
+        _validate_endpoint_spec(rm.source, "source", rm.relation_type)
+        _validate_endpoint_spec(rm.target, "target", rm.relation_type)
     else:
         raise KGError(
             ErrorCode.INVALID_REQUEST, {"reason": "unknown_mode", "mode": rm.mode}
@@ -211,6 +268,7 @@ def _em_to_dict(em: EntityMapCreate) -> dict:
         "schema": em.db_schema,
         "field_maps": [fm.model_dump() for fm in em.field_maps],
         "key_fields": em.key_fields,
+        "match_keys": em.match_keys,
     }
 
 

@@ -100,7 +100,11 @@ class EntityIdentity(Base):
 
 
 class GraphTriple(Base):
-    """关系表三元组。规模上量后再评估图库。"""
+    """关系表三元组。规模上量后再评估图库。
+
+    props 承载 ASSOCIATIVE 关联属性（持股比例、交易金额、签约角色等），
+    使"图上事实可读"——边上的数值不必跳出图谱去源表核对。
+    """
 
     __tablename__ = "graph_triple"
     __table_args__ = (
@@ -115,10 +119,16 @@ class GraphTriple(Base):
     subject: Mapped[str] = mapped_column(String(640), nullable=False)
     predicate: Mapped[str] = mapped_column(String(640), nullable=False)
     object_: Mapped[str] = mapped_column("object", String(640), nullable=False)
+    props: Mapped[dict | None] = mapped_column(JSON, default=None)
 
 
 class DerivedEdge(Base):
-    """派生边：只用于查询加速，不参与计数口径。"""
+    """派生边：由 DERIVATION 规则在抽取第 4 阶段推导。
+
+    rule_id 记录产出该边的规则；source_fact_ids 记录参与推导的直接事实
+    （GraphTriple.id 列表），使派生事实可以展开到来源事实；
+    props 携带推导产物（如间接持股乘积比例）。
+    """
 
     __tablename__ = "derived_edge"
 
@@ -129,11 +139,16 @@ class DerivedEdge(Base):
     subject: Mapped[str] = mapped_column(String(640), nullable=False)
     predicate: Mapped[str] = mapped_column(String(640), nullable=False)
     object_: Mapped[str] = mapped_column("object", String(640), nullable=False)
+    props: Mapped[dict | None] = mapped_column(JSON, default=None)
+    rule_id: Mapped[str | None] = mapped_column(String(128), default=None)
+    source_fact_ids: Mapped[list | None] = mapped_column(JSON, default=None)
 
 
 class FactEvidence(Base):
     """事实证据追溯：每条事实反查到表/行键/字段/运行批次。
 
+    冻结引用（mapping/ontology/resource/rule 版本）把证据钉在抽取当时的
+    资产版本上：上游改版不会静默改变证据的解释口径。
     来源被隔离时，前端明确提示"来源记录未进入当前候选图"，
     不伪装为证据完整。
     """
@@ -154,6 +169,10 @@ class FactEvidence(Base):
     columns: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     run_id: Mapped[int] = mapped_column(ForeignKey("extraction_run.id"), nullable=False)
     evidence_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    mapping_revision_id: Mapped[int | None] = mapped_column(Integer, default=None)
+    ontology_revision: Mapped[int | None] = mapped_column(Integer, default=None)
+    resource_revisions: Mapped[dict | None] = mapped_column(JSON, default=None)
+    rule_revisions: Mapped[dict | None] = mapped_column(JSON, default=None)
 
 
 class Quarantine(Base):

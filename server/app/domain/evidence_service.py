@@ -167,7 +167,65 @@ def _flatten_evidence(
                 "subject": ev.subject,
                 "predicate": ev.predicate,
                 "object": ev.object_,
+                "mapping_revision_id": ev.mapping_revision_id,
+                "ontology_revision": ev.ontology_revision,
+                "resource_revisions": ev.resource_revisions,
+                "rule_revisions": ev.rule_revisions,
             }
         )
 
     return evidences_out
+
+
+def trace_source_rows(
+    session: Session,
+    source_id: int,
+    table_name: str,
+    row_key: str,
+    graph_revision_id: int | None = None,
+) -> dict:
+    """反向追溯：从来源行反查它参与的事实与产出实体。
+
+    正向链是"事实 → 来源行"；这条反向链让用户从源数据的行出发，
+    回答"这一行进了图谱的哪些事实、哪些实体"，满足界面内闭环修正。
+    """
+    gr = resolve_graph(session, graph_revision_id)
+    rows = list(
+        session.execute(
+            select(FactEvidence).where(
+                FactEvidence.graph_revision_id == gr.id,
+                FactEvidence.source_id == source_id,
+                FactEvidence.table_name == table_name,
+                FactEvidence.row_key == row_key,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    ds = session.get(Datasource, source_id)
+    facts = [
+        {
+            "subject": ev.subject,
+            "predicate": ev.predicate,
+            "object": ev.object_,
+            "evidence_id": ev.id,
+            "evidence_type": ev.evidence_type,
+            "run_id": ev.run_id,
+        }
+        for ev in rows
+    ]
+    entities: set[str] = set()
+    for ev in rows:
+        if ev.predicate == "_entity_attrs":
+            entities.add(ev.subject)
+        else:
+            entities.update((ev.subject, ev.object_))
+    return {
+        "graph_revision_id": gr.id,
+        "source_id": source_id,
+        "source_name": ds.name if ds else None,
+        "table_name": table_name,
+        "row_key": row_key,
+        "facts": facts,
+        "entities": sorted(entities),
+    }

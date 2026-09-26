@@ -43,6 +43,10 @@ class ResourceSnapshot(BaseModel):
     parent_ids: list[int]
     resource_refs: list[SnapshotRef]
     datatype_props: list[SnapshotProperty] = Field(default_factory=list)
+    # 对象属性（关系）明细快照：基数与 OWL 特征（symmetric/transitive 等）。
+    # 旧版本快照可能没有该节，按 None 处理，不回退当前资源。
+    object_prop: dict | None = None
+    owl: dict | None = None
 
 
 def load_resource_snapshot(
@@ -74,6 +78,7 @@ def load_resource_snapshot(
             ErrorCode.VALIDATION_VIOLATION,
             {"resource_id": resource_id, "reason": "invalid_snapshot_structure"},
         ) from exc
+    snapshot.owl = (snapshot.object_prop or {}).get("owl") or None
     if snapshot.kind in {ResourceKind.ENTITY, ResourceKind.ASSOC}:
         # Every local attribute reference has one frozen detail. An omitted list
         # or entry is lost validation data, not an old-style global property.

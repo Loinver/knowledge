@@ -393,6 +393,10 @@ def test_entity_evidence_api_shape_and_no_connection_secrets(
             "run_id",
             "evidence_type",
             "quarantined",
+            "mapping_revision_id",
+            "ontology_revision",
+            "resource_revisions",
+            "rule_revisions",
         }
         assert ev["source_name"] == "ds1"
         assert ev["columns"]

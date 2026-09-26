@@ -2,18 +2,35 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.models.enums import ValidationState
 
 RuleSourceKind = Literal["STANDARD", "ENTERPRISE"]
+RuleLanguage = Literal["SHACL", "OWL", "DATA", "DERIVATION"]
 RuleSort = Literal["identifier", "-identifier", "id", "-id"]
+
+# DATA / DERIVATION 规则的 expression 是 JSON 配置；算子白名单防止自由代码执行。
+DATA_RULE_OPS = frozenset(
+    {"acyclic", "sum_le", "unique_attr", "required_edge", "date_format"}
+)
+DERIVATION_RULE_OPS = frozenset(
+    {"transitive", "symmetric", "co_occurrence", "product_chain"}
+)
 
 
 class RuleCreate(BaseModel):
@@ -26,11 +43,13 @@ class RuleCreate(BaseModel):
     source_reference: str = Field(min_length=1, max_length=512)
     target_iri: str = Field(min_length=1, max_length=2048)
     severity: Literal["INFO", "WARNING", "VIOLATION"]
-    language: Literal["SHACL", "OWL"]
+    language: RuleLanguage
     expression: str = Field(min_length=1, max_length=65536)
     execution: Literal["AUTO", "MANUAL"]
-    positive_example: str = Field(min_length=1, max_length=65536)
-    negative_example: str = Field(min_length=1, max_length=65536)
+    # SHACL 规则必填正反例（跑真实引擎）；DATA/DERIVATION 规则以 JSON 算子配置
+    # 为准，正反例无引擎可跑，允许为空。
+    positive_example: str = Field(default="", max_length=65536)
+    negative_example: str = Field(default="", max_length=65536)
 
     @field_validator("name_i18n")
     @classmethod
@@ -60,6 +79,36 @@ class RuleCreate(BaseModel):
         if not valid:
             raise KGError(ErrorCode.INVALID_IRI, {"field": "target_iri"})
         return value
+
+    @field_validator("positive_example", "negative_example")
+    @classmethod
+    def require_shacl_examples(cls, value: str, info: ValidationInfo) -> str:
+        """SHACL 规则的正反例走 pydantic 字段级 422 契约；DATA/DERIVATION 允许为空。"""
+        if info.data.get("language") == "SHACL" and not value.strip():
+            raise ValueError("SHACL rules require positive and negative examples")
+        return value
+
+    @model_validator(mode="after")
+    def validate_expression(self) -> RuleCreate:
+        if self.language == "DATA":
+            ops, reason = DATA_RULE_OPS, "unknown_data_op"
+        elif self.language == "DERIVATION":
+            ops, reason = DERIVATION_RULE_OPS, "unknown_derivation_op"
+        else:
+            return self
+        try:
+            config = json.loads(self.expression)
+        except ValueError as exc:
+            raise KGError(
+                ErrorCode.INVALID_REQUEST,
+                {"field": "expression", "reason": "invalid_json"},
+            ) from exc
+        if not isinstance(config, dict) or config.get("op") not in ops:
+            raise KGError(
+                ErrorCode.INVALID_REQUEST,
+                {"field": "expression", "reason": reason, "allowed": sorted(ops)},
+            )
+        return self
 
 
 class RuleOut(RuleCreate):

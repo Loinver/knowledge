@@ -71,6 +71,14 @@ class GraphTripleOut(BaseModel):
     subject: str
     predicate: str
     object_: str
+    props: dict | None = None
+
+
+class DerivedEdgeOut(GraphTripleOut):
+    """派生边：带产出规则与参与直接事实，可解释、可展开。"""
+
+    rule_id: str | None = None
+    source_fact_ids: list[int] | None = None
 
 
 class FactEvidenceOut(BaseModel):
@@ -86,6 +94,10 @@ class FactEvidenceOut(BaseModel):
     columns: list
     run_id: int
     evidence_type: str
+    mapping_revision_id: int | None = None
+    ontology_revision: int | None = None
+    resource_revisions: dict | None = None
+    rule_revisions: dict | None = None
 
 
 class QuarantineOut(BaseModel):
@@ -119,7 +131,7 @@ class EntityDetailOut(BaseModel):
     entity: EntityIdentityOut
     out_edges: list[GraphTripleOut]
     in_edges: list[GraphTripleOut]
-    derived_edges: list[GraphTripleOut]
+    derived_edges: list[DerivedEdgeOut]
     evidence: list[FactEvidenceOut]
 
 
@@ -140,6 +152,10 @@ class EvidenceTraceItem(FactOut):
     run_id: int
     evidence_type: str
     quarantined: bool
+    mapping_revision_id: int | None = None
+    ontology_revision: int | None = None
+    resource_revisions: dict | None = None
+    rule_revisions: dict | None = None
 
 
 class EvidenceTraceOut(BaseModel):
@@ -178,9 +194,32 @@ class GraphTypeCount(BaseModel):
 class GraphViewOut(BaseModel):
     graph_revision_id: int
     run_id: int
+    ontology_id: int | None = None
+    ontology_revision: int | None = None
     nodes: list[GraphViewNode]
     edges: list[GraphViewEdge]
     type_counts: list[GraphTypeCount]
     entity_total: int
     quarantine_count: int
     truncated: bool
+
+
+class ReverseTraceFact(BaseModel):
+    subject: str
+    predicate: str
+    object: str
+    evidence_id: int
+    evidence_type: str
+    run_id: int
+
+
+class ReverseTraceOut(BaseModel):
+    """反向追溯：来源行 → 参与的事实与实体（源行反查产出）。"""
+
+    graph_revision_id: int
+    source_id: int
+    source_name: str | None
+    table_name: str
+    row_key: str
+    facts: list[ReverseTraceFact]
+    entities: list[str]
