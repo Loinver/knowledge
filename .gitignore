@@ -25,6 +25,7 @@ demo/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.claude/settings.local.json
 *.swp
 *.swo
 
@@ -44,3 +45,4 @@ test-results/
 # 迁移前的回滚副本（alembic upgrade 前手动留档用）
 *.db.bak*
 *.db.pre-*
+.zcode/

@@ -30,8 +30,6 @@ What else was on the table and why it falls short.
 
 What this proposal explicitly does not include, so scope creep stays visible.
 
-## DCO
+## License
 
-By submitting this issue, I agree to the project's contribution terms. Any
-code I attach is submitted under the project's MIT license with a
-`Signed-off-by` attestation.
+Any code attached to this issue is submitted under the project's MIT license.

@@ -3,7 +3,7 @@
 你是「知识中台」开源项目的协作者。这是一个**前后端一体的 monorepo**：前端 Vue 3，后端 Python FastAPI，
 目标是端到端打通「本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯」。
 
-动手前先读完本文，再按需要加载 `.agents/conventions/` 下的细则。
+动手前先读根目录 [AGENTS.md](../AGENTS.md) 与本文，再按需要加载 `.agents/conventions/` 下的细则。
 
 ## 1. 项目骨架
 
@@ -32,50 +32,17 @@ docs/           开发计划与 ADR
 | 补测试                | `conventions/testing.md`                                    |
 | 提交 / 开 PR          | `conventions/commit.md`                                     |
 | 引入新依赖            | `conventions/security-and-license.md`                       |
-| 任何改动收尾          | 本文第 5 节「完工自检」                                     |
+| 任何改动收尾          | 根目录 `AGENTS.md`「完工自检」                              |
 
-## 3. 硬规则（不可协商）
+## 3. 硬规则、常用命令与完工自检
 
-1. **文案不硬编码**：前端模板禁止裸文本，一律 `vue-i18n`；ESLint 规则 `@intlify/vue-i18n/no-raw-text` 会拦截。
-2. **后端不返回中文句子**：只返回错误码（如 `KG.REVISION_CONFLICT`）+ 结构化参数，由前端翻译。
-3. **状态一律传枚举码**：`DRAFT`/`PUBLISHED`、`PASS`/`VIOLATION`/`NA`/`NOT_RUN`、`QUARANTINED`……不传中文状态串。
-4. **四态校验不得失真**：校验项没跑就是 `NOT_RUN`，绝不能显示成通过。
-5. **版本冻结**：本体发布冻结资源版本，映射发布冻结本体版本，上游改版不得静默影响下游。
-6. **demo 不入库**：`demo/`（含 GB/T 标准 PDF、xlsx）是本地素材，已在 `.gitignore` 排除，不得提交或复制到仓库。
-7. **依赖许可**：只允许 MIT / BSD / Apache-2.0 / PSF，禁止 GPL/AGPL/LGPL。
-8. **Python 必写类型注解**：`disallow_untyped_defs` 已开启，缺注解即失败。
-9. **模块边界必须清晰**：新增或实质修改的代码遵循 `conventions/application-architecture.md`；不以空目录、占位文件或大规模搬迁代替真实设计。
+这三部分写在仓库根 [AGENTS.md](../AGENTS.md)，它会被 Agent 自动加载；这里不重复，避免两处失同步。
 
-## 4. 常用命令
-
-```bash
-make install      # 装依赖 + git hooks
-make dev          # 前后端一体启动（后端 :8000，前端 :5173 代理 /api）
-make start        # 构建前端 + 单端口 :8000
-make lint         # ESLint + vue-tsc + Prettier + Ruff + Mypy
-make fix          # 自动修复可修复项
-make test         # 后端 pytest
-make test-e2e     # Playwright 浏览器端主流程与响应式检查
-pnpm run commit   # 交互式提交（禁止手写 git commit -m）
-```
-
-后端工具必须用 venv 内的可执行文件：`cd server && .venv/bin/ruff|mypy|pytest`（全局可能没有）。
-
-## 5. 完工自检（交付前逐条确认）
-
-- [ ] `make lint` 全绿、`make test` 通过。
-- [ ] 新增前端文案已进 `web/src/locales/zh-CN.json` 与 `en-US.json`，两份 key 集合一致。
-- [ ] 新增后端返回值是错误码与枚举，不是中文句子；新状态码已同步前端 i18n 码表。
-- [ ] 新增行为有对应测试；涉及抽取/图谱的改动不影响幂等性与失败保护断言。
-- [ ] 新模块位于复用范围相符的目录，前后端依赖方向符合 `conventions/application-architecture.md`。
-- [ ] `git status` 中无 `demo/`、`.workbuddy/`、`node_modules/`、`.venv/`、`dist/`。
-- [ ] 提交信息由 git-cz 生成，类型与 scope 正确。
-
-## 6. 已知坑
+## 4. 已知坑
 
 - **ESLint 9 flat config 只在 cwd 查找配置**，配置文件必须在仓库根（已放在根），且 `ignores` 要写 `**/dist/**` 才能忽略 `web/dist` 产物。
 - **vue-i18n 插件规则前缀**是 `@intlify/vue-i18n/...`，不是 `vue-i18n/...`；`no-raw-text` 只接受 `attributes / ignoreNodes / ignorePattern / ignoreText` 四个选项。
 - **vue-eslint-parser 必须 ^10**，与 `eslint-plugin-vue@10` 配套，降到 9 会触发 ERESOLVE 依赖冲突。
 - **RUF001/002/003 会误伤中文全角标点**，已在 ruff ignore 关闭，不要再打开。
-- **Python 3.13 装 cryptography 会 sdist 构建失败**，等 M2 做凭据加密时再引入并确认 wheel 可用。
+- **cryptography 50.x 在 macOS + Python 3.13 上没有 wheel**，会退回 Rust 源码构建而失败；`server/pyproject.toml` 已钉 `>=44,<50`，升级前先确认 wheel 可用。CI 用 Python 3.12，本地 3.13 同样可用。
 - **本机有 HTTP 代理**：`curl` 访问 127.0.0.1 要加 `--noproxy '*'`，否则 502 会被误判成服务没起来。

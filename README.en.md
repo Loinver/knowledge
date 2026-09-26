@@ -29,8 +29,8 @@ Reference specification: GB/T 48000.3—2026 (only clause numbers and short orig
 ```bash
 make install     # install dependencies and git hooks
 make dev         # run frontend and backend together
-make lint        # ESLint + Prettier + vue-tsc + Ruff + Mypy
-make test        # backend tests
+make lint        # ESLint + Prettier + vue-tsc + Ruff + Mypy + architecture boundary tests
+make test        # frontend and backend tests
 make test-e2e    # Playwright main-flow and responsive UI checks
 pnpm run commit  # interactive commit (Conventional Commits)
 ```

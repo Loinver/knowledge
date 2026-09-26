@@ -16,3 +16,5 @@ package-lock.json
 pnpm-lock.yaml
 *.min.js
 *.svg
+.zcode/
+.claude/

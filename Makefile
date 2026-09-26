@@ -24,7 +24,7 @@ architecture-check:
 	pnpm run check:architecture
 
 fix: ## 自动修复可修复问题
-	pnpm run lint:web -- --fix
+	pnpm run lint:web --fix
 	pnpm run format
 	cd server && .venv/bin/ruff check . --fix && .venv/bin/ruff format .
 

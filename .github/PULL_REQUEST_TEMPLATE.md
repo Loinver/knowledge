@@ -33,18 +33,10 @@ docs/implementation-plan.zh-CN.md (e.g. M0 / H-04) and any linked issue.
 
 Describe how the change was verified (unit / integration / e2e). For
 extraction / graph changes, confirm idempotency and failure-protection
-assertions still hold. If a smaller-than-full verification was used (per
-AGENTS.md risk tiers), note its coverage.
+assertions still hold. If a smaller-than-full verification was used, note its
+coverage.
 
-## DCO
+## License
 
-This project uses the Developer Certificate of Origin. Each commit message
-ends with:
-
-\`\`\`
-Signed-off-by: Your Name <your.email@example.com>
-\`\`\`
-
-By signing off, you attest that you have the right to submit the contribution
-under the project's MIT license. Commits without `Signed-off-by` cannot be
-merged.
+By submitting this PR, you agree that your contribution is licensed under the
+project's MIT license.

@@ -4,8 +4,10 @@
 
 ```bash
 pnpm run commit   # git-cz 交互式提交（唯一推荐）
-git commit         # husky 已接管，同样进入交互
 ```
+
+husky 只挂了 `pre-commit`（lint-staged）与 `commit-msg`（commitlint）；直接 `git commit` **不会**进入交互，
+只会在写完提交信息后由 commitlint 校验格式。
 
 **禁止 `git commit -m "..."`**：`commit-msg` 阶段的 commitlint 会强校验格式，手写容易不合规，也让 issue 引用缺失。
 
