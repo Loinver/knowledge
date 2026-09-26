@@ -81,6 +81,20 @@ function payload(rule: Rule): RuleInput {
 const dirty = computed(
   () => !saved.value || JSON.stringify(form.value) !== JSON.stringify(payload(saved.value)),
 )
+const needsExamples = computed(() => form.value.language === 'SHACL')
+const expressionValid = computed(() => {
+  if (form.value.language !== 'DATA' && form.value.language !== 'DERIVATION') return true
+  try {
+    const config = JSON.parse(form.value.expression) as { op?: string }
+    const ops =
+      form.value.language === 'DATA'
+        ? ['acyclic', 'sum_le', 'unique_attr', 'required_edge', 'date_format']
+        : ['transitive', 'symmetric', 'co_occurrence', 'product_chain']
+    return typeof config === 'object' && config !== null && !!config.op && ops.includes(config.op)
+  } catch {
+    return false
+  }
+})
 const canSave = computed(
   () =>
     form.value.identifier.trim() &&
@@ -89,8 +103,9 @@ const canSave = computed(
     form.value.source_reference.trim() &&
     form.value.target_iri.trim() &&
     form.value.expression.trim() &&
-    form.value.positive_example.trim() &&
-    form.value.negative_example.trim(),
+    expressionValid.value &&
+    (!needsExamples.value ||
+      (form.value.positive_example.trim() && form.value.negative_example.trim())),
 )
 const sourceOptions = computed(() =>
   ['STANDARD', 'ENTERPRISE'].map((value) => ({ value, label: t(`rules.sources.${value}`) })),
@@ -102,7 +117,10 @@ const severityOptions = computed(() =>
   })),
 )
 const languageOptions = computed(() =>
-  ['SHACL', 'OWL'].map((value) => ({ value, label: t(`rules.languages.${value}`) })),
+  ['SHACL', 'OWL', 'DATA', 'DERIVATION'].map((value) => ({
+    value,
+    label: t(`rules.languages.${value}`),
+  })),
 )
 const executionOptions = computed(() =>
   ['AUTO', 'MANUAL'].map((value) => ({ value, label: t(`rules.executions.${value}`) })),
@@ -361,16 +379,24 @@ async function remove() {
               <NTabPane name="metadata" :tab="t('rules.metadata')">
                 <div class="form-grid">
                   <NFormItem :label="t('rules.identifier')" required
-                    ><NInput v-model:value="form.identifier"
+                    ><NInput
+                      v-model:value="form.identifier"
+                      :input-props="{ 'aria-label': t('rules.identifier') }"
                   /></NFormItem>
                   <NFormItem :label="t('rules.category')" required
-                    ><NInput v-model:value="form.category"
+                    ><NInput
+                      v-model:value="form.category"
+                      :input-props="{ 'aria-label': t('rules.category') }"
                   /></NFormItem>
                   <NFormItem :label="t('common.labelZh')" required
-                    ><NInput v-model:value="form.name_i18n['zh-CN']"
+                    ><NInput
+                      v-model:value="form.name_i18n['zh-CN']"
+                      :input-props="{ 'aria-label': t('common.labelZh') }"
                   /></NFormItem>
                   <NFormItem :label="t('common.labelEn')"
-                    ><NInput v-model:value="form.name_i18n['en-US']"
+                    ><NInput
+                      v-model:value="form.name_i18n['en-US']"
+                      :input-props="{ 'aria-label': t('common.labelEn') }"
                   /></NFormItem>
                   <NFormItem :label="t('rules.source')" required
                     ><NSelect v-model:value="form.source_kind" :options="sourceOptions"
@@ -380,11 +406,15 @@ async function remove() {
                   /></NFormItem>
                 </div>
                 <NFormItem :label="t('rules.reference')" required
-                  ><NInput v-model:value="form.source_reference"
+                  ><NInput
+                    v-model:value="form.source_reference"
+                    :input-props="{ 'aria-label': t('rules.reference') }"
                 /></NFormItem>
                 <NAlert type="info" class="source-hint">{{ t('rules.sourceHint') }}</NAlert>
                 <NFormItem :label="t('rules.target')" required
-                  ><NInput v-model:value="form.target_iri"
+                  ><NInput
+                    v-model:value="form.target_iri"
+                    :input-props="{ 'aria-label': t('rules.target') }"
                 /></NFormItem>
               </NTabPane>
               <NTabPane name="expression" :tab="t('rules.expressionTab')">
@@ -402,20 +432,33 @@ async function remove() {
                   class="source-hint"
                   >{{ t('rules.notRunHint') }}</NAlert
                 >
+                <NAlert
+                  v-else-if="form.language === 'DATA' || form.language === 'DERIVATION'"
+                  type="info"
+                  class="source-hint"
+                  >{{ t(`rules.${form.language.toLowerCase()}Hint`) }}</NAlert
+                >
                 <NAlert v-else type="info" class="source-hint">{{ t('rules.shaclHint') }}</NAlert>
                 <NFormItem :label="t('rules.expression')" required
                   ><NInput
                     v-model:value="form.expression"
+                    :input-props="{ 'aria-label': t('rules.expression') }"
                     type="textarea"
                     :autosize="{ minRows: 12, maxRows: 24 }"
                     class="code-input"
                 /></NFormItem>
               </NTabPane>
               <NTabPane name="examples" :tab="t('rules.examples')">
-                <NAlert type="info" class="source-hint">{{ t('rules.examplesHint') }}</NAlert>
+                <NAlert v-if="needsExamples" type="info" class="source-hint">{{
+                  t('rules.examplesHint')
+                }}</NAlert>
+                <NAlert v-else type="info" class="source-hint">{{
+                  t('rules.examplesOptionalHint')
+                }}</NAlert>
                 <NFormItem :label="t('rules.positive')"
                   ><NInput
                     v-model:value="form.positive_example"
+                    :input-props="{ 'aria-label': t('rules.positive') }"
                     type="textarea"
                     :autosize="{ minRows: 6, maxRows: 15 }"
                     class="code-input"
@@ -423,6 +466,7 @@ async function remove() {
                 <NFormItem :label="t('rules.negative')"
                   ><NInput
                     v-model:value="form.negative_example"
+                    :input-props="{ 'aria-label': t('rules.negative') }"
                     type="textarea"
                     :autosize="{ minRows: 6, maxRows: 15 }"
                     class="code-input"

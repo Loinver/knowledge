@@ -68,10 +68,18 @@ interface EntityDraft {
   schema: string
   field_maps: FieldMap[]
   key_fields: string[]
+  /** 跨表业务键：多表映射同一类型时按业务键值融合为同一稳定 IRI */
+  match_keys: string[]
 }
 interface RelationAttributeMap {
   attr: string
   field: string
+}
+interface EndpointCandidate {
+  field: string
+  ref_table: string
+  when: string
+  ref_entity_type: string
 }
 interface RelationDraft {
   localId: number
@@ -83,9 +91,20 @@ interface RelationDraft {
   source_field: string
   source_ref_table: string
   source_ref_field: string
+  /** 多态端点：判别字段 + 候选列表（可二跳经由） */
+  source_type_field: string
+  source_candidates: EndpointCandidate[]
+  source_via_table: string
+  source_via_field: string
+  source_via_ref_field: string
   target_field: string
   target_ref_table: string
   target_ref_field: string
+  target_type_field: string
+  target_candidates: EndpointCandidate[]
+  target_via_table: string
+  target_via_field: string
+  target_via_ref_field: string
   attributes: RelationAttributeMap[]
 }
 
@@ -191,15 +210,46 @@ const canSaveDraft = computed(() => {
   const relationsComplete = relationMaps.value.every((map) => {
     if (!map.relation_type || !getTable(map.schema, map.table)) return false
     if (map.mode === 'FK') return Boolean(map.fk_field)
+    const endpointOk = (side: {
+      field: string
+      ref_table: string
+      ref_field: string
+      type_field: string
+      candidates: EndpointCandidate[]
+      via_table: string
+      via_field: string
+    }) => {
+      const single = Boolean(side.field && side.ref_table && side.ref_field)
+      const candidatesOk =
+        side.candidates.length > 0 &&
+        side.candidates.every(
+          (candidate) =>
+            Boolean(candidate.field && candidate.ref_table) &&
+            (!side.type_field || !!candidate.when),
+        )
+      const viaOk = !side.via_table || Boolean(side.via_field)
+      return (single || candidatesOk) && viaOk
+    }
     return (
-      Boolean(
-        map.source_field &&
-        map.source_ref_table &&
-        map.source_ref_field &&
-        map.target_field &&
-        map.target_ref_table &&
-        map.target_ref_field,
-      ) && map.attributes.every((attribute) => Boolean(attribute.field))
+      endpointOk({
+        field: map.source_field,
+        ref_table: map.source_ref_table,
+        ref_field: map.source_ref_field,
+        type_field: map.source_type_field,
+        candidates: map.source_candidates,
+        via_table: map.source_via_table,
+        via_field: map.source_via_field,
+      }) &&
+      endpointOk({
+        field: map.target_field,
+        ref_table: map.target_ref_table,
+        ref_field: map.target_ref_field,
+        type_field: map.target_type_field,
+        candidates: map.target_candidates,
+        via_table: map.target_via_table,
+        via_field: map.target_via_field,
+      }) &&
+      map.attributes.every((attribute) => Boolean(attribute.field))
     )
   })
   return entitiesComplete && relationsComplete
@@ -302,6 +352,34 @@ function toggleKeyField(map: EntityDraft, field: string, checked: boolean): void
     : map.key_fields.filter((item) => item !== field)
   invalidatePreview()
 }
+function toggleMatchKey(map: EntityDraft, field: string, checked: boolean): void {
+  map.match_keys = checked
+    ? [...new Set([...map.match_keys, field])]
+    : map.match_keys.filter((item) => item !== field)
+  invalidatePreview()
+}
+function addEndpointCandidate(map: RelationDraft, side: 'source' | 'target'): void {
+  const list = side === 'source' ? map.source_candidates : map.target_candidates
+  list.push({ field: '', ref_table: '', when: '', ref_entity_type: '' })
+  invalidatePreview()
+}
+function removeEndpointCandidate(
+  map: RelationDraft,
+  side: 'source' | 'target',
+  index: number,
+): void {
+  if (side === 'source') map.source_candidates.splice(index, 1)
+  else map.target_candidates.splice(index, 1)
+  invalidatePreview()
+}
+function candidateFieldOptions(map: RelationDraft, viaTable: string) {
+  const schema = map.schema
+  const columns = viaTable ? tableColumns(schema, viaTable) : relationFieldOptions(map)
+  return columns.map((column) => ({
+    value: 'name' in column ? column.name : String(column.value),
+    label: 'name' in column ? column.name : String(column.label),
+  }))
+}
 function newFieldMap(property: S['DataTypePropOut']): FieldMap {
   return {
     target_attr: property.name,
@@ -321,6 +399,7 @@ function newEntityMap(typeName: string): EntityDraft {
     schema: 'main',
     field_maps: (type?.data_props ?? []).map(newFieldMap),
     key_fields: [],
+    match_keys: [],
   }
 }
 function addEntityMap(): void {
@@ -351,9 +430,19 @@ function addRelationMap(): void {
     source_field: '',
     source_ref_table: '',
     source_ref_field: 'id',
+    source_type_field: '',
+    source_candidates: [],
+    source_via_table: '',
+    source_via_field: '',
+    source_via_ref_field: 'id',
     target_field: '',
     target_ref_table: '',
     target_ref_field: 'id',
+    target_type_field: '',
+    target_candidates: [],
+    target_via_table: '',
+    target_via_field: '',
+    target_via_ref_field: 'id',
     attributes: (next.attribute_defs ?? []).map((item) => ({ attr: item.name, field: '' })),
   })
   invalidatePreview()
@@ -416,6 +505,9 @@ function normalizeEntityMap(value: unknown): EntityDraft {
     key_fields: Array.isArray(row.key_fields)
       ? row.key_fields.filter((item): item is string => typeof item === 'string')
       : [],
+    match_keys: Array.isArray(row.match_keys)
+      ? row.match_keys.filter((item): item is string => typeof item === 'string')
+      : [],
   }
 }
 function normalizeRelationMap(value: unknown): RelationDraft {
@@ -438,11 +530,33 @@ function normalizeRelationMap(value: unknown): RelationDraft {
     source_field: textOf(source.field),
     source_ref_table: textOf(source.ref_table),
     source_ref_field: textOf(source.ref_field, 'id'),
+    source_type_field: textOf(source.type_field),
+    source_candidates: parseCandidates(source.candidates),
+    source_via_table: textOf(recordOf(source.via).table),
+    source_via_field: textOf(recordOf(source.via).field),
+    source_via_ref_field: textOf(recordOf(source.via).ref_field, 'id'),
     target_field: textOf(target.field),
     target_ref_table: textOf(target.ref_table),
     target_ref_field: textOf(target.ref_field, 'id'),
+    target_type_field: textOf(target.type_field),
+    target_candidates: parseCandidates(target.candidates),
+    target_via_table: textOf(recordOf(target.via).table),
+    target_via_field: textOf(recordOf(target.via).field),
+    target_via_ref_field: textOf(recordOf(target.via).ref_field, 'id'),
     attributes,
   }
+}
+function parseCandidates(value: unknown): EndpointCandidate[] {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => {
+    const row = recordOf(item)
+    return {
+      field: textOf(row.field),
+      ref_table: textOf(row.ref_table),
+      when: textOf(row.when),
+      ref_entity_type: textOf(row.ref_entity_type),
+    }
+  })
 }
 
 async function loadInitial(): Promise<void> {
@@ -592,6 +706,7 @@ function serializeDraft(): S['MappingRevisionCreate'] {
       schema: item.schema,
       field_maps: item.field_maps.map((field) => ({ ...field })),
       key_fields: [...item.key_fields],
+      match_keys: [...item.match_keys],
     })),
     rel_maps: relationMaps.value.map((item) => ({
       relation_type: item.relation_type,
@@ -606,6 +721,16 @@ function serializeDraft(): S['MappingRevisionCreate'] {
               field: item.source_field,
               ref_table: item.source_ref_table,
               ref_field: item.source_ref_field,
+              type_field: item.source_type_field || null,
+              candidates: item.source_candidates.map((candidate) => ({ ...candidate })),
+              via:
+                item.source_via_table && item.source_via_field
+                  ? {
+                      table: item.source_via_table,
+                      field: item.source_via_field,
+                      ref_field: item.source_via_ref_field || 'id',
+                    }
+                  : null,
             },
       target:
         item.mode === 'FK'
@@ -614,6 +739,16 @@ function serializeDraft(): S['MappingRevisionCreate'] {
               field: item.target_field,
               ref_table: item.target_ref_table,
               ref_field: item.target_ref_field,
+              type_field: item.target_type_field || null,
+              candidates: item.target_candidates.map((candidate) => ({ ...candidate })),
+              via:
+                item.target_via_table && item.target_via_field
+                  ? {
+                      table: item.target_via_table,
+                      field: item.target_via_field,
+                      ref_field: item.target_via_ref_field || 'id',
+                    }
+                  : null,
             },
       attributes: item.mode === 'ASSOCIATIVE' ? item.attributes : [],
     })),
@@ -732,8 +867,16 @@ async function chooseDatasource(value: number | null): Promise<void> {
     fk_field: '',
     source_field: '',
     source_ref_table: '',
+    source_type_field: '',
+    source_candidates: [],
+    source_via_table: '',
+    source_via_field: '',
     target_field: '',
     target_ref_table: '',
+    target_type_field: '',
+    target_candidates: [],
+    target_via_table: '',
+    target_via_field: '',
     attributes: item.attributes.map((attribute) => ({ ...attribute, field: '' })),
   }))
   invalidatePreview()
@@ -1381,6 +1524,28 @@ onBeforeUnmount(() => {
                     t('dataAccess.mapping.noStableKey')
                   }}</span>
                 </div>
+                <div v-if="getTable(map.schema, map.table)" class="key-fields">
+                  <span>{{ t('dataAccess.mapping.matchKeys') }}</span
+                  ><label
+                    v-for="column in tableColumns(map.schema, map.table)"
+                    :key="'mk-' + column.name"
+                    class="key-option"
+                    ><input
+                      type="checkbox"
+                      :checked="map.match_keys.includes(column.name)"
+                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      @change="
+                        toggleMatchKey(
+                          map,
+                          column.name,
+                          ($event.target as HTMLInputElement).checked,
+                        )
+                      "
+                    /><span class="mono">{{ column.name }}</span></label
+                  ><span v-if="map.match_keys.length" class="muted-copy">{{
+                    t('dataAccess.mapping.matchKeysHint')
+                  }}</span>
+                </div>
               </section>
             </div>
             <n-button
@@ -1489,6 +1654,79 @@ onBeforeUnmount(() => {
                         :disabled="selectedMapping?.status === 'PUBLISHED'"
                         @update:value="invalidatePreview"
                     /></label>
+                    <details class="poly-editor">
+                      <summary>{{ t('dataAccess.mapping.polyEndpoint') }}</summary>
+                      <label class="field-group"
+                        ><span>{{ t('dataAccess.mapping.discriminator') }}</span
+                        ><n-input
+                          v-model:value="map.source_type_field"
+                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :placeholder="t('dataAccess.mapping.discriminatorHint')"
+                          @update:value="invalidatePreview"
+                      /></label>
+                      <label class="field-group"
+                        ><span>{{ t('dataAccess.mapping.viaTable') }}</span
+                        ><n-select
+                          v-model:value="map.source_via_table"
+                          :options="refTableOptions()"
+                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          clearable
+                          filterable
+                          @update:value="invalidatePreview" /></label
+                      ><label class="field-group"
+                        ><span>{{ t('dataAccess.mapping.viaField') }}</span
+                        ><n-input
+                          v-model:value="map.source_via_field"
+                          :disabled="
+                            selectedMapping?.status === 'PUBLISHED' || !map.source_via_table
+                          "
+                          @update:value="invalidatePreview"
+                      /></label>
+                      <div class="candidate-rows">
+                        <span>{{ t('dataAccess.mapping.candidates') }}</span>
+                        <div
+                          v-for="(candidate, candidateIndex) in map.source_candidates"
+                          :key="candidateIndex"
+                          class="candidate-row"
+                        >
+                          <n-select
+                            v-model:value="candidate.field"
+                            :options="candidateFieldOptions(map, map.source_via_table)"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :placeholder="t('dataAccess.mapping.endpointField')"
+                            @update:value="invalidatePreview"
+                          />
+                          <n-select
+                            v-model:value="candidate.ref_table"
+                            :options="refTableOptions()"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :placeholder="t('dataAccess.mapping.referencedTable')"
+                            filterable
+                            @update:value="invalidatePreview"
+                          />
+                          <n-input
+                            v-model:value="candidate.when"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :placeholder="t('dataAccess.mapping.whenValue')"
+                            @update:value="invalidatePreview"
+                          />
+                          <n-button
+                            quaternary
+                            size="tiny"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            @click="removeEndpointCandidate(map, 'source', candidateIndex)"
+                            >{{ t('dataAccess.mapping.removeCandidate') }}</n-button
+                          >
+                        </div>
+                        <n-button
+                          size="tiny"
+                          secondary
+                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          @click="addEndpointCandidate(map, 'source')"
+                          >{{ t('dataAccess.mapping.addCandidate') }}</n-button
+                        >
+                      </div>
+                    </details>
                   </div>
                   <div class="endpoint-card">
                     <strong>{{ t('dataAccess.mapping.targetEndpoint') }}</strong
@@ -1516,6 +1754,79 @@ onBeforeUnmount(() => {
                         :disabled="selectedMapping?.status === 'PUBLISHED'"
                         @update:value="invalidatePreview"
                     /></label>
+                    <details class="poly-editor">
+                      <summary>{{ t('dataAccess.mapping.polyEndpoint') }}</summary>
+                      <label class="field-group"
+                        ><span>{{ t('dataAccess.mapping.discriminator') }}</span
+                        ><n-input
+                          v-model:value="map.target_type_field"
+                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :placeholder="t('dataAccess.mapping.discriminatorHint')"
+                          @update:value="invalidatePreview"
+                      /></label>
+                      <label class="field-group"
+                        ><span>{{ t('dataAccess.mapping.viaTable') }}</span
+                        ><n-select
+                          v-model:value="map.target_via_table"
+                          :options="refTableOptions()"
+                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          clearable
+                          filterable
+                          @update:value="invalidatePreview" /></label
+                      ><label class="field-group"
+                        ><span>{{ t('dataAccess.mapping.viaField') }}</span
+                        ><n-input
+                          v-model:value="map.target_via_field"
+                          :disabled="
+                            selectedMapping?.status === 'PUBLISHED' || !map.target_via_table
+                          "
+                          @update:value="invalidatePreview"
+                      /></label>
+                      <div class="candidate-rows">
+                        <span>{{ t('dataAccess.mapping.candidates') }}</span>
+                        <div
+                          v-for="(candidate, candidateIndex) in map.target_candidates"
+                          :key="candidateIndex"
+                          class="candidate-row"
+                        >
+                          <n-select
+                            v-model:value="candidate.field"
+                            :options="candidateFieldOptions(map, map.target_via_table)"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :placeholder="t('dataAccess.mapping.endpointField')"
+                            @update:value="invalidatePreview"
+                          />
+                          <n-select
+                            v-model:value="candidate.ref_table"
+                            :options="refTableOptions()"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :placeholder="t('dataAccess.mapping.referencedTable')"
+                            filterable
+                            @update:value="invalidatePreview"
+                          />
+                          <n-input
+                            v-model:value="candidate.when"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :placeholder="t('dataAccess.mapping.whenValue')"
+                            @update:value="invalidatePreview"
+                          />
+                          <n-button
+                            quaternary
+                            size="tiny"
+                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            @click="removeEndpointCandidate(map, 'target', candidateIndex)"
+                            >{{ t('dataAccess.mapping.removeCandidate') }}</n-button
+                          >
+                        </div>
+                        <n-button
+                          size="tiny"
+                          secondary
+                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          @click="addEndpointCandidate(map, 'target')"
+                          >{{ t('dataAccess.mapping.addCandidate') }}</n-button
+                        >
+                      </div>
+                    </details>
                   </div>
                 </div>
                 <div
@@ -2135,6 +2446,29 @@ onBeforeUnmount(() => {
   color: var(--text);
   font-size: var(--font-small);
   font-weight: 550;
+}
+.poly-editor {
+  display: grid;
+  gap: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.poly-editor summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.candidate-rows {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
+}
+.candidate-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.8fr auto;
+  gap: 6px;
+  align-items: center;
 }
 .attribute-maps {
   display: grid;
