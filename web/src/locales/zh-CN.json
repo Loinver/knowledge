@@ -45,7 +45,30 @@
     "forbiddenTitle": "无权访问",
     "forbiddenHint": "当前账号没有访问该页面的权限，请联系管理员。",
     "backToDashboard": "返回工作台",
-    "governanceClauses": "标准条款"
+    "governanceClauses": "标准条款",
+    "namespaces": "命名空间"
+  },
+  "namespace": {
+    "description": "命名空间决定语义资源的 IRI：IRI = 命名空间 IRI + 机读名。建模前至少登记一个；已被资源使用的命名空间不可删除。",
+    "create": "登记命名空间",
+    "createShort": "登记",
+    "prefix": "前缀",
+    "iri": "命名空间 IRI",
+    "prefixHint": "小写字母开头，仅含小写字母、数字、下划线或连字符，例如 kg",
+    "prefixPattern": "前缀须以小写字母开头，仅含小写字母、数字、_ 或 -，最长 64 位",
+    "iriHint": "http(s) 地址，以 # 或 / 结尾，例如 https://example.org/kg#",
+    "iriPattern": "命名空间 IRI 须为 http(s) 地址，并以 # 或 / 结尾",
+    "duplicatePrefix": "该前缀已登记",
+    "duplicateIri": "该命名空间 IRI 已登记",
+    "resourceCount": "引用资源数",
+    "protected": "受保护",
+    "protectedHint": "受保护的核心命名空间不可删除",
+    "inUseHint": "仍有 {count} 个资源使用该命名空间，不可删除",
+    "deleteConfirm": "确认删除命名空间 {prefix}？",
+    "deleted": "命名空间 {prefix} 已删除。",
+    "created": "命名空间 {prefix} 已登记。",
+    "empty": "还没有登记命名空间。",
+    "emptyHint": "还没有可用的命名空间。点「登记」先登记一个，登记后会自动选中。"
   },
   "ontology": {
     "description": "本体是装配产物：把实体类型、关系类型与业务域按固定版本组合成一张语义图。新建后进入设计器装配，发布即冻结全部引用资源的版本。",
@@ -80,6 +103,8 @@
       "INVALID_NAMESPACE": "命名空间不合法：{namespace}",
       "ALREADY_PUBLISHED": "资源已发布，不可重复发布",
       "PROTECTED_NAMESPACE": "受保护命名空间不可删除：{prefix}",
+      "ALREADY_EXISTS": "资源已存在",
+      "RESOURCE_IN_USE": "仍被 {count} 个资源引用，不可删除",
       "INVALID_IRI": "IRI 不合法",
       "INVALID_REQUEST": "请求参数不合法，请检查后重试",
       "REVISION_NOT_FOUND": "指定的资源版本不存在",
@@ -343,7 +368,73 @@
     "truncated": "本视图已截断，最多显示 200 个节点和 1,000 条边，不代表完整图谱。请选择中心实体或隐藏类型以缩小范围。",
     "graphQuarantine": "运行 #{run} 有 {count} 个隔离问题；受影响的源记录或字段可能未进入当前候选图。请检查运行记录，不要将来源视为完整。",
     "noVisibleNodes": "当前视图没有匹配节点，请清除中心实体或调整隐藏类型。",
-    "factDescription": "{subject} → {predicate} → {object}"
+    "factDescription": "{subject} → {predicate} → {object}",
+    "layout": {
+      "type_grid": "类型网格",
+      "ring": "自我中心环",
+      "force": "力导向网络",
+      "org_tree": "组织架构树",
+      "indent_tree": "缩进目录树",
+      "equity_tree": "股权穿透图",
+      "control_chain": "实际控制人链",
+      "supply_chain": "客商供应链图",
+      "timeline": "时间轴",
+      "schema": "本体模式图"
+    },
+    "reason": {
+      "hierarchy": "本体存在自引用/传递关系（{edge}），适合层级树形态",
+      "measuredLink": "本体存在带度量关联（{assoc}），适合穿透/供应链形态",
+      "productRule": "已配置比例乘积派生规则，可推导实际控制人链",
+      "dateAttr": "本体含 {count} 处日期属性，可按时间轴呈现",
+      "generic": "通用形态，适用于任何图谱"
+    },
+    "layoutLabel": "形态",
+    "recommended": "推荐形态：",
+    "pathQuery": "关系路径",
+    "pathFrom": "起点 IRI",
+    "pathTo": "终点 IRI",
+    "pathHops": "最大跳数",
+    "pathFind": "查找路径",
+    "pathFound": "找到最短路径（{hops} 跳），已在画布高亮",
+    "pathNotFound": "未在最大跳数内找到路径",
+    "diffQuery": "版本差异",
+    "diffBase": "基准结果集",
+    "diffTarget": "目标结果集",
+    "diffRun": "计算差异",
+    "diffSummary": "实体 +{entityAdded}/−{entityRemoved}，事实 +{added}/−{removed}",
+    "export": {
+      "title": "导出",
+      "png": "导出 PNG",
+      "svg": "导出 SVG",
+      "csv": "导出节点 CSV"
+    },
+    "qualityOverlay": "质量叠加",
+    "qualityFlagged": "该实体来源命中隔离",
+    "entityCount": "{count} 个实例",
+    "templates": "视图模板",
+    "templateName": "输入模板名称",
+    "templateSave": "保存当前视图",
+    "templateStale": "本体已升级",
+    "edgeProps": "边属性",
+    "chain": "证据链",
+    "chainView": "查看链",
+    "chainTitle": "证据溯源链（事实 → 来源行 → 运行 → 冻结版本）",
+    "chainFact": "事实",
+    "chainSource": "来源行",
+    "chainFields": "来源字段",
+    "chainRun": "抽取运行",
+    "chainMapping": "冻结映射版本",
+    "chainOntology": "冻结本体版本",
+    "chainResources": "冻结资源版本",
+    "chainRules": "冻结规则版本",
+    "chainUnpinned": "未记录（历史数据）",
+    "bySourceRow": "按来源行反查",
+    "reverseSource": "数据源 ID",
+    "reverseSummary": "来源行 {table}#{row} 参与 {facts} 条事实、产出 {entities} 个实体",
+    "reverseHint": "输入数据源 ID、表名与行键，反查该行在图谱中的产出",
+    "views360": "实体 360：",
+    "diffAdded": "+ {iri}",
+    "diffRemoved": "− {iri}"
   },
   "dashboard": {
     "overview": "主流程入口",
@@ -483,12 +574,17 @@
     },
     "languages": {
       "SHACL": "SHACL",
-      "OWL": "OWL"
+      "OWL": "OWL",
+      "DATA": "数据规则",
+      "DERIVATION": "派生规则"
     },
     "executions": {
       "AUTO": "自动",
       "MANUAL": "人工"
-    }
+    },
+    "dataHint": "expression 为 JSON 配置，算子：acyclic / sum_le / unique_attr / required_edge / date_format；AUTO 数据规则在抽取阶段3自动执行，命中写隔离。",
+    "derivationHint": "expression 为 JSON 配置，算子：transitive / symmetric / co_occurrence / product_chain；AUTO 派生规则在抽取阶段4执行，产出带规则与来源事实的派生边。",
+    "examplesOptionalHint": "数据规则与派生规则以 JSON 表达式为准，正反例可留空。"
   },
   "export": {
     "title": "本体导出",
@@ -820,8 +916,15 @@
         "kind": "数据库类型",
         "status": "连接状态"
       },
-      "statuses": { "CONNECTED": "已连接", "DISCONNECTED": "未连接" },
-      "columns": { "name": "名称", "kind": "类型", "connection": "连接信息" },
+      "statuses": {
+        "CONNECTED": "已连接",
+        "DISCONNECTED": "未连接"
+      },
+      "columns": {
+        "name": "名称",
+        "kind": "类型",
+        "connection": "连接信息"
+      },
       "connectionProtected": "连接信息已保护",
       "testHeading": "连接测试",
       "testHint": "如果连接需要密码，请在这里临时输入。密码只用于本次测试，不会回显或保存。",
@@ -1080,7 +1183,18 @@
       "errors": {
         "incomplete": "请完成映射名称、目标属性、源字段和必填项。",
         "request": "请求失败，错误码：{code}"
-      }
+      },
+      "matchKeys": "业务键（跨表融合）",
+      "matchKeysHint": "多张表映射同一类型且业务键值相同 → 融合为同一实体，双来源证据保留",
+      "polyEndpoint": "多态端点（可选）",
+      "discriminator": "判别字段",
+      "discriminatorHint": "如 shareholder_type；留空则按列非空顺序取候选",
+      "viaTable": "经由表（二跳）",
+      "viaField": "经由连接列",
+      "candidates": "候选端点",
+      "whenValue": "判别值 (when)",
+      "addCandidate": "添加候选",
+      "removeCandidate": "移除"
     },
     "preview": {
       "title": "样例预览",

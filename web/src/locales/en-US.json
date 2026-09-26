@@ -45,7 +45,30 @@
     "forbiddenTitle": "Access denied",
     "forbiddenHint": "Your account has no permission for this page. Contact an administrator.",
     "backToDashboard": "Back to dashboard",
-    "governanceClauses": "Standard clauses"
+    "governanceClauses": "Standard clauses",
+    "namespaces": "Namespaces"
+  },
+  "namespace": {
+    "description": "A namespace determines resource IRIs: IRI = namespace IRI + machine name. Register at least one before modeling; namespaces still used by resources cannot be deleted.",
+    "create": "Register namespace",
+    "createShort": "Register",
+    "prefix": "Prefix",
+    "iri": "Namespace IRI",
+    "prefixHint": "Starts with a lowercase letter; lowercase letters, digits, _ or - only, e.g. kg",
+    "prefixPattern": "Prefix must start with a lowercase letter and contain only lowercase letters, digits, _ or - (max 64)",
+    "iriHint": "An http(s) address ending with # or /, e.g. https://example.org/kg#",
+    "iriPattern": "Namespace IRI must be an http(s) address ending with # or /",
+    "duplicatePrefix": "This prefix is already registered",
+    "duplicateIri": "This namespace IRI is already registered",
+    "resourceCount": "Resources",
+    "protected": "Protected",
+    "protectedHint": "Protected core namespaces cannot be deleted",
+    "inUseHint": "{count} resource(s) still use this namespace; it cannot be deleted",
+    "deleteConfirm": "Delete namespace {prefix}?",
+    "deleted": "Namespace {prefix} deleted.",
+    "created": "Namespace {prefix} registered.",
+    "empty": "No namespaces registered yet.",
+    "emptyHint": "No namespace available yet. Click Register to add one; it will be selected automatically."
   },
   "ontology": {
     "description": "An ontology is the assembled artifact: entity types, relation types and business domains pinned to fixed revisions, forming one semantic graph. Create one and assemble it in the designer; publishing freezes every referenced revision.",
@@ -80,6 +103,8 @@
       "INVALID_NAMESPACE": "Invalid namespace: {namespace}",
       "ALREADY_PUBLISHED": "Resource already published",
       "PROTECTED_NAMESPACE": "Protected namespace cannot be deleted: {prefix}",
+      "ALREADY_EXISTS": "Resource already exists",
+      "RESOURCE_IN_USE": "Still referenced by {count} resource(s); cannot be deleted",
       "INVALID_IRI": "The IRI is invalid",
       "INVALID_REQUEST": "The request parameters are invalid. Review them and retry.",
       "REVISION_NOT_FOUND": "The requested resource revision does not exist",
@@ -343,7 +368,73 @@
     "truncated": "This view is truncated to at most 200 nodes and 1,000 edges. It is not the complete graph. Select a center or hide types to narrow the view.",
     "graphQuarantine": "Run #{run} has {count} quarantine issues. Affected source records or fields may be absent from this candidate graph. Inspect the run before assuming provenance is complete.",
     "noVisibleNodes": "No nodes match this view. Clear the center or adjust hidden types.",
-    "factDescription": "{subject} → {predicate} → {object}"
+    "factDescription": "{subject} → {predicate} → {object}",
+    "layout": {
+      "type_grid": "Type grid",
+      "ring": "Ego ring",
+      "force": "Force network",
+      "org_tree": "Org tree",
+      "indent_tree": "Indent tree",
+      "equity_tree": "Equity penetration",
+      "control_chain": "Control chain",
+      "supply_chain": "Supply chain",
+      "timeline": "Timeline",
+      "schema": "Ontology schema"
+    },
+    "reason": {
+      "hierarchy": "Ontology has self-referencing/transitive relation ({edge}); a tree form fits",
+      "measuredLink": "Ontology has measured association ({assoc}); penetration/supply-chain forms fit",
+      "productRule": "A product-chain derivation rule exists; control chains can be computed",
+      "dateAttr": "Ontology has {count} date attributes; a timeline fits",
+      "generic": "Generic form suitable for any graph"
+    },
+    "layoutLabel": "Form",
+    "recommended": "Recommended: ",
+    "pathQuery": "Path query",
+    "pathFrom": "From IRI",
+    "pathTo": "To IRI",
+    "pathHops": "Max hops",
+    "pathFind": "Find path",
+    "pathFound": "Shortest path found ({hops} hops), highlighted on canvas",
+    "pathNotFound": "No path within max hops",
+    "diffQuery": "Revision diff",
+    "diffBase": "Base revision",
+    "diffTarget": "Target revision",
+    "diffRun": "Compute diff",
+    "diffSummary": "Entities +{entityAdded}/−{entityRemoved}, facts +{added}/−{removed}",
+    "export": {
+      "title": "Export",
+      "png": "Export PNG",
+      "svg": "Export SVG",
+      "csv": "Export nodes CSV"
+    },
+    "qualityOverlay": "Quality overlay",
+    "qualityFlagged": "Source row of this entity hit quarantine",
+    "entityCount": "{count} instances",
+    "templates": "View templates",
+    "templateName": "Template name",
+    "templateSave": "Save current view",
+    "templateStale": "Ontology updated",
+    "edgeProps": "Edge props",
+    "chain": "Chain",
+    "chainView": "View chain",
+    "chainTitle": "Evidence chain (fact → source row → run → frozen revisions)",
+    "chainFact": "Fact",
+    "chainSource": "Source row",
+    "chainFields": "Source fields",
+    "chainRun": "Extraction run",
+    "chainMapping": "Frozen mapping",
+    "chainOntology": "Frozen ontology",
+    "chainResources": "Frozen resource revisions",
+    "chainRules": "Frozen rule revisions",
+    "chainUnpinned": "Not recorded (legacy data)",
+    "bySourceRow": "By source row",
+    "reverseSource": "Datasource ID",
+    "reverseSummary": "Source row {table}#{row} joins {facts} facts producing {entities} entities",
+    "reverseHint": "Enter datasource id, table and row key to trace what this row produced",
+    "views360": "Entity 360:",
+    "diffAdded": "+ {iri}",
+    "diffRemoved": "− {iri}"
   },
   "dashboard": {
     "overview": "Workflow",
@@ -483,12 +574,17 @@
     },
     "languages": {
       "SHACL": "SHACL",
-      "OWL": "OWL"
+      "OWL": "OWL",
+      "DATA": "Data rule",
+      "DERIVATION": "Derivation rule"
     },
     "executions": {
       "AUTO": "Automatic",
       "MANUAL": "Manual"
-    }
+    },
+    "dataHint": "expression is JSON config; ops: acyclic / sum_le / unique_attr / required_edge / date_format. AUTO data rules run in extraction stage 3; hits go to quarantine.",
+    "derivationHint": "expression is JSON config; ops: transitive / symmetric / co_occurrence / product_chain. AUTO derivation rules run in extraction stage 4 and produce derived edges with rule and source facts.",
+    "examplesOptionalHint": "Data and derivation rules are defined by their JSON expression; examples are optional."
   },
   "export": {
     "title": "Ontology export",
@@ -1087,7 +1183,18 @@
       "errors": {
         "incomplete": "Complete the mapping name, targets, source fields and required settings.",
         "request": "Request failed. Error code: {code}"
-      }
+      },
+      "matchKeys": "Business keys (cross-table fusion)",
+      "matchKeysHint": "Tables mapping to the same type with equal key values fuse into one entity; both source evidences are kept",
+      "polyEndpoint": "Polymorphic endpoint (optional)",
+      "discriminator": "Discriminator field",
+      "discriminatorHint": "e.g. shareholder_type; leave empty to pick the first non-null candidate",
+      "viaTable": "Via table (two-hop)",
+      "viaField": "Via join field",
+      "candidates": "Candidate endpoints",
+      "whenValue": "Discriminator value (when)",
+      "addCandidate": "Add candidate",
+      "removeCandidate": "Remove"
     },
     "preview": {
       "title": "Sample preview",

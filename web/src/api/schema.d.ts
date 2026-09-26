@@ -1464,6 +1464,122 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/extraction/evidence/trace/reverse': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Trace Reverse
+     * @description 反向追溯：来源行 → 参与的事实与产出实体。
+     */
+    get: operations['trace_reverse_api_v1_extraction_evidence_trace_reverse_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/graph/{base_id}/diff/{target_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Graph Diff
+     * @description 两个图谱版本的实体/三元组差异（G-24）。
+     */
+    get: operations['graph_diff_api_v1_extraction_graph__base_id__diff__target_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/graph/{graph_revision_id}/path': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Graph Path
+     * @description 有向最短路径（G-12），直接边与派生边可分别参与。
+     */
+    get: operations['graph_path_api_v1_extraction_graph__graph_revision_id__path_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/graph/{graph_revision_id}/layout-recommendations': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Graph Layout Recommendations
+     * @description 从冻结本体快照的语义信号推荐图谱形态（含理由参数）。
+     */
+    get: operations['graph_layout_recommendations_api_v1_extraction_graph__graph_revision_id__layout_recommendations_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/view-templates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List View Templates */
+    get: operations['list_view_templates_api_v1_view_templates_get']
+    put?: never
+    /** Create View Template */
+    post: operations['create_view_template_api_v1_view_templates_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/view-templates/{template_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get View Template */
+    get: operations['get_view_template_api_v1_view_templates__template_id__get']
+    put?: never
+    post?: never
+    /** Delete View Template */
+    delete: operations['delete_view_template_api_v1_view_templates__template_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/governance/rules': {
     parameters: {
       query?: never
@@ -2226,6 +2342,40 @@ export interface components {
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['ForgotPasswordResult'] | null
     }
+    /** ApiResponse[GraphDiffOut] */
+    ApiResponse_GraphDiffOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['GraphDiffOut'] | null
+    }
+    /** ApiResponse[GraphRecommendationOut] */
+    ApiResponse_GraphRecommendationOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['GraphRecommendationOut'] | null
+    }
     /** ApiResponse[GraphRevisionOut] */
     ApiResponse_GraphRevisionOut_: {
       /**
@@ -2518,6 +2668,23 @@ export interface components {
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['PasswordResetIssued'] | null
     }
+    /** ApiResponse[PathOut] */
+    ApiResponse_PathOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['PathOut'] | null
+    }
     /** ApiResponse[PreviewResponse] */
     ApiResponse_PreviewResponse_: {
       /**
@@ -2568,6 +2735,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['RelationTypeOut'] | null
+    }
+    /** ApiResponse[ReverseTraceOut] */
+    ApiResponse_ReverseTraceOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ReverseTraceOut'] | null
     }
     /** ApiResponse[RevisionOut] */
     ApiResponse_RevisionOut_: {
@@ -2874,6 +3058,40 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['ValidationReportOut'] | null
+    }
+    /** ApiResponse[ViewTemplateOut] */
+    ApiResponse_ViewTemplateOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ViewTemplateOut'] | null
+    }
+    /** ApiResponse[ViewTemplatePage] */
+    ApiResponse_ViewTemplatePage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ViewTemplatePage'] | null
     }
     /** ApiResponse[list[ConflictInfo]] */
     ApiResponse_list_ConflictInfo__: {
@@ -3673,6 +3891,39 @@ export interface components {
       /** Status */
       status: string
     }
+    /**
+     * DerivedEdgeOut
+     * @description 派生边：带产出规则与参与直接事实，可解释、可展开。
+     */
+    DerivedEdgeOut: {
+      /** Id */
+      id: number
+      /** Graph Revision Id */
+      graph_revision_id: number
+      /** Subject */
+      subject: string
+      /** Predicate */
+      predicate: string
+      /** Object */
+      object_: string
+      /** Props */
+      props?: {
+        [key: string]: unknown
+      } | null
+      /** Rule Id */
+      rule_id?: string | null
+      /** Source Fact Ids */
+      source_fact_ids?: number[] | null
+    }
+    /** DiffTriple */
+    DiffTriple: {
+      /** Subject */
+      subject: string
+      /** Predicate */
+      predicate: string
+      /** Object */
+      object: string
+    }
     /** DomainBrief */
     DomainBrief: {
       /** Id */
@@ -3817,7 +4068,7 @@ export interface components {
       /** In Edges */
       in_edges: components['schemas']['GraphTripleOut'][]
       /** Derived Edges */
-      derived_edges: components['schemas']['GraphTripleOut'][]
+      derived_edges: components['schemas']['DerivedEdgeOut'][]
       /** Evidence */
       evidence: components['schemas']['FactEvidenceOut'][]
     }
@@ -3841,6 +4092,10 @@ export interface components {
     /**
      * EntityMapCreate
      * @description 实体映射。一表可生成多类型，一类型可来自多表。
+     *
+     *     match_keys 是跨表业务键（如统一社会信用代码）：多张表映射到同一
+     *     entity_type 时，按业务键值生成同一稳定 IRI，实现跨表实体融合；
+     *     每张来源表各自保留 FactEvidence，证据不合并。
      */
     EntityMapCreate: {
       /** Entity Type */
@@ -3859,6 +4114,11 @@ export interface components {
        * @default []
        */
       key_fields: string[]
+      /**
+       * Match Keys
+       * @default []
+       */
+      match_keys: string[]
     }
     /** EntityPage */
     EntityPage: {
@@ -4154,6 +4414,18 @@ export interface components {
       evidence_type: string
       /** Quarantined */
       quarantined: boolean
+      /** Mapping Revision Id */
+      mapping_revision_id?: number | null
+      /** Ontology Revision */
+      ontology_revision?: number | null
+      /** Resource Revisions */
+      resource_revisions?: {
+        [key: string]: unknown
+      } | null
+      /** Rule Revisions */
+      rule_revisions?: {
+        [key: string]: unknown
+      } | null
     }
     /**
      * ExtractionRunExport
@@ -4240,6 +4512,18 @@ export interface components {
       run_id: number
       /** Evidence Type */
       evidence_type: string
+      /** Mapping Revision Id */
+      mapping_revision_id?: number | null
+      /** Ontology Revision */
+      ontology_revision?: number | null
+      /** Resource Revisions */
+      resource_revisions?: {
+        [key: string]: unknown
+      } | null
+      /** Rule Revisions */
+      rule_revisions?: {
+        [key: string]: unknown
+      } | null
     }
     /** FactOut */
     FactOut: {
@@ -4298,6 +4582,42 @@ export interface components {
        */
       expires_in: number
     }
+    /** GraphDiffOut */
+    GraphDiffOut: {
+      /** Base Graph Revision Id */
+      base_graph_revision_id: number
+      /** Target Graph Revision Id */
+      target_graph_revision_id: number
+      /** Entities Added */
+      entities_added: string[]
+      /** Entities Removed */
+      entities_removed: string[]
+      /** Triples Added */
+      triples_added: components['schemas']['DiffTriple'][]
+      /** Triples Removed */
+      triples_removed: components['schemas']['DiffTriple'][]
+      /** Entity Added Count */
+      entity_added_count: number
+      /** Entity Removed Count */
+      entity_removed_count: number
+      /** Triple Added Count */
+      triple_added_count: number
+      /** Triple Removed Count */
+      triple_removed_count: number
+      /** Truncated */
+      truncated: boolean
+    }
+    /** GraphRecommendationOut */
+    GraphRecommendationOut: {
+      /** Graph Revision Id */
+      graph_revision_id: number
+      /** Signals */
+      signals: {
+        [key: string]: unknown
+      }
+      /** Recommendations */
+      recommendations: components['schemas']['LayoutRecommendation'][]
+    }
     /** GraphRevisionOut */
     GraphRevisionOut: {
       /** Id */
@@ -4326,6 +4646,10 @@ export interface components {
       predicate: string
       /** Object */
       object_: string
+      /** Props */
+      props?: {
+        [key: string]: unknown
+      } | null
     }
     /** GraphTypeCount */
     GraphTypeCount: {
@@ -4346,6 +4670,10 @@ export interface components {
       predicate: string
       /** Object */
       object_: string
+      /** Props */
+      props?: {
+        [key: string]: unknown
+      } | null
       /**
        * Kind
        * @enum {string}
@@ -4377,6 +4705,10 @@ export interface components {
       graph_revision_id: number
       /** Run Id */
       run_id: number
+      /** Ontology Id */
+      ontology_id?: number | null
+      /** Ontology Revision */
+      ontology_revision?: number | null
       /** Nodes */
       nodes: components['schemas']['GraphViewNode'][]
       /** Edges */
@@ -4452,6 +4784,17 @@ export interface components {
       name: boolean
       /** Namespace */
       namespace: boolean
+    }
+    /** LayoutRecommendation */
+    LayoutRecommendation: {
+      /** Layout Id */
+      layout_id: string
+      /** Reason Key */
+      reason_key: string
+      /** Reason Params */
+      reason_params?: {
+        [key: string]: unknown
+      }
     }
     /**
      * LoginRequest
@@ -4635,6 +4978,11 @@ export interface components {
       label_i18n?: {
         [key: string]: string
       } | null
+      /**
+       * Resource Count
+       * @default 0
+       */
+      resource_count: number
     }
     /**
      * NullPolicy
@@ -4899,6 +5247,25 @@ export interface components {
       /** Password */
       password: string
     }
+    /** PathOut */
+    PathOut: {
+      /** Graph Revision Id */
+      graph_revision_id: number
+      /** From Iri */
+      from_iri: string
+      /** To Iri */
+      to_iri: string
+      /** Max Hops */
+      max_hops: number
+      /** Found */
+      found: boolean
+      /** Hops */
+      hops: number
+      /** Nodes */
+      nodes: string[]
+      /** Edge Ids */
+      edge_ids: number[]
+    }
     /** PreviewColumnMeta */
     PreviewColumnMeta: {
       /** Name */
@@ -5041,15 +5408,73 @@ export interface components {
       display_name?: string | null
     }
     /**
-     * RelEndpointSpec
-     * @description 关系端点：字段 → 引用表/字段。
+     * RelEndpointCandidate
+     * @description 多态端点候选：一列值 → 一张引用表。
+     *
+     *     when 与端点 spec 的 type_field 配合：type_field 的行值等于 when
+     *     时启用该候选；不配 type_field 时按列非空顺序取第一个候选。
      */
-    RelEndpointSpec: {
+    RelEndpointCandidate: {
       /** Field */
       field: string
       /** Ref Table */
       ref_table: string
       /** Ref Field */
+      ref_field?: string | null
+      /** When */
+      when?: string | null
+      /** Ref Entity Type */
+      ref_entity_type?: string | null
+    }
+    /**
+     * RelEndpointSpec
+     * @description 关系端点：字段 → 引用表/字段，支持多态候选与二跳经由。
+     *
+     *     单候选端点等价于 candidates=[{field, ref_table, ref_field}]；
+     *     多候选 + type_field 表达"判别字段决定端点表"的多态结构；
+     *     via 声明时，判别字段与候选列都在经由表的行上求值。
+     */
+    RelEndpointSpec: {
+      /**
+       * Field
+       * @default
+       */
+      field: string
+      /**
+       * Ref Table
+       * @default
+       */
+      ref_table: string
+      /**
+       * Ref Field
+       * @default
+       */
+      ref_field: string
+      /**
+       * Candidates
+       * @default []
+       */
+      candidates: components['schemas']['RelEndpointCandidate'][]
+      /** Type Field */
+      type_field?: string | null
+      via?: components['schemas']['RelEndpointVia'] | null
+    }
+    /**
+     * RelEndpointVia
+     * @description 二跳端点：先按本行连接列找到经由表的行，再在该行上判别端点。
+     *
+     *     典型结构：持股表的 shareholder_id → 股东表（多态）→ 按
+     *     shareholder_type 判别引用自然人表或企业表。
+     */
+    RelEndpointVia: {
+      /** Table */
+      table: string
+      /** Field */
+      field: string
+      /**
+       * Ref Field
+       * @default id
+       */
       ref_field: string
     }
     /**
@@ -5250,6 +5675,41 @@ export interface components {
      * @enum {string}
      */
     ResourceStatus: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+    /** ReverseTraceFact */
+    ReverseTraceFact: {
+      /** Subject */
+      subject: string
+      /** Predicate */
+      predicate: string
+      /** Object */
+      object: string
+      /** Evidence Id */
+      evidence_id: number
+      /** Evidence Type */
+      evidence_type: string
+      /** Run Id */
+      run_id: number
+    }
+    /**
+     * ReverseTraceOut
+     * @description 反向追溯：来源行 → 参与的事实与实体（源行反查产出）。
+     */
+    ReverseTraceOut: {
+      /** Graph Revision Id */
+      graph_revision_id: number
+      /** Source Id */
+      source_id: number
+      /** Source Name */
+      source_name: string | null
+      /** Table Name */
+      table_name: string
+      /** Row Key */
+      row_key: string
+      /** Facts */
+      facts: components['schemas']['ReverseTraceFact'][]
+      /** Entities */
+      entities: string[]
+    }
     /** RevisionOut */
     RevisionOut: {
       /** Revision */
@@ -5294,7 +5754,7 @@ export interface components {
        * Language
        * @enum {string}
        */
-      language: 'SHACL' | 'OWL'
+      language: 'SHACL' | 'OWL' | 'DATA' | 'DERIVATION'
       /** Expression */
       expression: string
       /**
@@ -5302,9 +5762,15 @@ export interface components {
        * @enum {string}
        */
       execution: 'AUTO' | 'MANUAL'
-      /** Positive Example */
+      /**
+       * Positive Example
+       * @default
+       */
       positive_example: string
-      /** Negative Example */
+      /**
+       * Negative Example
+       * @default
+       */
       negative_example: string
     }
     /** RuleExampleOut */
@@ -5343,7 +5809,7 @@ export interface components {
        * Language
        * @enum {string}
        */
-      language: 'SHACL' | 'OWL'
+      language: 'SHACL' | 'OWL' | 'DATA' | 'DERIVATION'
       /** Expression */
       expression: string
       /**
@@ -5351,9 +5817,15 @@ export interface components {
        * @enum {string}
        */
       execution: 'AUTO' | 'MANUAL'
-      /** Positive Example */
+      /**
+       * Positive Example
+       * @default
+       */
       positive_example: string
-      /** Negative Example */
+      /**
+       * Negative Example
+       * @default
+       */
       negative_example: string
       /** Id */
       id: number
@@ -5944,6 +6416,68 @@ export interface components {
      * @enum {string}
      */
     ValidationState: 'PASS' | 'VIOLATION' | 'NA' | 'NOT_RUN'
+    /** ViewTemplateCreate */
+    ViewTemplateCreate: {
+      /** Name I18N */
+      name_i18n: {
+        [key: string]: string
+      }
+      /** Layout Id */
+      layout_id: string
+      /** Config */
+      config?: {
+        [key: string]: unknown
+      }
+      /** Ontology Id */
+      ontology_id: number
+      /** Ontology Revision */
+      ontology_revision: number
+    }
+    /** ViewTemplateOut */
+    ViewTemplateOut: {
+      /** Id */
+      id: number
+      /** Name I18N */
+      name_i18n: {
+        [key: string]: string
+      }
+      /** Layout Id */
+      layout_id: string
+      /** Config */
+      config: {
+        [key: string]: unknown
+      }
+      /** Ontology Id */
+      ontology_id: number
+      /** Ontology Revision */
+      ontology_revision: number
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string
+      /**
+       * Stale
+       * @default false
+       */
+      stale: boolean
+    }
+    /** ViewTemplatePage */
+    ViewTemplatePage: {
+      /** Items */
+      items: components['schemas']['ViewTemplateOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
   }
   responses: never
   parameters: never
@@ -9485,6 +10019,267 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_EntityTraceOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  trace_reverse_api_v1_extraction_evidence_trace_reverse_get: {
+    parameters: {
+      query: {
+        source_id: number
+        table: string
+        row_key: string
+        graph_revision_id?: number | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ReverseTraceOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  graph_diff_api_v1_extraction_graph__base_id__diff__target_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        base_id: number
+        target_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_GraphDiffOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  graph_path_api_v1_extraction_graph__graph_revision_id__path_get: {
+    parameters: {
+      query: {
+        from: string
+        to: string
+        max_hops?: number
+        include_derived?: boolean
+      }
+      header?: never
+      path: {
+        graph_revision_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_PathOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  graph_layout_recommendations_api_v1_extraction_graph__graph_revision_id__layout_recommendations_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        graph_revision_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_GraphRecommendationOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_view_templates_api_v1_view_templates_get: {
+    parameters: {
+      query?: {
+        ontology_id?: number | null
+        page?: number
+        page_size?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ViewTemplatePage_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_view_template_api_v1_view_templates_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ViewTemplateCreate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ViewTemplateOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_view_template_api_v1_view_templates__template_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ViewTemplateOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  delete_view_template_api_v1_view_templates__template_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
         }
       }
       /** @description Validation Error */

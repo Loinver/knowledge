@@ -62,6 +62,13 @@ def test_list_response_is_wrapped(client: TestClient) -> None:
     assert body["data"] == []
 
 
+def test_list_reports_resource_count(client: TestClient) -> None:
+    client.post(URL, json={"prefix": "ex", "iri": "https://example.org/"})
+    body = raw(client.get(URL))
+    assert body["data"][0]["prefix"] == "ex"
+    assert body["data"][0]["resource_count"] == 0
+
+
 def test_create_response_is_wrapped(client: TestClient) -> None:
     response = client.post(URL, json={"prefix": "ex", "iri": "https://example.org/"})
     assert response.status_code == 201
@@ -78,6 +85,37 @@ def test_delete_returns_ok_with_null_data(client: TestClient) -> None:
     response = client.delete(f"{URL}/{namespace_id}")
     assert response.status_code == 200
     assert raw(response) == {"code": OK_CODE, "message": "OK", "data": None}
+
+
+def test_delete_in_use_conflicts_with_structured_error(
+    client: TestClient, sessions: sessionmaker[Session]
+) -> None:
+    from app.models.enums import ResourceKind
+    from app.models.resource import ModelResource
+
+    created = raw(
+        client.post(URL, json={"prefix": "ex", "iri": "https://example.org/"})
+    )
+    namespace_id = created["data"]["id"]
+    with sessions() as s:
+        s.add(
+            ModelResource(
+                kind=ResourceKind.ENTITY,
+                name="Enterprise",
+                iri="https://example.org/Enterprise",
+                namespace_id=namespace_id,
+            )
+        )
+        s.commit()
+    body = raw(client.get(URL))
+    assert body["data"][0]["resource_count"] == 1
+    response = client.delete(f"{URL}/{namespace_id}")
+    assert response.status_code == 409
+    body = raw(response)
+    assert body["code"] == "KG.RESOURCE_IN_USE"
+    assert body["data"] is None
+    assert body["params"]["prefix"] == "ex"
+    assert body["params"]["count"] == 1
 
 
 def test_error_response_shares_the_same_shape(client: TestClient) -> None:

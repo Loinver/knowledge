@@ -26,6 +26,8 @@ import { namespacesApi } from '@/api/namespaces'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
+import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
+
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const router = useRouter()
@@ -206,6 +208,15 @@ const rules = computed<FormRules>(() => ({
 }))
 
 const nsOptions = computed(() => namespaces.value.map((ns) => ({ label: ns.prefix, value: ns.id })))
+const showNamespaceCreate = ref(false)
+
+/** 就地登记的命名空间直接选中，空库也能在一个抽屉里完成第一个类型的创建。 */
+function onNamespaceCreated(ns: Namespace) {
+  namespaces.value = [...namespaces.value, ns]
+  formData.value.namespace_id = ns.id
+  // 程序赋值不会触发字段校验；只重校这一项，清掉此前残留的「必填」提示。
+  void formRef.value?.validate(undefined, ['namespace_id']).catch(() => undefined)
+}
 
 function goToDetail(id: number) {
   void router.push({ name: 'entity-detail', params: { id } })
@@ -443,8 +454,16 @@ watch(domainFilter, () => void loadList())
             <template #feedback>{{ t('entityType.nameHint') }}</template>
           </NFormItem>
           <NFormItem :label="t('common.namespace')" path="namespace_id">
-            <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
+            <div class="ns-field">
+              <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
+              <NButton @click="showNamespaceCreate = true">{{
+                t('namespace.createShort')
+              }}</NButton>
+            </div>
           </NFormItem>
+          <NAlert v-if="!namespaces.length" type="info" class="ns-hint">
+            {{ t('namespace.emptyHint') }}
+          </NAlert>
           <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
           </NFormItem>
@@ -463,6 +482,7 @@ watch(domainFilter, () => void loadList())
         </template>
       </NDrawerContent>
     </NDrawer>
+    <NamespaceCreateModal v-model:show="showNamespaceCreate" @created="onNamespaceCreated" />
   </section>
 </template>
 
@@ -687,6 +707,16 @@ watch(domainFilter, () => void loadList())
 }
 
 /* ── 抽屉 ───────────────────────────────────────────────── */
+.ns-field {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.ns-hint {
+  margin-bottom: var(--space-3);
+}
+
 .create-error {
   margin-bottom: var(--space-3);
 }

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_session
 from app.domain.iri_service import (
     delete_namespace,
+    namespace_usage,
     register_namespace,
     scan_rename_impact,
 )
@@ -30,8 +31,14 @@ router = APIRouter(prefix="/namespaces", tags=["namespaces"])
 
 
 @router.get("", response_model=ApiResponse[list[NamespaceOut]])
-def list_namespaces(session: Session = Depends(get_session)) -> list[Namespace]:
-    return list_registered_namespaces(session)
+def list_namespaces(session: Session = Depends(get_session)) -> list[NamespaceOut]:
+    usage = namespace_usage(session)
+    return [
+        NamespaceOut.model_validate(ns).model_copy(
+            update={"resource_count": usage.get(ns.id, 0)}
+        )
+        for ns in list_registered_namespaces(session)
+    ]
 
 
 @router.post("", response_model=ApiResponse[NamespaceOut], status_code=201)

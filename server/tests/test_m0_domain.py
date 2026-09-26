@@ -122,7 +122,40 @@ def test_namespace_duplicate_rejected(session):
     _make_namespace(session)
     with pytest.raises(KGError) as exc:
         register_namespace(session, "kg", "https://other.org/#")
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
+    assert exc.value.params == {"namespace": "kg", "field": "prefix"}
+    with pytest.raises(KGError) as exc:
+        register_namespace(session, "other", "https://example.org/kg#")
+    assert exc.value.params == {"namespace": "https://example.org/kg#", "field": "iri"}
+
+
+@pytest.mark.parametrize("prefix", ["", "KG", "1kg", "kg:core", "kg core", "k" * 65])
+def test_namespace_prefix_must_be_lowercase_ncname(session, prefix):
+    """前缀会出现在 Turtle 缩写里，只接受小写 NCName 子集。"""
+    with pytest.raises(KGError) as exc:
+        register_namespace(session, prefix, "https://example.org/kg#")
+    assert exc.value.code == ErrorCode.INVALID_NAMESPACE
+    assert exc.value.params["field"] == "prefix"
+
+
+def test_namespace_in_use_cannot_delete(session):
+    """仍有资源从该命名空间推导 IRI 时不可删，删掉资源后才可删。"""
+    from app.domain.iri_service import delete_namespace, namespace_usage
+
+    ns = _make_namespace(session)
+    res = _make_resource(session, ns)
+    session.commit()
+    assert namespace_usage(session) == {ns.id: 1}
+    with pytest.raises(KGError) as exc:
+        delete_namespace(session, ns.id)
+    assert exc.value.code == ErrorCode.RESOURCE_IN_USE
+    assert exc.value.params == {"prefix": "kg", "count": 1}
+
+    session.delete(res)
+    session.flush()
+    delete_namespace(session, ns.id)
+    session.commit()
+    assert namespace_usage(session) == {}
 
 
 def test_invalid_name_rejected(session):

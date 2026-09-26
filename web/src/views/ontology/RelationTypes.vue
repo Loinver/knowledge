@@ -27,6 +27,8 @@ import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
+import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
+
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 
@@ -202,6 +204,14 @@ const formData = ref({
 })
 
 const nsOptions = computed(() => namespaces.value.map((ns) => ({ label: ns.prefix, value: ns.id })))
+const showNamespaceCreate = ref(false)
+
+/** 就地登记的命名空间直接选中，并只重校该字段，清掉此前残留的「必填」提示。 */
+function onNamespaceCreated(ns: Namespace) {
+  namespaces.value = [...namespaces.value, ns]
+  formData.value.namespace_id = ns.id
+  void createFormRef.value?.validate(undefined, ['namespace_id']).catch(() => undefined)
+}
 const typeOptions = computed(() =>
   typeList.value.map((tp) => ({ label: pickLabel(tp.label_i18n, tp.name), value: tp.id })),
 )
@@ -629,8 +639,16 @@ onMounted(async () => {
             <template #feedback>{{ t('relation.nameHint') }}</template>
           </NFormItem>
           <NFormItem :label="t('common.namespace')" path="namespace_id">
-            <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
+            <div class="ns-field">
+              <NSelect v-model:value="formData.namespace_id" :options="nsOptions" />
+              <NButton @click="showNamespaceCreate = true">{{
+                t('namespace.createShort')
+              }}</NButton>
+            </div>
           </NFormItem>
+          <NAlert v-if="!namespaces.length" type="info" class="ns-hint">
+            {{ t('namespace.emptyHint') }}
+          </NAlert>
           <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
           </NFormItem>
@@ -700,12 +718,23 @@ onMounted(async () => {
         </template>
       </NDrawerContent>
     </NDrawer>
+    <NamespaceCreateModal v-model:show="showNamespaceCreate" @created="onNamespaceCreated" />
   </section>
 </template>
 
 <style scoped>
 .page {
   padding-bottom: var(--space-5);
+}
+
+.ns-field {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.ns-hint {
+  margin-bottom: var(--space-3);
 }
 
 .stats {

@@ -19,6 +19,8 @@ class NamespaceOut(BaseModel):
     iri: str
     protected: bool
     label_i18n: dict[str, str] | None = None
+    # 引用该命名空间的语义资源数；大于 0 时不可删除。
+    resource_count: int = 0
 
 
 class IriBuildRequest(BaseModel):

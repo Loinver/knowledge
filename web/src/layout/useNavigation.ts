@@ -49,6 +49,7 @@ export function useNavigation() {
         label: t('menu.entityTypes'),
         items: [
           { key: 'entity-types', label: t('page.entityTypes') },
+          { key: 'namespaces', label: t('page.namespaces') },
           { key: 'enum-dictionaries', label: t('enumDictionaries.title') },
         ],
       },

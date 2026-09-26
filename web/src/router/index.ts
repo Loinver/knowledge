@@ -54,6 +54,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ontology/Ontologies.vue'),
       },
       {
+        path: 'ontology/namespaces',
+        name: 'namespaces',
+        component: () => import('@/views/ontology/Namespaces.vue'),
+      },
+      {
         path: 'ontology/entity-types',
         name: 'entity-types',
         component: () => import('@/views/ontology/EntityTypes.vue'),
