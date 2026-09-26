@@ -111,6 +111,11 @@ const routes: RouteRecordRaw[] = [
         name: 'extraction-runs',
         component: () => import('@/views/extraction/ExtractionRuns.vue'),
       },
+      {
+        path: 'extraction/ai-assist',
+        name: 'ai-assist',
+        component: () => import('@/views/extraction/AiAssist.vue'),
+      },
 
       {
         path: 'graph',

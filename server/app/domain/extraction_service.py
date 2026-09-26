@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from datetime import UTC, datetime
 
-from sqlalchemy import func, inspect, select
+from sqlalchemy import bindparam, func, inspect, literal_column, quoted_name, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -73,13 +74,26 @@ def _load_frozen_pins(session: Session, rev: MappingRevision) -> dict:
     }
 
 
+class ExtractionCancelledError(Exception):
+    """协作式取消：任务在阶段边界安全中断，不发布结果集。"""
+
+
 def start_run(
     session: Session,
     mapping_revision_id: int,
     datasource_id: int,
     namespace: str = "https://example.org/kg/",
+    *,
+    progress: Callable[[str, dict], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+    watermarks: dict | None = None,
+    watermark_out: dict | None = None,
 ) -> ExtractionRun:
-    """启动抽取运行。同步执行四阶段，状态机落库。"""
+    """启动抽取运行。同步执行四阶段，状态机落库。
+
+    progress / cancel_check / watermarks 供异步任务使用：进度按阶段
+    回调，取消在阶段边界协作生效，水位用于增量过滤与新水位写出。
+    """
     rev = session.get(MappingRevision, mapping_revision_id)
     if rev is None:
         raise KGError(
@@ -118,7 +132,18 @@ def start_run(
     session.flush()
 
     try:
-        counts = _execute_four_phases(session, run, rev, ds, snap.catalog, namespace)
+        counts = _execute_four_phases(
+            session,
+            run,
+            rev,
+            ds,
+            snap.catalog,
+            namespace,
+            progress=progress,
+            cancel_check=cancel_check,
+            watermarks=watermarks,
+            watermark_out=watermark_out,
+        )
     except Exception:
         run.status = RunResult.FAILED
         run.finished_at = datetime.now(UTC)
@@ -162,6 +187,11 @@ def _execute_four_phases(
     ds: Datasource,
     catalog: dict,
     namespace: str,
+    *,
+    progress: Callable[[str, dict], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+    watermarks: dict | None = None,
+    watermark_out: dict | None = None,
 ) -> dict:
     """四阶段执行。返回计数。
 
@@ -177,12 +207,30 @@ def _execute_four_phases(
     entity_iri_index: dict[str, dict] = {}  # IRI -> {type, row_key}
     # (table, row_key) / ("type:<entity_type>", 业务键) -> IRI，端点解析索引
     key_index: dict[tuple[str, str], str] = {}
+
+    def _check_cancel() -> None:
+        if cancel_check is not None and cancel_check():
+            raise ExtractionCancelledError()
+
+    def _report(phase: str, extra: dict) -> None:
+        if progress is not None:
+            progress(
+                phase,
+                {
+                    "entity_count": len(entity_iri_index),
+                    "triple_count": triple_count,
+                    "quarantine_count": quarantine_count,
+                    **extra,
+                },
+            )
+
     quarantine_count = 0
     evidence_count = 0
 
     triple_count = 0
     rel_evidence = 0
     with datasource_engine(ds) as engine:
+        _check_cancel()
         # 阶段1：实体映射
         for em in rev.entity_maps or []:
             n, q = _phase1_entity(
@@ -195,10 +243,14 @@ def _execute_four_phases(
                 namespace,
                 entity_iri_index,
                 key_index,
+                watermarks=watermarks,
+                watermark_out=watermark_out,
             )
             quarantine_count += q
             evidence_count += n
+        _report("entities", {"evidence_count": evidence_count})
 
+        _check_cancel()
         # 阶段2：关系映射
         for rm in rev.rel_maps or []:
             t, q, e = _phase2_relation(
@@ -215,15 +267,20 @@ def _execute_four_phases(
             triple_count += t
             quarantine_count += q
             rel_evidence += e
+        _report("relations", {"evidence_count": evidence_count + rel_evidence})
 
     entity_count = len(entity_iri_index)
 
+    _check_cancel()
     # 阶段3：规则校验（实例校验报告 + DATA 规则执行，命中写隔离）
     rule_stage = run_rule_stage(session, run, gr, rev)
     quarantine_count += rule_stage["quarantined_by_rule"]
+    _report("rules", {"evidence_count": evidence_count + rel_evidence})
 
+    _check_cancel()
     # 阶段4：派生推导（DERIVATION 规则执行，写 DerivedEdge）
     derived_count = run_derivation_stage(session, run, gr, rev)
+    _report("derivation", {"evidence_count": evidence_count + rel_evidence})
 
     counts = {
         "entity_count": entity_count,
@@ -252,6 +309,15 @@ def _table_in_catalog(table: str, schema: str, table_set: set[str]) -> bool:
     return table in table_set or f"{schema}:{table}" in table_set
 
 
+def _greater_value(candidate: object, incumbent: object | None) -> bool:
+    """水位取 max：数值按数值比较，其余按字符串；类型混排时保守取候选。"""
+    if incumbent is None:
+        return True
+    if isinstance(candidate, int | float) and isinstance(incumbent, int | float):
+        return float(candidate) > float(incumbent)
+    return str(candidate) > str(incumbent)
+
+
 def _stable_iri(namespace: str, entity_type: str, row_key: str) -> str:
     """稳定 IRI：namespace + entity_type + '-' + row_key。幂等基础。"""
     safe_key = str(row_key).replace(" ", "_").replace("|", "-")
@@ -268,6 +334,9 @@ def _phase1_entity(
     namespace: str,
     entity_iri_index: dict,
     key_index: dict[tuple[str, str], str],
+    *,
+    watermarks: dict | None = None,
+    watermark_out: dict | None = None,
 ) -> tuple[int, int]:
     """阶段1：实体映射。返回 (evidence_count, quarantine_count)。
 
@@ -280,6 +349,13 @@ def _phase1_entity(
     field_maps = em.get("field_maps", [])
     key_fields = em.get("key_fields", [])
     match_keys = em.get("match_keys") or []
+    incremental_field = em.get("incremental_field")
+    watermark: object | None = None
+    if watermarks and incremental_field:
+        entry = watermarks.get(table) or {}
+        if entry.get("field") == incremental_field:
+            watermark = entry.get("value")
+    watermark_max: object | None = None
     evidence_n = 0
     quarantine_n = 0
 
@@ -298,9 +374,16 @@ def _phase1_entity(
         return 0, 1
 
     sql = select_source_rows(table, schema)
+    query_params: dict = {}
+    if watermark is not None and incremental_field:
+        sql = sql.where(
+            literal_column(quoted_name(incremental_field, True))
+            > bindparam("kg_watermark")
+        )
+        query_params["kg_watermark"] = watermark
     try:
         with engine.connect() as conn:
-            result = conn.execute(sql)
+            result = conn.execute(sql, query_params)
             raw_rows = [dict(r._mapping) for r in result.fetchall()]
     except Exception:
         session.add(
@@ -317,6 +400,11 @@ def _phase1_entity(
             row_key = "|".join(key_parts) if key_parts else f"row-{idx}"
         else:
             row_key = f"row-{idx}"
+
+        if incremental_field:
+            current = raw.get(incremental_field)
+            if current is not None and _greater_value(current, watermark_max):
+                watermark_max = current
 
         # 空键检查
         empty_keys = [k for k in key_fields if raw.get(k) is None or raw.get(k) == ""]
@@ -441,6 +529,8 @@ def _phase1_entity(
         )
         evidence_n += 1
     session.flush()
+    if watermark_out is not None and incremental_field and watermark_max is not None:
+        watermark_out[table] = {"field": incremental_field, "value": watermark_max}
     return evidence_n, quarantine_n
 
 

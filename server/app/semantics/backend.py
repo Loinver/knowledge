@@ -50,18 +50,25 @@ class SemanticBackend(Protocol):
         ...
 
     def reason(self, data_graph: Any) -> ReasonReport:
-        """运行最小推理（RDFS+OWL Horst），返回推断三元组。
+        """运行最小推理（RDFS+OWL Horst），返回推断三元组。"""
+        ...
 
-        完整 OWL-DL 一致性不属于本接口的最小能力，未接入完整推理器时
-        调用方应通过 has_full_reasoner() 判定，相关检查项返回 NOT_RUN。
+    def check_consistency(
+        self, data: str, *, rdf_format: str = PARSER_TURTLE
+    ) -> ValidationReport:
+        """对序列化的本体图运行 OWL 一致性检查，返回真实引擎结论。
+
+        一致性检查是独立于最小推理的能力；后端不具备时应抛出
+        NotImplementedError，由领域层转 NOT_RUN，绝不退化成 PASS。
         """
         ...
 
     def has_full_reasoner(self) -> bool:
-        """是否具备完整 OWL-DL 推理与一致性检查能力。
+        """是否具备 OWL 一致性检查能力。
 
-        RdflibBackend 返回 False（owlrl 仅最小推理）；JenaRemoteBackend
-        接入后返回 True。领域层据此决定 A08 是否可执行。
+        RdflibBackend 通过 owlrl 提供 OWL 2 RL 一致性闭包（含
+        owl:Nothing 物化检测）；DL 完整推理仍超出范围，调用方在
+        结果 detail 中如实标注推理谱系。
         """
         ...
 

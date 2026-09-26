@@ -46,7 +46,8 @@
     "forbiddenHint": "Your account has no permission for this page. Contact an administrator.",
     "backToDashboard": "Back to dashboard",
     "governanceClauses": "Standard clauses",
-    "namespaces": "Namespaces"
+    "namespaces": "Namespaces",
+    "aiAssist": "AI Assist"
   },
   "namespace": {
     "description": "A namespace determines resource IRIs: IRI = namespace IRI + machine name. Register at least one before modeling; namespaces still used by resources cannot be deleted.",
@@ -205,7 +206,8 @@
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
     "zoomLevel": "Zoom {percent}%",
-    "positionValue": "{x}, {y}"
+    "positionValue": "{x}, {y}",
+    "aiAssist": "AI suggestions"
   },
   "entityType": {
     "list": "Entity Type List",
@@ -1230,5 +1232,20 @@
       "rowRange": "Rows {start}–{end}",
       "nullValue": "Empty"
     }
+  },
+  "ai": {
+    "pageHint": "Extract candidate entities and facts from pasted text; every suggestion requires manual confirmation",
+    "generate": "Generate suggestions",
+    "hint": "Suggestions are candidates only; nothing is saved without confirmation",
+    "empty": "No new suggestions",
+    "applied": "Applied to draft",
+    "apply": "Apply",
+    "discard": "Discard",
+    "datasourceRequired": "Choose a datasource first",
+    "documentText": "Text to extract from",
+    "documentPlaceholder": "Paste contracts or announcements; the AI extracts candidate facts by ontology types",
+    "documentSuggestions": "Document candidate facts (review only, not saved)",
+    "extract": "Extract",
+    "mappingTitle": "AI mapping suggestions"
   }
 }

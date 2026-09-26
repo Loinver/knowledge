@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain import ontology_export_service
 from app.domain.ontology_snapshot import (
     ResourceSnapshot,
     load_ontology_snapshot,
@@ -79,7 +80,7 @@ def run_ontology_validation(
         _check_a05_rule_set(session, onto),
         _check_a06_core_template(session, onto, referenced_ids),
         _check_a07_namespace(session, resources),
-        _check_a08_owl_consistency(backend),
+        _check_a08_owl_consistency(session, onto, backend),
     ]
 
     summary = {
@@ -318,17 +319,51 @@ def _check_a07_namespace(
 
 
 def _check_a08_owl_consistency(
+    session: Session,
+    onto: Ontology,
     backend: SemanticBackend | None,
 ) -> ValidationResult:
-    """A08 OWL 一致性：未接完整推理器 → NOT_RUN，绝不能显示成 PASS。"""
+    """A08 OWL 一致性：owlrl OWL 2 RL 闭包真实执行。
+
+    DL 完整推理仍超出范围，推理谱系如实写入 message；引擎缺失、
+    本体未发布或导出失败按 NOT_RUN 处理，绝不显示成 PASS。
+    """
+    if onto.current_revision < 1:
+        return ValidationResult(
+            check_code="A08",
+            state=ValidationState.NA,
+            message="ontology not published",
+        )
     if backend is None or not backend.has_full_reasoner():
         return ValidationResult(
             check_code="A08",
             state=ValidationState.NOT_RUN,
-            message="full OWL-DL reasoner not available",
+            message="consistency reasoner not available",
         )
-    return ValidationResult(
+    try:
+        exported = ontology_export_service.export_ontology(
+            session, onto.id, revision=onto.current_revision
+        )
+    except KGError as exc:
+        return ValidationResult(
+            check_code="A08",
+            state=ValidationState.NOT_RUN,
+            detail={"reason": "export_failed", "params": exc.params},
+            message="ontology RDF export failed",
+        )
+    report = backend.check_consistency(exported.content)
+    if report.state is ValidationState.NOT_RUN:
+        return ValidationResult(
+            check_code="A08",
+            state=ValidationState.NOT_RUN,
+            message=report.results_text,
+        )
+    conflicts = (report.raw or {}).get("errors") if isinstance(report.raw, dict) else []
+    result = ValidationResult(
         check_code="A08",
-        state=ValidationState.NOT_RUN,
-        message="full OWL-DL consistency check not implemented",
+        state=report.state,
+        message="owlrl OWL 2 RL consistency check (full DL reasoning out of scope)",
     )
+    if conflicts:
+        result.detail = {"errors": conflicts[:10]}
+    return result

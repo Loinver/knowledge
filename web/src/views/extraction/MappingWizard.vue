@@ -28,6 +28,7 @@ import { relationsApi } from '@/api/relations'
 import type { components } from '@/api/schema'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import AiSuggestions from '@/views/ontology/components/AiSuggestions.vue'
 
 type S = components['schemas']
 type Datasource = components['schemas']['DatasourceBrief']
@@ -142,6 +143,7 @@ const selectedSampleTable = ref<string | null>(null)
 const sampleLimit = ref<number>(20)
 const namespace = ref('')
 const viewMode = ref<'graph' | 'table'>('graph')
+const showAi = ref(false)
 let selectionController: AbortController | undefined
 let assetController: AbortController | undefined
 let lifecycleController: AbortController | undefined
@@ -1106,6 +1108,9 @@ onBeforeUnmount(() => {
           @click="handleSaveDraft"
           >{{ t('dataAccess.mapping.saveDraft') }}</n-button
         >
+        <n-button v-if="selectedMapping && selectedDatasourceId" @click="showAi = true">{{
+          t('ai.mappingTitle')
+        }}</n-button>
       </template>
     </PageHeader>
 
@@ -2093,6 +2098,20 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
+
+      <!-- AI 映射建议（V-EX-07）：逐条人工确认后并入映射草稿 -->
+      <n-drawer v-model:show="showAi" :width="480" placement="right">
+        <n-drawer-content :title="t('ai.mappingTitle')" closable>
+          <AiSuggestions
+            v-if="selectedMappingId !== null && selectedDatasourceId !== null"
+            kind="MAPPING_SUGGEST"
+            :title="t('ai.mappingTitle')"
+            :target-id="selectedMappingId"
+            :datasource-id="selectedDatasourceId"
+            @applied="() => void selectMapping(selectedMappingId)"
+          />
+        </n-drawer-content>
+      </n-drawer>
     </n-spin>
   </section>
 </template>

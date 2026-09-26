@@ -84,6 +84,30 @@ class ViewTemplate(Base):
     )
 
 
+class AiSuggestion(Base):
+    """AI 建议（V-DS-05 / V-EX-07）：PENDING → APPLIED/DISCARDED。
+
+    建议永远只是建议：每条独立保存标题、内容与解释，人工逐条
+    确认后才会作用到草稿资产，绝不自动落库。
+    """
+
+    __tablename__ = "ai_suggestion"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="PENDING", nullable=False)
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+
+
 class StandardClause(Base):
     """标准条款资料：条款编号 + 自撰描述，不抄正文。
 

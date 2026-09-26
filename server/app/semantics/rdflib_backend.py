@@ -1,7 +1,7 @@
 """基于 rdflib + pySHACL + owlrl 的本地语义后端实现。
 
-不伪装成完整 OWL-DL 推理器：owlrl 只做 RDFS+OWL Horst 最小推理，
-因此 has_full_reasoner() 返回 False，A08 一致性检查由领域层标记 NOT_RUN。
+owlrl 提供 RDFS+OWL Horst 最小推理与 OWL 2 RL 一致性闭包
+（矛盾会物化为 owl:Nothing）；DL 完整推理仍超出范围，detail 中如实标注。
 """
 
 from __future__ import annotations
@@ -121,9 +121,52 @@ class RdflibBackend:
             raw=data_graph,
         )
 
+    def check_consistency(
+        self, data: str, *, rdf_format: str = PARSER_TURTLE
+    ) -> ValidationReport:
+        """owlrl OWL 2 RL 闭包一致性检查。
+
+        矛盾（不相交冲突、基数冲突、逐点冲突等）由 owlrl 收集在
+        error_messages；引擎自身抛错按 NOT_RUN 处理——引擎失败不等于
+        不一致，绝不改写结论。
+        """
+        try:
+            graph = self.parse(data, rdf_format=rdf_format)
+        except Exception:
+            return ValidationReport(
+                state=ValidationState.NOT_RUN,
+                conforms=False,
+                results_text="ontology graph parse failed",
+            )
+        semantics = owlrl.OWLRL_Semantics(
+            graph, axioms=False, daxioms=False, rdfs=False
+        )
+        try:
+            semantics.closure()
+            semantics.flush_stored_triples()
+        except Exception as exc:  # owlrl 对个别构造直接抛错
+            logger.warning("owlrl closure failed: %s", exc)
+            return ValidationReport(
+                state=ValidationState.NOT_RUN,
+                conforms=False,
+                results_text=f"owlrl closure failed: {exc}",
+            )
+        errors = [str(message) for message in (semantics.error_messages or [])]
+        state = ValidationState.VIOLATION if errors else ValidationState.PASS
+        return ValidationReport(
+            state=state,
+            conforms=not errors,
+            results_text=(
+                f"owlrl OWL 2 RL consistency: {len(errors)} inconsistency(ies)"
+                if errors
+                else "owlrl OWL 2 RL consistency: consistent"
+            ),
+            raw={"errors": errors[:20]},
+        )
+
     def has_full_reasoner(self) -> bool:
-        """owlrl 只是最小推理，不是完整 OWL-DL。"""
-        return False
+        """owlrl 提供 OWL 2 RL 一致性闭包（DL 完整推理仍超出范围）。"""
+        return True
 
 
 __all__ = ["RdflibBackend"]

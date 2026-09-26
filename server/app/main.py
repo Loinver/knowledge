@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from app.api.errors import install_error_handler
 from app.api.v1.accounts import router as accounts_router
+from app.api.v1.ai import router as ai_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.clauses import router as clauses_router
 from app.api.v1.dashboard import router as dashboard_router
@@ -91,6 +92,7 @@ business_router.include_router(relations_router)
 business_router.include_router(validation_router)
 business_router.include_router(extraction_router)
 business_router.include_router(graph_templates_router)
+business_router.include_router(ai_router)
 business_router.include_router(governance_router)
 business_router.include_router(clauses_router)
 app.include_router(business_router)

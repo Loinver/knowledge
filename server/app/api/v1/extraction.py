@@ -28,6 +28,13 @@ from app.domain.extraction_service import (
     start_run,
     switch_current,
 )
+from app.domain.extraction_task_service import (
+    cancel_task,
+    create_task,
+    get_task,
+    list_tasks,
+    live_progress,
+)
 from app.domain.graph_analysis_service import diff_graph_revisions, shortest_path
 from app.domain.graph_recommendation_service import recommend_layouts
 from app.domain.graph_view_service import graph_view
@@ -39,6 +46,7 @@ from app.schemas.extraction import (
     EntityTraceOut,
     ExtractionRunExport,
     ExtractionRunOut,
+    ExtractionTaskOut,
     FactEvidenceOut,
     FactTraceOut,
     GraphRevisionOut,
@@ -47,6 +55,7 @@ from app.schemas.extraction import (
     QuarantineOut,
     ReverseTraceOut,
     RunStartRequest,
+    TaskCreateRequest,
 )
 from app.schemas.graph_view import GraphDiffOut, GraphRecommendationOut, PathOut
 from app.schemas.response import ApiResponse
@@ -100,6 +109,59 @@ def create_run(
         run=ExtractionRunOut.model_validate(run),
         graph_revision=GraphRevisionOut.model_validate(gr) if gr else None,
     )
+
+
+@router.post("/tasks", response_model=ApiResponse[ExtractionTaskOut], status_code=202)
+def create_extraction_task(
+    payload: TaskCreateRequest, session: Session = Depends(get_session)
+) -> ExtractionTaskOut:
+    """创建异步抽取任务（run_after 为空即调度器尽快执行）。"""
+    task = create_task(
+        session,
+        payload.mapping_revision_id,
+        payload.datasource_id,
+        payload.namespace,
+        incremental=payload.incremental,
+        run_after=payload.run_after,
+    )
+    session.commit()
+    return _task_out(task)
+
+
+def _task_out(task: object) -> ExtractionTaskOut:
+    data = ExtractionTaskOut.model_validate(task)
+    if data.status == "RUNNING":
+        live = live_progress(data.id)
+        if live is not None:
+            data = data.model_copy(update={"progress": live})
+    return data
+
+
+@router.get("/tasks", response_model=ApiResponse[list[ExtractionTaskOut]])
+def list_extraction_tasks(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[ExtractionTaskOut]:
+    items, _total = list_tasks(session, page, page_size)
+    return [_task_out(item) for item in items]
+
+
+@router.get("/tasks/{task_id}", response_model=ApiResponse[ExtractionTaskOut])
+def get_extraction_task(
+    task_id: int, session: Session = Depends(get_session)
+) -> ExtractionTaskOut:
+    return _task_out(get_task(session, task_id))
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=ApiResponse[ExtractionTaskOut])
+def cancel_extraction_task(
+    task_id: int, session: Session = Depends(get_session)
+) -> ExtractionTaskOut:
+    """取消任务：PENDING 直接取消；RUNNING 在阶段边界协作生效。"""
+    task = cancel_task(session, task_id)
+    session.commit()
+    return _task_out(task)
 
 
 @router.get("/runs", response_model=ApiResponse[list[ExtractionRunOut]])

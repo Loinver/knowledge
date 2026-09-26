@@ -113,6 +113,32 @@ class QuarantineOut(BaseModel):
     created_at: datetime
 
 
+class TaskCreateRequest(BaseModel):
+    mapping_revision_id: int
+    datasource_id: int
+    namespace: str = "https://example.org/kg/"
+    incremental: bool = False
+    run_after: datetime | None = None
+
+
+class ExtractionTaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    mapping_revision_id: int
+    datasource_id: int
+    namespace: str
+    status: str
+    run_id: int | None
+    incremental: bool
+    run_after: datetime | None
+    progress: dict
+    watermark: dict | None
+    error: str | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
 class RunStartRequest(BaseModel):
     mapping_revision_id: int
     datasource_id: int

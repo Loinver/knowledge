@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { NAlert, NButton, NEmpty, NSelect, NSpin, useMessage } from 'naive-ui'
+import {
+  NAlert,
+  NButton,
+  NDrawer,
+  NDrawerContent,
+  NEmpty,
+  NSelect,
+  NSpin,
+  useMessage,
+} from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,6 +24,7 @@ import { relationsApi } from '@/api/relations'
 import type { ValidationReport, ValidationResultItem } from '@/api/validation'
 import { validationApi } from '@/api/validation'
 import { useApiError } from '@/composables/useApiError'
+import AiSuggestions from '@/views/ontology/components/AiSuggestions.vue'
 
 const { t, te, locale } = useI18n()
 const message = useMessage()
@@ -62,6 +72,7 @@ const validationResults = ref<ValidationResultItem[]>([])
 const validating = ref(false)
 const validationError = ref('')
 const showValidation = ref(false)
+const showAi = ref(false)
 
 const canvasEl = ref<HTMLElement | null>(null)
 const worldEl = ref<HTMLElement | null>(null)
@@ -956,6 +967,9 @@ onBeforeUnmount(() => {
       >
         {{ t('designer.runValidation') }}
       </NButton>
+      <NButton size="small" :disabled="ontologyId === null" @click="showAi = true">
+        {{ t('designer.aiAssist') }}
+      </NButton>
       <NButton size="small" type="primary" :disabled="!canEdit" @click="publish">
         {{ t('common.publish') }}
       </NButton>
@@ -1289,6 +1303,18 @@ onBeforeUnmount(() => {
         <div v-else class="inspect-empty">{{ t('designer.selectNode') }}</div>
       </aside>
     </div>
+    <!-- AI 补全建议（V-DS-05）：逐条人工确认后才写入草稿资源 -->
+    <NDrawer v-model:show="showAi" :width="460" placement="right">
+      <NDrawerContent :title="t('designer.aiAssist')" closable>
+        <AiSuggestions
+          v-if="ontologyId !== null"
+          kind="ONTOLOGY_COMPLETION"
+          :title="t('designer.aiAssist')"
+          :target-id="ontologyId"
+          @applied="() => void loadCatalog()"
+        />
+      </NDrawerContent>
+    </NDrawer>
   </section>
 </template>
 

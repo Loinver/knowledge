@@ -269,6 +269,7 @@ def _em_to_dict(em: EntityMapCreate) -> dict:
         "field_maps": [fm.model_dump() for fm in em.field_maps],
         "key_fields": em.key_fields,
         "match_keys": em.match_keys,
+        "incremental_field": em.incremental_field,
     }
 
 

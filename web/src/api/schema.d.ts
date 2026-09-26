@@ -1188,6 +1188,64 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/extraction/tasks': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Extraction Tasks */
+    get: operations['list_extraction_tasks_api_v1_extraction_tasks_get']
+    put?: never
+    /**
+     * Create Extraction Task
+     * @description 创建异步抽取任务（run_after 为空即调度器尽快执行）。
+     */
+    post: operations['create_extraction_task_api_v1_extraction_tasks_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/tasks/{task_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Extraction Task */
+    get: operations['get_extraction_task_api_v1_extraction_tasks__task_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/tasks/{task_id}/cancel': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Cancel Extraction Task
+     * @description 取消任务：PENDING 直接取消；RUNNING 在阶段边界协作生效。
+     */
+    post: operations['cancel_extraction_task_api_v1_extraction_tasks__task_id__cancel_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/extraction/runs/{run_id}': {
     parameters: {
       query?: never
@@ -1575,6 +1633,134 @@ export interface paths {
     post?: never
     /** Delete View Template */
     delete: operations['delete_view_template_api_v1_view_templates__template_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/ontologies/{ontology_id}/suggest-completion': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suggest Completion
+     * @description 为草稿类型建议缺失的双语标签/定义（仅草稿资源）。
+     */
+    post: operations['suggest_completion_api_v1_ai_ontologies__ontology_id__suggest_completion_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/mappings/{mapping_id}/suggest-mapping': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Suggest Mapping Route
+     * @description 按源表结构与本体类型建议字段映射（应用到映射草稿）。
+     */
+    post: operations['suggest_mapping_route_api_v1_ai_mappings__mapping_id__suggest_mapping_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/documents/extract': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Extract Facts
+     * @description 从文本抽取候选事实（仅审阅；应用不落库）。
+     */
+    post: operations['extract_facts_api_v1_ai_documents_extract_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/suggestions': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List All Suggestions */
+    get: operations['list_all_suggestions_api_v1_ai_suggestions_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/suggestions/{suggestion_id}/apply': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Apply One */
+    post: operations['apply_one_api_v1_ai_suggestions__suggestion_id__apply_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/suggestions/{suggestion_id}/discard': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Discard One */
+    post: operations['discard_one_api_v1_ai_suggestions__suggestion_id__discard_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ai/suggestions/{suggestion_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get One */
+    get: operations['get_one_api_v1_ai_suggestions__suggestion_id__get']
+    put?: never
+    post?: never
+    delete?: never
     options?: never
     head?: never
     patch?: never
@@ -2019,6 +2205,49 @@ export interface paths {
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** AiSuggestionOut */
+    AiSuggestionOut: {
+      /** Id */
+      id: number
+      /** Kind */
+      kind: string
+      /** Target Id */
+      target_id: number
+      /** Status */
+      status: string
+      /** Title */
+      title: string
+      /** Payload */
+      payload: {
+        [key: string]: unknown
+      }
+      /** Explanation */
+      explanation: string
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+      /** Resolved At */
+      resolved_at: string | null
+    }
+    /** ApiResponse[AiSuggestionOut] */
+    ApiResponse_AiSuggestionOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['AiSuggestionOut'] | null
+    }
     /** ApiResponse[AuditLogPage] */
     ApiResponse_AuditLogPage_: {
       /**
@@ -2307,6 +2536,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['ExtractionRunOut'] | null
+    }
+    /** ApiResponse[ExtractionTaskOut] */
+    ApiResponse_ExtractionTaskOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['ExtractionTaskOut'] | null
     }
     /** ApiResponse[FactTraceOut] */
     ApiResponse_FactTraceOut_: {
@@ -3093,6 +3339,26 @@ export interface components {
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['ViewTemplatePage'] | null
     }
+    /** ApiResponse[list[AiSuggestionOut]] */
+    ApiResponse_list_AiSuggestionOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['AiSuggestionOut'][] | null
+    }
     /** ApiResponse[list[ConflictInfo]] */
     ApiResponse_list_ConflictInfo__: {
       /**
@@ -3272,6 +3538,26 @@ export interface components {
        * @description 业务数据；无数据时为 null
        */
       data?: components['schemas']['ExtractionRunOut'][] | null
+    }
+    /** ApiResponse[list[ExtractionTaskOut]] */
+    ApiResponse_list_ExtractionTaskOut__: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /**
+       * Data
+       * @description 业务数据；无数据时为 null
+       */
+      data?: components['schemas']['ExtractionTaskOut'][] | null
     }
     /** ApiResponse[list[FactEvidenceOut]] */
     ApiResponse_list_FactEvidenceOut__: {
@@ -3924,6 +4210,13 @@ export interface components {
       /** Object */
       object: string
     }
+    /** DocumentExtractRequest */
+    DocumentExtractRequest: {
+      /** Ontology Id */
+      ontology_id: number
+      /** Text */
+      text: string
+    }
     /** DomainBrief */
     DomainBrief: {
       /** Id */
@@ -4119,6 +4412,8 @@ export interface components {
        * @default []
        */
       match_keys: string[]
+      /** Incremental Field */
+      incremental_field?: string | null
     }
     /** EntityPage */
     EntityPage: {
@@ -4485,6 +4780,44 @@ export interface components {
        * Format: date-time
        */
       started_at: string
+      /** Finished At */
+      finished_at: string | null
+    }
+    /** ExtractionTaskOut */
+    ExtractionTaskOut: {
+      /** Id */
+      id: number
+      /** Mapping Revision Id */
+      mapping_revision_id: number
+      /** Datasource Id */
+      datasource_id: number
+      /** Namespace */
+      namespace: string
+      /** Status */
+      status: string
+      /** Run Id */
+      run_id: number | null
+      /** Incremental */
+      incremental: boolean
+      /** Run After */
+      run_after: string | null
+      /** Progress */
+      progress: {
+        [key: string]: unknown
+      }
+      /** Watermark */
+      watermark: {
+        [key: string]: unknown
+      } | null
+      /** Error */
+      error: string | null
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+      /** Started At */
+      started_at: string | null
       /** Finished At */
       finished_at: string | null
     }
@@ -6004,6 +6337,25 @@ export interface components {
       table: string
       /** References */
       references: components['schemas']['ReferenceItem'][]
+    }
+    /** TaskCreateRequest */
+    TaskCreateRequest: {
+      /** Mapping Revision Id */
+      mapping_revision_id: number
+      /** Datasource Id */
+      datasource_id: number
+      /**
+       * Namespace
+       * @default https://example.org/kg/
+       */
+      namespace: string
+      /**
+       * Incremental
+       * @default false
+       */
+      incremental: boolean
+      /** Run After */
+      run_after?: string | null
     }
     /** TemplateCreate */
     TemplateCreate: {
@@ -9553,6 +9905,133 @@ export interface operations {
       }
     }
   }
+  list_extraction_tasks_api_v1_extraction_tasks_get: {
+    parameters: {
+      query?: {
+        page?: number
+        page_size?: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_ExtractionTaskOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  create_extraction_task_api_v1_extraction_tasks_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TaskCreateRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ExtractionTaskOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_extraction_task_api_v1_extraction_tasks__task_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        task_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ExtractionTaskOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  cancel_extraction_task_api_v1_extraction_tasks__task_id__cancel_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        task_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ExtractionTaskOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   get_one_run_api_v1_extraction_runs__run_id__get: {
     parameters: {
       query?: never
@@ -10280,6 +10759,228 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  suggest_completion_api_v1_ai_ontologies__ontology_id__suggest_completion_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_AiSuggestionOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  suggest_mapping_route_api_v1_ai_mappings__mapping_id__suggest_mapping_post: {
+    parameters: {
+      query: {
+        datasource_id: number
+      }
+      header?: never
+      path: {
+        mapping_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_AiSuggestionOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  extract_facts_api_v1_ai_documents_extract_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DocumentExtractRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_AiSuggestionOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_all_suggestions_api_v1_ai_suggestions_get: {
+    parameters: {
+      query?: {
+        kind?: string | null
+        status?: string | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_AiSuggestionOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  apply_one_api_v1_ai_suggestions__suggestion_id__apply_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        suggestion_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_AiSuggestionOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  discard_one_api_v1_ai_suggestions__suggestion_id__discard_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        suggestion_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_AiSuggestionOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_one_api_v1_ai_suggestions__suggestion_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        suggestion_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_AiSuggestionOut_']
         }
       }
       /** @description Validation Error */

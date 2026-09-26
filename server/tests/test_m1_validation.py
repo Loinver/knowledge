@@ -25,6 +25,7 @@ from app.models.validation import ValidationReport, ValidationResult
 from app.schemas.ontology import OntologyCreate, OntologyRefAdd
 from app.schemas.type import EntityTypeCreate
 from app.semantics.backend import SemanticBackend
+from app.semantics.backend import ValidationReport as SemanticValidationReport
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -93,17 +94,19 @@ def test_validation_all_pass_for_clean_ontology(session, published_type):
     assert by_code["A05"] == ValidationState.NA
     assert by_code["A06"] == ValidationState.NA
     assert by_code["A07"] == ValidationState.PASS
-    assert by_code["A08"] == ValidationState.NOT_RUN
+    # 草稿本体无已发布版本可查 → A08 如实 NA（非适用），不是通过
+    assert by_code["A08"] == ValidationState.NA
     assert report.summary["pass"] == 5
     assert report.summary["violation"] == 0
-    assert report.summary["na"] == 2
-    assert report.summary["not_run"] == 1
+    assert report.summary["na"] == 3
+    assert report.summary["not_run"] == 0
 
 
 def test_a08_not_run_never_pass(session, published_type):
-    """A08 未接完整推理器 → NOT_RUN，绝不被当 PASS。"""
+    """已发布本体但无推理器 → A08 NOT_RUN，绝不被当 PASS。"""
     onto = _make_ontology(session)
     add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    publish_ontology(session, onto)
     session.commit()
     report = run_ontology_validation(session, onto.id)
     session.commit()
@@ -117,7 +120,7 @@ def test_a08_not_run_never_pass(session, published_type):
     assert a08.state is not ValidationState.PASS
 
 
-def test_a08_capability_without_execution_is_still_not_run(
+def test_a08_unpublished_ontology_is_na(
     session: Session, published_type: ModelResource
 ) -> None:
     onto = _make_ontology(session)
@@ -126,8 +129,45 @@ def test_a08_capability_without_execution_is_still_not_run(
     backend.has_full_reasoner.return_value = True
     report = run_ontology_validation(session, onto.id, backend=backend)
     a08 = next(result for result in report.results if result.check_code == "A08")
+    assert a08.state == ValidationState.NA
+    assert a08.message == "ontology not published"
+
+
+def test_a08_runs_real_consistency_check(
+    session: Session, published_type: ModelResource
+) -> None:
+    """A08 在有推理器时真实执行：引擎结论原样进四态，绝不改写。"""
+    onto = _make_ontology(session)
+    add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    publish_ontology(session, onto)
+    session.commit()
+    backend = Mock(spec=SemanticBackend)
+    backend.has_full_reasoner.return_value = True
+    backend.check_consistency.return_value = SemanticValidationReport(
+        state=ValidationState.VIOLATION,
+        conforms=False,
+        results_text="owlrl OWL 2 RL consistency: 1 inconsistency(ies)",
+        raw={"errors": ["Disjoint classes A and B have a common individual i"]},
+    )
+    report = run_ontology_validation(session, onto.id, backend=backend)
+    a08 = next(result for result in report.results if result.check_code == "A08")
+    assert a08.state == ValidationState.VIOLATION
+    assert a08.detail is not None
+    assert "Disjoint classes" in (a08.detail or {}).get("errors", [""])[0]
+    backend.check_consistency.assert_called_once()
+
+
+def test_a08_not_run_without_reasoner(
+    session: Session, published_type: ModelResource
+) -> None:
+    onto = _make_ontology(session)
+    add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
+    publish_ontology(session, onto)
+    session.commit()
+    report = run_ontology_validation(session, onto.id, backend=None)
+    a08 = next(result for result in report.results if result.check_code == "A08")
     assert a08.state == ValidationState.NOT_RUN
-    assert a08.message == "full OWL-DL consistency check not implemented"
+    assert a08.message == "consistency reasoner not available"
 
 
 def test_a02_violation_missing_zh_label(session, ns):

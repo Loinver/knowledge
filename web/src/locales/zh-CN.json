@@ -46,7 +46,8 @@
     "forbiddenHint": "当前账号没有访问该页面的权限，请联系管理员。",
     "backToDashboard": "返回工作台",
     "governanceClauses": "标准条款",
-    "namespaces": "命名空间"
+    "namespaces": "命名空间",
+    "aiAssist": "AI 助手"
   },
   "namespace": {
     "description": "命名空间决定语义资源的 IRI：IRI = 命名空间 IRI + 机读名。建模前至少登记一个；已被资源使用的命名空间不可删除。",
@@ -205,7 +206,8 @@
     "zoomOut": "缩小",
     "zoomIn": "放大",
     "zoomLevel": "缩放 {percent}%",
-    "positionValue": "{x}, {y}"
+    "positionValue": "{x}, {y}",
+    "aiAssist": "AI 补全建议"
   },
   "entityType": {
     "list": "实体类型列表",
@@ -1230,5 +1232,20 @@
       "rowRange": "第 {start}–{end} 行",
       "nullValue": "空"
     }
+  },
+  "ai": {
+    "pageHint": "从粘贴的文本中抽取候选实体与关系事实；所有建议必须人工逐条确认",
+    "generate": "生成建议",
+    "hint": "建议仅为候选，人工确认后才会落库",
+    "empty": "没有新的建议",
+    "applied": "已应用到草稿",
+    "apply": "应用",
+    "discard": "忽略",
+    "datasourceRequired": "请先选择数据源",
+    "documentText": "待抽取文本",
+    "documentPlaceholder": "粘贴合同、公告等文本，AI 将按本体类型抽取候选事实",
+    "documentSuggestions": "文档抽取候选事实（仅审阅，不落库）",
+    "extract": "开始抽取",
+    "mappingTitle": "AI 映射建议"
   }
 }

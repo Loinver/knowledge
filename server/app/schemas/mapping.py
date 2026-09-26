@@ -65,6 +65,8 @@ class EntityMapCreate(BaseModel):
     field_maps: list[FieldMap]
     key_fields: list[str] = []
     match_keys: list[str] = []
+    # 增量水位字段（如 updated_at / 自增 id）：配合异步任务的增量运行过滤
+    incremental_field: str | None = None
 
 
 class RelEndpointCandidate(BaseModel):

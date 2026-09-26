@@ -61,3 +61,17 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
+
+
+@contextmanager
+def bound_scope(factory: sessionmaker) -> Iterator[Session]:
+    """绑定任意引擎工厂的事务上下文（异步任务线程使用）。"""
+    session = factory()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

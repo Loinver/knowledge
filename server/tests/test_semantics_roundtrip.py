@@ -44,9 +44,9 @@ def test_rdflib_backend_satisfies_protocol(backend: RdflibBackend) -> None:
     assert isinstance(backend, SemanticBackend)
 
 
-def test_has_full_reasoner_is_false_for_rdflib(backend: RdflibBackend) -> None:
-    """owlrl 只是最小推理，不是完整 OWL-DL。"""
-    assert backend.has_full_reasoner() is False
+def test_has_full_reasoner_rdflib_has_owlrl(backend: RdflibBackend) -> None:
+    """owlrl 提供 OWL 2 RL 一致性闭包（DL 完整推理仍超出范围）。"""
+    assert backend.has_full_reasoner() is True
 
 
 # ---------------------------------------------------------------------------
@@ -231,22 +231,33 @@ def test_reason_does_not_mutate_original_inferred_only(backend: RdflibBackend) -
 # ---------------------------------------------------------------------------
 
 
-def test_a08_not_run_when_no_full_reasoner(backend: RdflibBackend) -> None:
-    """A08 OWL 一致性：未接完整推理器 → NOT_RUN，绝不能显示成 PASS。
+def test_a08_real_consistency_check(backend: RdflibBackend) -> None:
+    """A08 OWL 一致性：owlrl OWL 2 RL 真实执行，结论原样进四态。
 
-    模拟领域层的判定逻辑：后端 has_full_reasoner()=False 时，
-    A08 一致性检查项必须落 NOT_RUN，且 NOT_RUN 不等于 PASS。
+    引擎结论只允许 PASS/VIOLATION/NOT_RUN，绝不能凭占位逻辑显示 PASS。
     """
+    import pytest as _pytest
+    from app.semantics.backend import ValidationReport
+
     if not backend.has_full_reasoner():
         a08_state = ValidationState.NOT_RUN
     else:
-        # 占位：完整推理器接入后在此调用一致性检查
-        a08_state = ValidationState.PASS
-
-    assert a08_state is ValidationState.NOT_RUN
-    # 四态不失真的核心断言：NOT_RUN 绝不被当 PASS
+        report = backend.check_consistency(
+            """
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix ex: <https://example.org/> .
+ex:A a owl:Class . ex:B a owl:Class . ex:C a owl:Class .
+ex:C rdfs:subClassOf ex:A , ex:B .
+ex:A owl:disjointWith ex:B .
+ex:i1 a ex:C .
+"""
+        )
+        a08_state = report.state
+        assert report.raw["errors"]
+    assert a08_state is ValidationState.VIOLATION
     assert a08_state is not ValidationState.PASS
-    assert a08_state is not ValidationState.VIOLATION
+    _ = _pytest, ValidationReport
 
 
 @pytest.mark.parametrize(

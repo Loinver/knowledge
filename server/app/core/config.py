@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     login_failure_window_seconds: int = Field(default=900, ge=1)
     login_max_failures_per_account: int = Field(default=5, ge=1)
     login_max_failures_per_ip: int = Field(default=30, ge=1)
+    # --- AI 建议（V-DS-05 / V-EX-07，第三批） ---
+    # OpenAI 兼容 chat/completions 端点。不配置即禁用 AI 建议：
+    # 相关接口如实返回 KG.LLM_NOT_CONFIGURED，绝不内置密钥或兜底模拟。
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+    llm_timeout_seconds: float = Field(default=30.0, ge=1)
+
     # 前置反向代理的层数。0 表示直连，忽略 X-Forwarded-For，
     # 否则客户端可以伪造来源地址绕过限流并污染审计。
     trusted_proxy_count: int = Field(default=0, ge=0)
