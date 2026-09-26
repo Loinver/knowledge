@@ -23,6 +23,7 @@ const isolatedEnv = {
   KG_ALLOW_PUBLIC_REGISTRATION: 'true',
   KG_EXPOSE_RESET_TOKEN: 'false',
   KG_PASSWORD_ITERATIONS: '1000',
+  KG_API_PROXY_TARGET: 'http://127.0.0.1:8123',
 }
 
 export default defineConfig({
@@ -34,7 +35,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: 'list',
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://127.0.0.1:5199',
     browserName: 'chromium',
     locale: 'zh-CN',
     viewport: { width: 1440, height: 960 },
@@ -45,18 +46,18 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: './.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000',
+      command: './.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8123',
       cwd: resolve(root, 'server'),
-      url: 'http://127.0.0.1:8000/api/v1/health',
+      url: 'http://127.0.0.1:8123/api/v1/health',
       env: isolatedEnv,
       reuseExistingServer: false,
       timeout: 120_000,
       name: 'isolated API',
     },
     {
-      command: './node_modules/.bin/vite --host 127.0.0.1 --port 5173 --strictPort',
+      command: './node_modules/.bin/vite --host 127.0.0.1 --port 5199 --strictPort',
       cwd: resolve(root, 'web'),
-      url: 'http://127.0.0.1:5173/login',
+      url: 'http://127.0.0.1:5199/login',
       env: isolatedEnv,
       reuseExistingServer: false,
       timeout: 120_000,

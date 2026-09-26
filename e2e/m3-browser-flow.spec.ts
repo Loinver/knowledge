@@ -235,7 +235,7 @@ async function createSourceThroughUI(page: Page, sourcePath: string): Promise<nu
   await modal.getByLabel('名称').fill('E2E 样例源')
   await modal.getByLabel('数据库').fill(sourcePath)
   await modal.getByRole('button', { name: '测试连接' }).click()
-  await expect(modal.getByText(/发现 6 张表/)).toBeVisible()
+  await expect(modal.getByText(/发现 17 张表/)).toBeVisible()
   await modal.getByRole('button', { name: '保存' }).click()
   await expect(modal).not.toBeVisible()
   await expect(page.getByText('E2E 样例源', { exact: true })).toBeVisible()
@@ -275,7 +275,7 @@ async function chooseMappingAndRunThroughUI(page: Page, mappingName: string): Pr
   const sourceSelect = page.locator('.datasource-form .n-base-selection').first()
   await sourceSelect.click()
   await page.getByText('E2E 样例源 · sqlite', { exact: true }).click()
-  await expect(page.locator('.catalog-summary')).toContainText('6')
+  await expect(page.locator('.catalog-summary')).toContainText('17')
 
   await page.locator('.mapping-picker .n-base-selection').click()
   await page.getByText(mappingName + ' · 草稿', { exact: true }).click()
@@ -524,9 +524,110 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   )
   await expect(page.getByRole('cell', { name: 'hr_employee' }).first()).toBeVisible()
 
+  // ===== 第二批验收：命名空间登记 UI / 数据规则 UI / 图谱形态 / 证据链与反查 =====
+
+  // 全程界面第 1 步：命名空间管理页登记（空库也能在界面建模的第一入口）
+  await page.goto('/ontology/namespaces')
+  await page.getByRole('button', { name: '登记命名空间' }).first().click()
+  const nsDialog = page.getByRole('dialog')
+  await nsDialog.getByPlaceholder('kg', { exact: true }).fill('e2eforms')
+  await nsDialog
+    .getByPlaceholder('https://example.org/kg#', { exact: true })
+    .fill('https://example.org/e2eforms/')
+  await nsDialog.getByPlaceholder('请输入').nth(0).fill('端到端形态')
+  await nsDialog.getByPlaceholder('请输入').nth(1).fill('E2E forms')
+  await nsDialog.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByRole('cell', { name: 'e2eforms', exact: true })).toBeVisible()
+
+  // 规则页 UI：新建数据规则（DATA 语言 + JSON 表达式，正反例可空）
+  await page.goto('/governance/rules')
+  await page.getByRole('button', { name: '新建规则' }).click()
+  const ruleDrawer = page.locator('.n-drawer').filter({ hasText: '新建规则' })
+  await ruleDrawer.getByLabel('规则标识').fill('E2E_UNIQUE_CREDIT')
+  await ruleDrawer.getByLabel('分类').fill('scene')
+  await ruleDrawer.getByLabel('中文标签').fill('信用代码唯一')
+  await ruleDrawer.getByLabel('英文标签').fill('Unique credit code')
+  await ruleDrawer.getByLabel('来源依据').fill('E2E-POLICY-01')
+  await ruleDrawer.getByLabel('作用类型 IRI').fill('https://example.org/e2e/E2EEnterprise')
+  await ruleDrawer.locator('.n-tabs-tab').filter({ hasText: '表达式' }).click()
+  const languageSelect = ruleDrawer
+    .locator('.n-form-item')
+    .filter({ hasText: '表达语言' })
+    .locator('.n-select')
+  await languageSelect.click()
+  await page.locator('.n-base-select-option').filter({ hasText: '数据规则' }).click()
+  await ruleDrawer
+    .locator('.code-input textarea')
+    .first()
+    .fill('{"op": "unique_attr", "type": "E2EEnterprise", "attr": "name"}')
+  await ruleDrawer.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByText('规则已保存')).toBeVisible()
+  await page.locator('.n-drawer-header__close').click()
+  await expect(page.getByRole('cell', { name: 'E2E_UNIQUE_CREDIT' })).toBeVisible()
+
+  // 图谱形态选择器 + 推荐条
+  const linkedFact = firstTriples.find((fact) => fact.subject !== fact.object_)
+  expect(linkedFact, 'sample data contains at least one cross-entity fact').toBeTruthy()
+  await page.goto('/graph?graph=' + firstGraph!.id + '&layout=org_tree')
+  await expect(page.locator('svg .node').first()).toBeVisible()
+  await expect(page.getByText('形态', { exact: true })).toBeVisible()
+  await expect(page.getByText('推荐形态：')).toBeVisible()
+  await page.goto('/graph?graph=' + firstGraph!.id + '&layout=force')
+  await expect(page.locator('svg .node').first()).toBeVisible()
+
+  // 关系路径抽屉（G-12）：沿样例事实的端点找最短路径
+  await page.getByRole('button', { name: '关系路径' }).click()
+  const pathDrawer = page.locator('.n-drawer').filter({ hasText: '起点 IRI' })
+  await pathDrawer.getByLabel('起点 IRI').fill(linkedFact!.subject)
+  await pathDrawer.getByLabel('终点 IRI').fill(linkedFact!.object_)
+  await pathDrawer.getByRole('button', { name: '查找路径' }).click()
+  await expect(pathDrawer.getByText(/找到最短路径|未在最大跳数内找到路径/)).toBeVisible()
+  await pathDrawer.locator('.n-drawer-header__close').click()
+
+  // 版本差异抽屉（G-24）：firstGraph vs partial
+  await page.getByRole('button', { name: '版本差异' }).click()
+  const diffDrawer = page.locator('.n-drawer').filter({ hasText: '基准结果集' })
+  await diffDrawer.getByRole('textbox', { name: '基准结果集' }).fill(String(firstGraph!.id))
+  await diffDrawer
+    .getByRole('textbox', { name: '目标结果集' })
+    .fill(String(partial.graph_revision.id))
+  await diffDrawer.getByRole('button', { name: '计算差异' }).click()
+  await expect(diffDrawer.getByText(/实体 \+\d+\/−\d+，事实 \+\d+\/−\d+/)).toBeVisible()
+  await diffDrawer.locator('.n-drawer-header__close').click()
+
+  // 质量叠加（G-28）：PARTIAL 结果集的隔离命中节点带标记
+  await page.goto('/graph?graph=' + partial.graph_revision.id)
+  await page.getByText('质量叠加').click()
+  await expect(page.locator('svg .quality-flag').first()).toBeVisible()
+
+  // 导出菜单存在且可选
+  await page.getByRole('button', { name: '导出' }).click()
+  await expect(page.getByText('导出节点 CSV')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // 证据冻结链（G-26）：事实 → 来源行 → 运行 → 冻结版本
+  await page.goto(
+    '/graph/evidence?mode=entity&graph=' +
+      firstGraph!.id +
+      '&iri=' +
+      encodeURIComponent(employee!.iri),
+  )
+  await page.getByRole('button', { name: '查看链' }).first().click()
+  await expect(page.getByText('冻结本体版本')).toBeVisible()
+
+  // 反向追溯（V-TR-05）：来源行 → 产出实体
+  await page.goto('/graph/evidence?graph=' + firstGraph!.id)
+  await page.getByText('按来源行反查').click()
+  await page.getByLabel('数据源 ID').fill(String(datasourceId))
+  await page.getByLabel('来源表').fill('hr_employee')
+  await page.getByLabel('来源行键').fill('8001')
+  await page.getByRole('button', { name: '追溯证据' }).click()
+  await expect(page.getByText(/参与 \d+ 条事实、产出 \d+ 个实体/)).toBeVisible()
+
   const routes = [
     { path: '/', pageHeader: true },
     { path: '/ontology/entity-types', pageHeader: true },
+    { path: '/ontology/namespaces', pageHeader: true },
     { path: '/ontology/entity-types/' + ontology.entityTypes.E2EEmployee.id, pageHeader: true },
     { path: '/ontology/relation-types', pageHeader: true },
     { path: '/ontology/domains', pageHeader: true },
