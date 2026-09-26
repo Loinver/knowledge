@@ -440,6 +440,436 @@ const schema: LayoutPlugin = {
   },
 }
 
+// ===== 第三批增强形态（P1/P2） =====
+
+function layeredHorizontal(
+  levels: { level: Map<string, number>; order: Map<string, number> },
+  graph: Pick<GraphView, 'nodes' | 'edges'>,
+): LayoutResult {
+  const { level, order } = levels
+  const perLevel = new Map<number, PositionedNode[]>()
+  for (const node of graph.nodes) {
+    const lv = level.get(node.iri) ?? 0
+    const index = order.get(node.iri) ?? 0
+    perLevel.set(lv, [
+      ...(perLevel.get(lv) ?? []),
+      { ...node, x: 120 + lv * 190, y: 80 + index * 120 },
+    ])
+  }
+  const maxLevel = Math.max(0, ...perLevel.keys())
+  const maxRow = Math.max(1, ...[...perLevel.values()].map((nodes) => nodes.length))
+  return {
+    width: Math.max(900, 260 + maxLevel * 190),
+    height: Math.max(480, 160 + maxRow * 120),
+    groups: [],
+    nodes: [...perLevel.values()].flat(),
+    edgePaths: {},
+  }
+}
+
+/** G-08 集团族谱：横向控股树（层沿横轴、成员沿纵轴）。 */
+const clanTree: LayoutPlugin = {
+  id: 'clan_tree',
+  compute: (graph) => {
+    const levels = assignLevels(graph)
+    return levels ? layeredHorizontal(levels, graph) : gridLayout(graph.nodes)
+  },
+}
+
+/** G-13 二部图：按边的方向把节点分到左右两列（通用二部布局）。 */
+const bipartite: LayoutPlugin = {
+  id: 'bipartite',
+  compute: (graph) => supplyChain.compute(graph),
+}
+
+/** 环检测（G-09）：DFS 找出环上实体，置于中心环，其余实体网格排布。 */
+function findCycleNodes(nodes: GraphViewNode[], edges: GraphViewEdge[]): Set<string> {
+  const iris = new Set(nodes.map((node) => node.iri))
+  const adj = new Map<string, string[]>()
+  for (const edge of edges) {
+    if (!iris.has(edge.subject) || !iris.has(edge.object_)) continue
+    adj.set(edge.subject, [...(adj.get(edge.subject) ?? []), edge.object_])
+  }
+  const color = new Map<string, number>()
+  const onStack = new Set<string>()
+  const inCycle = new Set<string>()
+  const visit = (node: string) => {
+    color.set(node, 1)
+    onStack.add(node)
+    for (const next of adj.get(node) ?? []) {
+      if (onStack.has(next)) {
+        inCycle.add(next)
+        inCycle.add(node)
+      } else if (!color.get(next)) {
+        visit(next)
+      }
+    }
+    onStack.delete(node)
+    color.set(node, 2)
+  }
+  for (const node of iris) if (!color.get(node)) visit(node)
+  return inCycle
+}
+
+/** G-09 环路检测视图：环上实体内环居中，环外实体外圈网格。 */
+const cycleView: LayoutPlugin = {
+  id: 'cycle_view',
+  compute: (graph) => {
+    const cycleNodes = findCycleNodes(graph.nodes, graph.edges)
+    const onCycle = graph.nodes.filter((node) => cycleNodes.has(node.iri))
+    const offCycle = graph.nodes.filter((node) => !cycleNodes.has(node.iri))
+    const radius = 150
+    const center = 480
+    const ringNodes = onCycle.map((node, index) => {
+      const angle = (2 * Math.PI * index) / onCycle.length - Math.PI / 2
+      return { ...node, x: center + Math.cos(angle) * radius, y: 330 + Math.sin(angle) * radius }
+    })
+    const rest = gridLayout(offCycle)
+    const shifted = rest.nodes.map((node) => ({ ...node, x: node.x + 900 }))
+    return {
+      width: Math.max(1400, 900 + rest.width),
+      height: Math.max(660, rest.height),
+      groups: rest.groups.map((group) => ({ ...group, nodes: [] })),
+      nodes: [...ringNodes, ...shifted],
+      edgePaths: {},
+    }
+  },
+}
+
+/** 连通分量（无向）：社区划分基础。 */
+function components(nodes: GraphViewNode[], edges: GraphViewEdge[]): GraphViewNode[][] {
+  const adj = new Map<string, string[]>()
+  for (const edge of edges) {
+    adj.set(edge.subject, [...(adj.get(edge.subject) ?? []), edge.object_])
+    adj.set(edge.object_, [...(adj.get(edge.object_) ?? []), edge.subject])
+  }
+  const seen = new Set<string>()
+  const out: GraphViewNode[][] = []
+  for (const node of nodes) {
+    if (seen.has(node.iri)) continue
+    const members: GraphViewNode[] = []
+    const queue = [node.iri]
+    seen.add(node.iri)
+    while (queue.length) {
+      const current = queue.shift()!
+      const self = nodes.find((item) => item.iri === current)
+      if (self) members.push(self)
+      for (const next of adj.get(current) ?? []) {
+        if (!seen.has(next)) {
+          seen.add(next)
+          queue.push(next)
+        }
+      }
+    }
+    out.push(members)
+  }
+  return out.sort((a, b) => b.length - a.length)
+}
+
+/** G-14 社区聚类：连通分量分块排布，块间留白，最大块在前。 */
+const community: LayoutPlugin = {
+  id: 'community',
+  compute: (graph) => {
+    const groups = components(graph.nodes, graph.edges)
+    const placed: PositionedNode[] = []
+    let blockX = 60
+    let blockY = 60
+    let rowHeight = 0
+    let index = 0
+    for (const members of groups) {
+      const cols = Math.min(4, members.length)
+      const blockWidth = cols * 215
+      if (blockX + blockWidth > 1560 && blockX > 60) {
+        blockX = 60
+        blockY += rowHeight + 150
+        rowHeight = 0
+      }
+      members.forEach((node, i) => {
+        placed.push({
+          ...node,
+          x: blockX + 115 + (i % cols) * 215,
+          y: blockY + 55 + Math.floor(i / cols) * 110,
+        })
+      })
+      rowHeight = Math.max(rowHeight, Math.ceil(members.length / cols) * 110)
+      blockX += blockWidth + 120
+      index += 1
+    }
+    void index
+    return {
+      width: 1620,
+      height: Math.max(480, blockY + rowHeight + 140),
+      groups: [],
+      nodes: placed,
+      edgePaths: {},
+    }
+  },
+}
+
+/** G-15 多方关系：高度数枢纽居中内环，邻居按枢纽分布外环。 */
+const nary: LayoutPlugin = {
+  id: 'nary',
+  compute: (graph) => {
+    const degree = new Map<string, number>()
+    for (const edge of graph.edges) {
+      degree.set(edge.subject, (degree.get(edge.subject) ?? 0) + 1)
+      degree.set(edge.object_, (degree.get(edge.object_) ?? 0) + 1)
+    }
+    const sorted = [...graph.nodes].sort(
+      (a, b) => (degree.get(b.iri) ?? 0) - (degree.get(a.iri) ?? 0),
+    )
+    const hubs = sorted.slice(0, Math.max(1, Math.ceil(graph.nodes.length / 6)))
+    const hubSet = new Set(hubs.map((node) => node.iri))
+    const spokes = sorted.filter((node) => !hubSet.has(node.iri))
+    const hubPlaced = hubs.map((node, index) => {
+      const angle = (2 * Math.PI * index) / hubs.length - Math.PI / 2
+      return { ...node, x: 480 + Math.cos(angle) * 110, y: 330 + Math.sin(angle) * 110 }
+    })
+    const byHub = new Map<string, GraphViewNode[]>()
+    for (const node of spokes) {
+      const hub =
+        graph.edges.find(
+          (edge) =>
+            (edge.subject === node.iri && hubSet.has(edge.object_)) ||
+            (edge.object_ === node.iri && hubSet.has(edge.subject)),
+        ) ?? null
+      const key = hub ? (hubSet.has(hub.subject) ? hub.subject : hub.object_) : '_free'
+      byHub.set(key, [...(byHub.get(key) ?? []), node])
+    }
+    const outer: PositionedNode[] = []
+    for (const [hubIri, members] of byHub) {
+      const hub = hubPlaced.find((node) => node.iri === hubIri)
+      const anchorX = hub ? hub.x : 880
+      const anchorY = hub ? hub.y : 120
+      members.forEach((node, index) => {
+        const angle = (2 * Math.PI * index) / members.length + Math.abs(anchorX) * 0.001
+        outer.push({
+          ...node,
+          x: Math.max(90, Math.min(1500, anchorX + Math.cos(angle) * 300)),
+          y: Math.max(50, Math.min(640, anchorY + Math.sin(angle) * 260)),
+        })
+      })
+    }
+    return { width: 1560, height: 680, groups: [], nodes: [...hubPlaced, ...outer], edgePaths: {} }
+  },
+}
+
+/** 类型级聚合图（G-18/G-19 公共基础）。 */
+function typeGraph(graph: Pick<GraphView, 'nodes' | 'edges'>): {
+  nodes: GraphViewNode[]
+  edges: GraphViewEdge[]
+} {
+  const byType = new Map<string, GraphViewNode[]>()
+  for (const node of graph.nodes) {
+    byType.set(node.type_iri, [...(byType.get(node.type_iri) ?? []), node])
+  }
+  const typeOf = new Map(graph.nodes.map((node) => [node.iri, node.type_iri] as const))
+  const seen = new Set<string>()
+  const edges: GraphViewEdge[] = []
+  for (const edge of graph.edges) {
+    const st = typeOf.get(edge.subject)
+    const ot = typeOf.get(edge.object_)
+    if (!st || !ot) continue
+    const key = `${st}|${edge.predicate}|${ot}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    edges.push({ ...edge, subject: st, object_: ot })
+  }
+  for (const edge of edges) {
+    edge.props = {
+      count: graph.edges.filter(
+        (item) =>
+          item.predicate === edge.predicate &&
+          typeOf.get(item.subject) === edge.subject &&
+          typeOf.get(item.object_) === edge.object_,
+      ).length,
+    }
+  }
+  const nodes: GraphViewNode[] = [...byType.entries()].map(([type, members]) => ({
+    ...members[0]!,
+    iri: type,
+    type_iri: type,
+    row_key: String(members.length),
+    attrs: {
+      name: type.split(/[/#]/).filter(Boolean).at(-1) || type,
+      __typeCount__: members.length,
+    },
+    distance: 0,
+  }))
+  return { nodes, edges }
+}
+
+/** G-18 桑基（类型级流向）：类型分层排布，边宽以 count 标注。 */
+const sankey: LayoutPlugin = {
+  id: 'sankey',
+  compute: (graph) => {
+    const aggregated = typeGraph(graph)
+    const levels = assignLevels(aggregated)
+    return levels ? layeredResult(levels, aggregated) : gridLayout(aggregated.nodes)
+  },
+}
+
+/** G-19 弦图（类型级圆周）：类型节点圆周分布，边带实例计数。 */
+const chord: LayoutPlugin = {
+  id: 'chord',
+  compute: (graph) => {
+    const aggregated = typeGraph(graph)
+    const size = 760
+    return {
+      width: size,
+      height: size,
+      groups: [],
+      nodes: aggregated.nodes.map((node, index) => {
+        const angle = (2 * Math.PI * index) / aggregated.nodes.length - Math.PI / 2
+        return {
+          ...node,
+          x: size / 2 + Math.cos(angle) * (size / 2 - 130),
+          y: size / 2 + Math.sin(angle) * (size / 2 - 130),
+        }
+      }),
+      edgePaths: {},
+    }
+  },
+}
+
+const REGION_KEYS = ['region', 'province', 'city', 'address', 'location', '地区', '城市', '地址']
+
+function regionOf(attrs: Record<string, unknown>): string | null {
+  for (const key of REGION_KEYS) {
+    const value = attrs[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+/** G-25 地理分布：按区域属性聚块（无地图瓦片，区域名标注在块首节点）；无区域属性退化网格。 */
+const geo: LayoutPlugin = {
+  id: 'geo',
+  compute: (graph) => {
+    const buckets = new Map<string, GraphViewNode[]>()
+    let hasRegion = false
+    for (const node of graph.nodes) {
+      const region = regionOf(node.attrs)
+      if (region === null) continue
+      hasRegion = true
+      buckets.set(region, [...(buckets.get(region) ?? []), node])
+    }
+    if (!hasRegion) return gridLayout(graph.nodes)
+    const regionless = graph.nodes.filter((node) => regionOf(node.attrs) === null)
+    const placed: PositionedNode[] = []
+    let blockX = 60
+    let blockY = 60
+    let rowHeight = 0
+    for (const [region, members] of [...buckets.entries()].sort(
+      (a, b) => b[1].length - a[1].length,
+    )) {
+      const cols = Math.min(4, members.length)
+      const blockWidth = cols * 215
+      if (blockX + blockWidth > 1560 && blockX > 60) {
+        blockX = 60
+        blockY += rowHeight + 190
+        rowHeight = 0
+      }
+      members.forEach((node, i) => {
+        placed.push({
+          ...node,
+          x: blockX + 115 + (i % cols) * 215,
+          y: blockY + 95 + Math.floor(i / cols) * 110,
+        })
+      })
+      if (placed.length) {
+        const first = placed[placed.length - members.length]!
+        placed[placed.length - members.length] = {
+          ...first,
+          attrs: { ...first.attrs, __region__: region },
+        }
+      }
+      rowHeight = Math.max(rowHeight, Math.ceil(members.length / cols) * 110 + 80)
+      blockX += blockWidth + 120
+    }
+    // 无区域属性的节点排在收尾块，绝不静默丢弃
+    if (regionless.length) {
+      const cols = Math.min(4, regionless.length)
+      regionless.forEach((node, i) => {
+        placed.push({
+          ...node,
+          x: blockX + 115 + (i % cols) * 215,
+          y: blockY + 95 + Math.floor(i / cols) * 110,
+        })
+      })
+    }
+    return {
+      width: 1620,
+      height: Math.max(480, blockY + rowHeight + 140),
+      groups: [],
+      nodes: placed,
+      edgePaths: {},
+    }
+  },
+}
+
+/**
+ * G-27 影响面：被依赖者在上的依赖树。
+ * 与组织树相反，这里 subject 是"依赖方上方的被依赖方"——
+ * 即边 (a -> b) 表示 a 依赖 b，b 应在 a 之上，受影响面自上而下展开。
+ */
+function impactParentLinks(
+  nodes: GraphViewNode[],
+  edges: GraphViewEdge[],
+): Map<string, { parent: string; edgeId: number }> {
+  const iris = new Set(nodes.map((node) => node.iri))
+  const parents = new Map<string, { parent: string; edgeId: number }>()
+  for (const edge of edges) {
+    if (!iris.has(edge.subject) || !iris.has(edge.object_)) continue
+    if (edge.subject === edge.object_) continue
+    // 反向：object 是被依赖方（父），subject 是依赖方（子）
+    if (!parents.has(edge.subject)) {
+      parents.set(edge.subject, { parent: edge.object_, edgeId: edge.id })
+    }
+  }
+  return parents
+}
+
+const impact: LayoutPlugin = {
+  id: 'impact',
+  compute: (graph) => {
+    const parents = impactParentLinks(graph.nodes, graph.edges)
+    const rootIris = graph.nodes.filter((node) => !parents.has(node.iri)).map((node) => node.iri)
+    if (!parents.size || !rootIris.length) return gridLayout(graph.nodes)
+    const byIri = new Map(graph.nodes.map((node) => [node.iri, node]))
+    const childrenOf = (iri: string) =>
+      graph.nodes.filter((node) => parents.get(node.iri)?.parent === iri).map((node) => node.iri)
+    const data = hierarchy('__root__', (iri: string) =>
+      iri === '__root__' ? rootIris : childrenOf(iri),
+    )
+    d3tree<string>().nodeSize([NODE_W + 85, 165])(data)
+    const placed: PositionedNode[] = []
+    data.each((item) => {
+      const node = byIri.get(item.data)
+      if (!node) return
+      const px = item.x ?? 0
+      const py = item.y ?? 0
+      placed.push({ ...node, x: px + 140, y: py + 60 })
+    })
+    if (!placed.length) return gridLayout(graph.nodes)
+    const maxBreadth = Math.max(...placed.map((node) => node.x), 0)
+    const maxDepth = Math.max(...placed.map((node) => node.y), 0)
+    const overrides: Record<number, EdgePathOverride> = {}
+    for (const [child, link] of parents) {
+      const source = placed.find((node) => node.iri === child)
+      const target = placed.find((node) => node.iri === link.parent)
+      if (source && target) overrides[link.edgeId] = elbow(target, source)
+    }
+    return {
+      width: Math.max(900, maxBreadth + NODE_W + 200),
+      height: Math.max(480, maxDepth + NODE_H + 130),
+      groups: [],
+      nodes: placed,
+      edgePaths: overrides,
+    }
+  },
+}
+
 export const LAYOUTS: LayoutPlugin[] = [
   typeGrid,
   ring,
@@ -451,6 +881,15 @@ export const LAYOUTS: LayoutPlugin[] = [
   supplyChain,
   timeline,
   schema,
+  clanTree,
+  cycleView,
+  bipartite,
+  community,
+  nary,
+  sankey,
+  chord,
+  geo,
+  impact,
 ]
 
 export const LAYOUT_IDS = LAYOUTS.map((layout) => layout.id)

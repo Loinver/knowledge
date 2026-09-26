@@ -54,9 +54,7 @@ def suggest_mapping_route(
     return [_out(item) for item in items]
 
 
-@router.post(
-    "/documents/extract", response_model=ApiResponse[list[AiSuggestionOut]]
-)
+@router.post("/documents/extract", response_model=ApiResponse[list[AiSuggestionOut]])
 def extract_facts(
     payload: DocumentExtractRequest, session: Session = Depends(get_session)
 ) -> list[AiSuggestionOut]:

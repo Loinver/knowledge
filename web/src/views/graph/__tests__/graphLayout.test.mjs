@@ -57,6 +57,15 @@ test('registry exposes every P0 form id and default fallback by center', () => {
     'supply_chain',
     'timeline',
     'schema',
+    'clan_tree',
+    'cycle_view',
+    'bipartite',
+    'community',
+    'nary',
+    'sankey',
+    'chord',
+    'geo',
+    'impact',
   ])
   assert.equal(resolveLayout(undefined, true).id, 'ring')
   assert.equal(resolveLayout(undefined, false).id, 'type_grid')
@@ -185,4 +194,65 @@ test('self loops remain separate and empty graphs are valid', () => {
   assert.ok(paths.every((path) => path.path.includes(' C ')))
   assert.deepEqual(graphPaths([], []), [])
   assert.deepEqual(layoutOf('ring', []).nodes, [])
+})
+
+test('cycle view isolates cycle members on the inner ring', () => {
+  const nodes = [node('a', 'Ent'), node('b', 'Ent'), node('c', 'Ent'), node('solo', 'Ent')]
+  const edges = [edge(1, 'a', 'b'), edge(2, 'b', 'a'), edge(3, 'solo', 'c')]
+  const layout = layoutOf('cycle_view', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  // 环上两实体靠近中心 (480, 330)；网格块整体右移
+  const ringDist = Math.hypot(byIri.get('a').x - 480, byIri.get('a').y - 330)
+  assert.ok(ringDist < 220)
+  assert.ok(byIri.get('solo').x > 800, '环外节点应落入右侧网格块')
+})
+
+test('community groups connected components into separated blocks', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('far', 'Person')]
+  const edges = [edge(1, 'a', 'b')]
+  const layout = layoutOf('community', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  const pairGap = Math.hypot(
+    byIri.get('a').x - byIri.get('b').x,
+    byIri.get('a').y - byIri.get('b').y,
+  )
+  const crossGap = Math.abs(byIri.get('far').x - byIri.get('a').x)
+  assert.ok(crossGap > pairGap, '不同社区必须比社区内节点更远')
+})
+
+test('impact tree reverses dependency direction', () => {
+  const nodes = [node('root', 'App'), node('lib', 'Module')]
+  const edges = [edge(1, 'lib', 'root')]
+  const layout = layoutOf('impact', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  // 依赖者 lib 排在 root 之下（root 是被依赖的根）
+  assert.ok(byIri.get('lib').y > byIri.get('root').y)
+})
+
+test('geo groups nodes by region attribute and falls back to grid', () => {
+  const nodes = [
+    node('sh', 'Ent', 0, { region: '上海' }),
+    node('sh2', 'Ent', 0, { region: '上海' }),
+    node('bj', 'Ent', 0, { region: '北京' }),
+    node('none', 'Ent'),
+  ]
+  const layout = layoutOf('geo', nodes, [])
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  assert.ok(Math.abs(byIri.get('sh').y - byIri.get('sh2').y) < 1, '同城节点同一行')
+  assert.ok(
+    Math.abs(byIri.get('sh').y - byIri.get('bj').y) > 1 || byIri.get('bj').x !== byIri.get('sh').x,
+  )
+  // 无区域属性节点仍在布局中（退化块）
+  assert.ok(byIri.get('none'))
+})
+
+test('sankey and chord aggregate to type level with counts', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const edges = [edge(1, 'a', 'c'), edge(2, 'b', 'c')]
+  const sankeyLayout = layoutOf('sankey', nodes, edges)
+  assert.equal(sankeyLayout.nodes.length, 2)
+  const chordLayout = layoutOf('chord', nodes, edges)
+  assert.equal(chordLayout.nodes.length, 2)
+  const person = chordLayout.nodes.find((item) => item.iri === 'Person')
+  assert.equal(person.attrs.__typeCount__, 2)
 })

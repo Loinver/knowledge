@@ -17,19 +17,25 @@ _PREFIXES = """
 @prefix ex: <https://example.org/> .
 """
 
-_CONFLICT = _PREFIXES + """
+_CONFLICT = (
+    _PREFIXES
+    + """
 ex:A a owl:Class . ex:B a owl:Class . ex:C a owl:Class .
 ex:C rdfs:subClassOf ex:A , ex:B .
 ex:A owl:disjointWith ex:B .
 ex:i1 a ex:C .
 """
+)
 
-_CLEAN = _PREFIXES + """
+_CLEAN = (
+    _PREFIXES
+    + """
 ex:A a owl:Class . ex:B a owl:Class . ex:C a owl:Class .
 ex:C rdfs:subClassOf ex:A .
 ex:A owl:disjointWith ex:B .
 ex:i1 a ex:C .
 """
+)
 
 
 def test_real_disjoint_conflict_is_violation() -> None:

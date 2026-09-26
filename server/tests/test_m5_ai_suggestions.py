@@ -170,16 +170,18 @@ def test_discard_marks_and_rejects_repeat(session: Session, monkeypatch) -> None
     res = _entity(session, "Person")
     monkeypatch.setattr(llm, "is_configured", lambda: True)
     monkeypatch.setattr(
-        llm, "chat_json", lambda system, user: [
+        llm,
+        "chat_json",
+        lambda system, user: [
             {"resource_id": res.id, "label_zh": "人员", "explanation": ""}
-        ]
+        ],
     )
     items = suggest_ontology_completion(session, _onto_id(session))
     discarded = discard_suggestion(session, items[0].id)
     assert discarded.status == "DISCARDED"
     with pytest.raises(KGError):
         discard_suggestion(session, items[0].id)
-    pending = [item for item in list_suggestions(session, status="PENDING")]
+    pending = list_suggestions(session, status="PENDING")
     assert pending == []
 
 
@@ -217,7 +219,9 @@ def test_document_facts_review_only(session: Session, monkeypatch) -> None:
     with pytest.raises(KGError) as exc_info:
         apply_suggestion(session, items[0].id)
     assert exc_info.value.code is ErrorCode.SUGGESTION_NOT_APPLICABLE
-    assert "张三" in json.dumps(items[0].payload, ensure_ascii=False)  # payload 可序列化
+    # payload 结构可序列化
+    dumped = json.dumps(items[0].payload, ensure_ascii=False)
+    assert "张三" in dumped
 
 
 def test_unpublished_resource_kind_filter(session: Session) -> None:

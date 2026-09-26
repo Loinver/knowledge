@@ -15,7 +15,7 @@ import {
   NTabs,
   NTag,
 } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -235,6 +235,8 @@ watch(
 // ===== 关系路径（G-12）与版本差异（G-24）抽屉 =====
 const showPath = ref(false)
 const showDiff = ref(false)
+const showMatrix = ref(false)
+const showCentrality = ref(false)
 const pathFrom = ref('')
 const pathTo = ref('')
 const pathHops = ref(3)
@@ -327,6 +329,135 @@ const exportOptions = ['png', 'svg', 'csv'].map((kind) => ({
   value: kind,
   label: t(`graph.export.${kind}`),
 }))
+
+// ===== 邻接矩阵（G-20）与中心性排行（G-32）抽屉 =====
+const centralityColumns = computed(() => [
+  { key: 'name', title: t('common.name'), width: 160, ellipsis: { tooltip: true } },
+  { key: 'in', title: t('graph.degreeIn'), width: 70 },
+  { key: 'out', title: t('graph.degreeOut'), width: 70 },
+  { key: 'total', title: t('graph.degreeTotal'), width: 80 },
+  {
+    key: 'go',
+    title: '',
+    width: 110,
+    render: (row: { iri: string }) =>
+      h(NButton, { size: 'tiny', onClick: () => explore(row.iri) }, () => t('graph.exploreShort')),
+  },
+])
+const typeMatrix = computed(() => {
+  const graph = data.value
+  if (!graph) return null
+  const types = [...new Set(graph.nodes.map((node) => node.type_iri))].sort()
+  const typeOf = new Map(graph.nodes.map((node) => [node.iri, node.type_iri] as const))
+  const counts = new Map<string, number>()
+  for (const edge of graph.edges) {
+    const st = typeOf.get(edge.subject)
+    const ot = typeOf.get(edge.object_)
+    if (!st || !ot) continue
+    const key = `${st}\u0000${ot}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const rows = types.map((row) => {
+    const cells: Record<string, number | string> = { __type: row }
+    for (const col of types) cells[col] = counts.get(`${row}\u0000${col}`) ?? 0
+    return cells
+  })
+  return { types, rows }
+})
+const matrixColumns = computed(() => {
+  const matrix = typeMatrix.value
+  if (!matrix) return []
+  return [
+    { key: '__type', title: t('graph.matrixType'), width: 180, ellipsis: { tooltip: true } },
+    ...matrix.types.map((type) => ({
+      key: type,
+      title: type.split(/[/#]/).filter(Boolean).at(-1) || type,
+      width: 70,
+    })),
+  ]
+})
+
+function matrixRowKey(row: Record<string, unknown>): string {
+  return String(row.__type)
+}
+function centralityRowKey(row: { iri: string }): string {
+  return row.iri
+}
+const centralityRows = computed(() => {
+  const graph = data.value
+  if (!graph) return []
+  const stats = new Map<string, { in: number; out: number }>()
+  for (const node of graph.nodes) {
+    stats.set(node.iri, { in: 0, out: 0, ...stats.get(node.iri) })
+  }
+  for (const edge of graph.edges) {
+    const outEntry = stats.get(edge.subject)
+    if (outEntry) outEntry.out += 1
+    const inEntry = stats.get(edge.object_)
+    if (inEntry) inEntry.in += 1
+  }
+  return [...stats.entries()]
+    .map(([iri, value]) => ({
+      iri,
+      name: String(graph.nodes.find((node) => node.iri === iri)?.attrs.name ?? iri).slice(0, 30),
+      in: value.in,
+      out: value.out,
+      total: value.in + value.out,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 30)
+})
+
+// ===== 时间切片回放（G-23）：timeline 形态下按日期窗口过滤画布数据 =====
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/
+const replayRange = ref<[number, number] | null>(null)
+const replayBounds = computed<[number, number] | null>(() => {
+  const graph = data.value
+  if (!graph) return null
+  const times: number[] = []
+  for (const node of graph.nodes) {
+    for (const value of Object.values(node.attrs)) {
+      if (typeof value === 'string' && ISO_DATE_RE.test(value)) {
+        times.push(new Date(value.slice(0, 10)).getTime())
+        break
+      }
+    }
+  }
+  if (!times.length) return null
+  return [Math.min(...times), Math.max(...times)]
+})
+watch(
+  [() => data.value?.graph_revision_id, replayBounds] as const,
+  ([revision, bounds]) => {
+    replayRange.value = revision && bounds ? [...bounds] : null
+  },
+  { immediate: true },
+)
+const replayedGraph = computed(() => {
+  const graph = data.value
+  const bounds = replayBounds.value
+  const range = replayRange.value
+  if (!graph || !bounds || !range || layoutId.value !== 'timeline') return graph
+  if (range[0] === bounds[0] && range[1] === bounds[1]) return graph
+  const keep = new Set(
+    graph.nodes
+      .filter((node) => {
+        for (const value of Object.values(node.attrs)) {
+          if (typeof value === 'string' && ISO_DATE_RE.test(value)) {
+            const time = new Date(value.slice(0, 10)).getTime()
+            return time >= range[0] && time <= range[1]
+          }
+        }
+        return false
+      })
+      .map((node) => node.iri),
+  )
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((node) => keep.has(node.iri)),
+    edges: graph.edges.filter((edge) => keep.has(edge.subject) && keep.has(edge.object_)),
+  }
+})
 function onExport(kind: string) {
   void doExport(kind as 'png' | 'svg' | 'csv')
 }
@@ -398,6 +529,8 @@ function onExport(kind: string) {
       <NCheckbox v-model:checked="qualityOverlay">{{ t('graph.qualityOverlay') }}</NCheckbox>
       <NButton @click="showPath = true">{{ t('graph.pathQuery') }}</NButton>
       <NButton @click="showDiff = true">{{ t('graph.diffQuery') }}</NButton>
+      <NButton @click="showMatrix = true">{{ t('graph.matrix') }}</NButton>
+      <NButton @click="showCentrality = true">{{ t('graph.centrality') }}</NButton>
       <NPopselect :options="exportOptions" trigger="click" @update:value="onExport">
         <NButton>{{ t('graph.export.title') }}</NButton>
       </NPopselect>
@@ -479,6 +612,18 @@ function onExport(kind: string) {
         </NTag>
       </div>
     </NAlert>
+    <label v-if="layoutId === 'timeline' && replayBounds && replayRange" class="replay">
+      <span>{{ t('graph.replay') }}</span>
+      <NSlider
+        v-model:value="replayRange"
+        range
+        :min="replayBounds[0]"
+        :max="replayBounds[1]"
+        :step="24 * 3600 * 1000"
+        :format-tooltip="(value: number) => new Date(value).toISOString().slice(0, 10)"
+        :aria-label="t('graph.replay')"
+      />
+    </label>
     <NAlert v-if="error" type="warning">{{ error }}</NAlert>
     <NAlert v-if="exportError" type="warning">{{ exportError }}</NAlert>
     <NAlert v-if="templateError" type="warning">{{ templateError }}</NAlert>
@@ -501,7 +646,7 @@ function onExport(kind: string) {
       <NEmpty v-if="!data.nodes.length" :description="t('graph.noVisibleNodes')" />
       <template v-else>
         <GraphCanvas
-          :graph="data"
+          :graph="replayedGraph ?? data"
           :neighborhood="!!center"
           :layout-id="layoutId"
           :flagged-iris="qualityOverlay ? flaggedIris : undefined"
@@ -609,6 +754,32 @@ function onExport(kind: string) {
         </div>
       </NDrawerContent>
     </NDrawer>
+    <NDrawer v-model:show="showMatrix" :width="560">
+      <NDrawerContent :title="t('graph.matrix')" closable>
+        <NAlert v-if="!typeMatrix" type="info">{{ t('graph.matrixEmpty') }}</NAlert>
+        <NDataTable
+          v-else
+          :columns="matrixColumns"
+          :data="typeMatrix.rows"
+          :row-key="matrixRowKey"
+          :max-height="560"
+          :scroll-x="120 + typeMatrix.types.length * 70"
+          size="small"
+        />
+      </NDrawerContent>
+    </NDrawer>
+    <NDrawer v-model:show="showCentrality" :width="520">
+      <NDrawerContent :title="t('graph.centrality')" closable>
+        <p class="centrality-hint">{{ t('graph.centralityHint') }}</p>
+        <NDataTable
+          :columns="centralityColumns"
+          :data="centralityRows"
+          :row-key="centralityRowKey"
+          :max-height="560"
+          size="small"
+        />
+      </NDrawerContent>
+    </NDrawer>
   </section>
 </template>
 
@@ -663,6 +834,19 @@ label :deep(.n-input) {
 }
 .recommendation-row .reason {
   color: var(--text-secondary);
+}
+.replay {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.replay > span {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
+}
+.replay :deep(.n-slider) {
+  flex: 1;
 }
 .panel-form {
   display: grid;

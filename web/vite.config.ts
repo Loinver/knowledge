@@ -18,5 +18,18 @@ export default defineConfig({
       },
     },
   },
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // 拆分大块：naive-ui 与 vue 全家桶各自成块，业务代码随路由加载
+        manualChunks: {
+          'naive-ui': ['naive-ui'],
+          'vue-vendor': ['vue', 'vue-router', 'vue-i18n', 'pinia', 'axios'],
+          'd3-vendor': ['d3-hierarchy', 'd3-force'],
+        },
+      },
+    },
+  },
 })
