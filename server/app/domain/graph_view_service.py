@@ -6,7 +6,29 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.domain.extraction_service import resolve_graph
-from app.models.extraction import DerivedEdge, EntityIdentity, GraphTriple, Quarantine
+from app.models.data_access import Mapping, MappingRevision
+from app.models.extraction import (
+    DerivedEdge,
+    EntityIdentity,
+    ExtractionRun,
+    GraphRevision,
+    GraphTriple,
+    Quarantine,
+)
+
+
+def _ontology_id(session: Session, gr: GraphRevision) -> int | None:
+    """当前结果集 → run → 映射 → 本体 id；链路缺失返回 None。"""
+    run = session.get(ExtractionRun, gr.run_id)
+    rev = session.get(MappingRevision, run.mapping_revision_id) if run else None
+    mapping = session.get(Mapping, rev.mapping_id) if rev else None
+    return mapping.id if mapping else None
+
+
+def _ontology_revision(session: Session, gr: GraphRevision) -> int | None:
+    run = session.get(ExtractionRun, gr.run_id)
+    rev = session.get(MappingRevision, run.mapping_revision_id) if run else None
+    return rev.onto_version if rev else None
 
 
 def graph_view(
@@ -47,10 +69,14 @@ def graph_view(
 
     def edges_between(
         model: type[GraphTriple] | type[DerivedEdge],
-    ) -> Select[tuple[int, str, str, str]]:
+    ) -> Select[tuple[int, str, str, str, dict | None]]:
         return (
             select(
-                model.id, model.subject, model.predicate, model.object_.label("object_")
+                model.id,
+                model.subject,
+                model.predicate,
+                model.object_.label("object_"),
+                model.props,
             )
             .join(
                 source,
@@ -131,12 +157,17 @@ def graph_view(
                 "subject": edge.subject,
                 "predicate": edge.predicate,
                 "object_": edge.object_,
+                "props": edge.props,
                 "kind": "DIRECT" if model is GraphTriple else "DERIVED",
             }
             for edge in edges[:remaining]
         )
     return {
         "graph_revision_id": gr.id,
+        # 供前端视图模板钉扎与实体 360 下钻：当前结果集对应的本体版本
+        "ontology_id": _ontology_id(session, gr),
+        "ontology_revision": _ontology_revision(session, gr),
+        "run_id": gr.run_id,
         "nodes": [
             {
                 "id": node.id,
@@ -158,6 +189,5 @@ def graph_view(
             .where(Quarantine.run_id == gr.run_id)
         )
         or 0,
-        "run_id": gr.run_id,
         "truncated": truncated,
     }
