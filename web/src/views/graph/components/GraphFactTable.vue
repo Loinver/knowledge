@@ -9,6 +9,12 @@ import type { GraphFact } from '@/api/graph'
 
 const props = defineProps<{ items: GraphFact[]; graphRevisionId: number; derived?: boolean }>()
 const { t } = useI18n()
+const formatProps = (value: GraphFact['props']) =>
+  value
+    ? Object.entries(value)
+        .map(([key, item]) => `${key}=${String(item)}`)
+        .join(' · ')
+    : ''
 const columns = computed<DataTableColumns<GraphFact>>(() => [
   ...(['subject', 'predicate', 'object_'] as const).map((key) => ({
     key,
@@ -30,6 +36,12 @@ const columns = computed<DataTableColumns<GraphFact>>(() => [
             () => row[key],
           ),
   })),
+  {
+    key: 'props',
+    title: t('graph.edgeProps'),
+    width: 160,
+    render: (row: GraphFact) => formatProps(row.props) || '—',
+  },
   ...(!props.derived
     ? [
         {
@@ -64,7 +76,7 @@ const columns = computed<DataTableColumns<GraphFact>>(() => [
     :data="items"
     :row-key="(row: GraphFact) => row.id"
     :max-height="480"
-    :scroll-x="derived ? 780 : 920"
+    :scroll-x="derived ? 940 : 1080"
     virtual-scroll
   />
 </template>

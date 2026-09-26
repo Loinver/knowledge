@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NAlert, NButton, NDataTable, NEmpty, NTabPane, NTabs } from 'naive-ui'
+import { NAlert, NButton, NDataTable, NEmpty, NSpace, NTabPane, NTabs } from 'naive-ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
@@ -44,6 +44,34 @@ const attributeKey = (row: { key: string }) => row.key
       <p class="iri">{{ data.detail.entity.iri }}</p>
       <p>{{ t('graph.type') }}: {{ data.detail.entity.type_iri }}</p>
       <p>{{ t('graph.resultSet', { id: data.detail.entity.graph_revision_id }) }}</p>
+      <!-- G-30 实体 360 画像：分区跳转到各形态与追溯 -->
+      <NSpace align="center" class="views-360">
+        <span>{{ t('graph.views360') }}</span>
+        <NButton
+          v-for="layout in ['force', 'ring', 'org_tree', 'equity_tree', 'timeline']"
+          :key="layout"
+          size="small"
+          @click="
+            $router.push({
+              name: 'graph-browse',
+              query: {
+                graph: data.detail.entity.graph_revision_id,
+                center: data.detail.entity.iri,
+                layout,
+              },
+            })
+          "
+        >
+          {{ t(`graph.layout.${layout}`) }}
+        </NButton>
+        <RouterLink
+          :to="{
+            name: 'graph-evidence',
+            query: { graph: data.detail.entity.graph_revision_id, iri: data.detail.entity.iri },
+          }"
+          >{{ t('graph.chainTitle') }}</RouterLink
+        >
+      </NSpace>
       <NTabs type="line" animated>
         <NTabPane name="attrs" :tab="t('entityType.dataProps')">
           <NDataTable
@@ -98,6 +126,9 @@ p {
 }
 .iri {
   overflow-wrap: anywhere;
+}
+.views-360 {
+  flex-wrap: wrap;
 }
 .notice {
   margin-bottom: 16px;

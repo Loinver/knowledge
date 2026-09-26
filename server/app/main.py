@@ -31,6 +31,7 @@ from app.api.v1.enum_dictionaries import (
 )
 from app.api.v1.extraction import router as extraction_router
 from app.api.v1.governance import router as governance_router
+from app.api.v1.graph_templates import router as graph_templates_router
 from app.api.v1.mapping_preview import router as mapping_preview_router
 from app.api.v1.mappings import router as mappings_router
 from app.api.v1.metadata import router as metadata_router
@@ -89,6 +90,7 @@ business_router.include_router(templates_router)
 business_router.include_router(relations_router)
 business_router.include_router(validation_router)
 business_router.include_router(extraction_router)
+business_router.include_router(graph_templates_router)
 business_router.include_router(governance_router)
 business_router.include_router(clauses_router)
 app.include_router(business_router)

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
-import { NDataTable, NTag } from 'naive-ui'
+import { NButton, NDataTable, NTag } from 'naive-ui'
 import { computed, h } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { EvidenceItem } from '@/api/graph'
 
-defineProps<{ items: EvidenceItem[] }>()
+const props = defineProps<{ items: EvidenceItem[] }>()
+const emit = defineEmits<{ chain: [item: EvidenceItem] }>()
 const { t } = useI18n()
 const columns = computed<DataTableColumns<EvidenceItem>>(() => [
   ...(['subject', 'predicate', 'object'] as const).map((key) => ({
@@ -49,7 +50,15 @@ const columns = computed<DataTableColumns<EvidenceItem>>(() => [
         t(row.quarantined ? 'graph.hasQuarantine' : 'graph.noQuarantine'),
       ),
   },
+  {
+    key: 'chain',
+    title: t('graph.chain'),
+    width: 120,
+    render: (row) =>
+      h(NButton, { size: 'tiny', onClick: () => emit('chain', row) }, () => t('graph.chainView')),
+  },
 ])
+void props
 </script>
 
 <template>
@@ -58,7 +67,7 @@ const columns = computed<DataTableColumns<EvidenceItem>>(() => [
     :data="items"
     :row-key="(row: EvidenceItem) => row.id"
     :max-height="480"
-    :scroll-x="1890"
+    :scroll-x="2010"
     virtual-scroll
   />
 </template>

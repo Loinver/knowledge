@@ -9,7 +9,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.db import get_session
-from app.domain.evidence_service import trace_entity_evidence
+from app.domain.evidence_service import (
+    trace_entity_evidence,
+    trace_source_rows,
+)
 from app.domain.evidence_service import trace_fact as trace_fact_evidence
 from app.domain.extraction_service import (
     get_current_graph,
@@ -25,6 +28,8 @@ from app.domain.extraction_service import (
     start_run,
     switch_current,
 )
+from app.domain.graph_analysis_service import diff_graph_revisions, shortest_path
+from app.domain.graph_recommendation_service import recommend_layouts
 from app.domain.graph_view_service import graph_view
 from app.domain.run_export_service import export_run
 from app.schemas.extraction import (
@@ -40,8 +45,10 @@ from app.schemas.extraction import (
     GraphTripleOut,
     GraphViewOut,
     QuarantineOut,
+    ReverseTraceOut,
     RunStartRequest,
 )
+from app.schemas.graph_view import GraphDiffOut, GraphRecommendationOut, PathOut
 from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/extraction", tags=["extraction"])
@@ -268,3 +275,54 @@ def trace_entity(
 ) -> dict:
     """实体维度的证据汇总。"""
     return trace_entity_evidence(session, iri, graph_revision_id)
+
+
+@router.get("/evidence/trace/reverse", response_model=ApiResponse[ReverseTraceOut])
+def trace_reverse(
+    source_id: int = Query(..., ge=1),
+    table: str = Query(..., max_length=128),
+    row_key: str = Query(..., max_length=256),
+    graph_revision_id: int | None = Query(None, ge=1),
+    session: Session = Depends(get_session),
+) -> dict:
+    """反向追溯：来源行 → 参与的事实与产出实体。"""
+    return trace_source_rows(session, source_id, table, row_key, graph_revision_id)
+
+
+@router.get(
+    "/graph/{base_id}/diff/{target_id}", response_model=ApiResponse[GraphDiffOut]
+)
+def graph_diff(
+    base_id: int,
+    target_id: int,
+    session: Session = Depends(get_session),
+) -> dict:
+    """两个图谱版本的实体/三元组差异（G-24）。"""
+    return diff_graph_revisions(session, base_id, target_id)
+
+
+@router.get("/graph/{graph_revision_id}/path", response_model=ApiResponse[PathOut])
+def graph_path(
+    graph_revision_id: int,
+    from_: str = Query(..., alias="from", max_length=640),
+    to: str = Query(..., max_length=640),
+    max_hops: int = Query(3, ge=1, le=6),
+    include_derived: bool = True,
+    session: Session = Depends(get_session),
+) -> dict:
+    """有向最短路径（G-12），直接边与派生边可分别参与。"""
+    return shortest_path(
+        session, graph_revision_id, from_, to, max_hops, include_derived
+    )
+
+
+@router.get(
+    "/graph/{graph_revision_id}/layout-recommendations",
+    response_model=ApiResponse[GraphRecommendationOut],
+)
+def graph_layout_recommendations(
+    graph_revision_id: int,
+    session: Session = Depends(get_session),
+) -> dict:
+    """从冻结本体快照的语义信号推荐图谱形态（含理由参数）。"""
+    return recommend_layouts(session, graph_revision_id)

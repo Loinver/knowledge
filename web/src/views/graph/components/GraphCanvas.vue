@@ -5,15 +5,45 @@ import { useI18n } from 'vue-i18n'
 
 import type { GraphView } from '@/api/graph'
 
-import { graphPaths, layoutGraph } from './graphLayout'
+import { graphPaths, resolveLayout } from './graphLayout'
 
-const props = defineProps<{ graph: GraphView; neighborhood: boolean }>()
+const props = defineProps<{
+  graph: GraphView
+  neighborhood: boolean
+  layoutId?: string | null
+  /** 质量叠加（G-28）：被隔离/违规命中的实体 IRI，节点叠加红色标记。 */
+  flaggedIris?: Set<string>
+  /** G-12 路径查询结果高亮。 */
+  highlightIris?: Set<string>
+}>()
 const emit = defineEmits<{ select: [iri: string] }>()
 const { t } = useI18n()
 const zoom = ref(1)
 const shortName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
-const layout = computed(() => layoutGraph(props.graph.nodes, props.neighborhood))
-const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
+const layout = computed(() =>
+  resolveLayout(props.layoutId, props.neighborhood).compute(props.graph),
+)
+const paths = computed(() =>
+  graphPaths(layout.value.nodes, props.graph.edges, layout.value.edgePaths),
+)
+const isSchema = computed(() => props.layoutId === 'schema')
+const edgeLabel = (edge: { props?: Record<string, unknown> | null; kind: string }) => {
+  if (!edge.props) return ''
+  const short = (value: unknown) => {
+    const text = String(value)
+    return /^https?:\/\//.test(text) ? shortName(text) || text : text
+  }
+  const parts = Object.entries(edge.props)
+    .filter(([key]) => key !== '__typeCount__')
+    .map(([key, value]) => `${key}=${short(value)}`)
+  return parts.slice(0, 2).join(' ')
+}
+const nodeFlagged = (iri: string) => props.flaggedIris?.has(iri) ?? false
+const nodeHighlighted = (iri: string) => props.highlightIris?.has(iri) ?? false
+const nodeBadgeText = (node: GraphView['nodes'][number]) => {
+  const count = node.attrs.__typeCount__
+  return typeof count === 'number' ? t('graph.entityCount', { count }) : ''
+}
 </script>
 
 <template>
@@ -34,6 +64,7 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
       <NButton @click="zoom = 1">{{ t('graph.resetZoom') }}</NButton>
       <span class="legend direct">{{ t('graph.directRelation') }}</span>
       <span class="legend derived">{{ t('graph.derived') }}</span>
+      <span v-if="flaggedIris?.size" class="legend flagged">{{ t('graph.qualityOverlay') }}</span>
     </NSpace>
     <p class="hint">{{ t('graph.canvasHint') }}</p>
     <div class="canvas-scroll" tabindex="0" :aria-label="t('page.graphBrowse')">
@@ -77,32 +108,46 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
         >
           {{ shortName(group.type) }}
         </text>
-        <path
-          v-for="edge in paths"
-          :key="edge.key"
-          :d="edge.path"
-          class="edge"
-          :class="{ derived: edge.kind === 'DERIVED' }"
-          :marker-end="
-            edge.kind === 'DERIVED' ? 'url(#graph-derived-arrow)' : 'url(#graph-direct-arrow)'
-          "
-        >
-          <title>
-            {{
-              t('graph.factDescription', {
-                subject: edge.subject,
-                predicate: edge.predicate,
-                object: edge.object_,
-              })
-            }}
-          </title>
-        </path>
+        <g v-for="edge in paths" :key="edge.key" class="edge-group">
+          <path
+            v-if="edge.path"
+            :d="edge.path"
+            class="edge"
+            :class="{ derived: edge.kind === 'DERIVED' }"
+            :marker-end="
+              edge.kind === 'DERIVED' ? 'url(#graph-derived-arrow)' : 'url(#graph-direct-arrow)'
+            "
+          >
+            <title>
+              {{
+                t('graph.factDescription', {
+                  subject: edge.subject,
+                  predicate: edge.predicate,
+                  object: edge.object_,
+                })
+              }}
+            </title>
+          </path>
+          <text
+            v-if="edge.path && edgeLabel(edge)"
+            :x="edge.label?.x"
+            :y="(edge.label?.y ?? 0) - 4"
+            text-anchor="middle"
+            class="edge-props"
+            :class="{ derived: edge.kind === 'DERIVED' }"
+          >
+            {{ edgeLabel(edge) }}
+          </text>
+        </g>
         <g
           v-for="node in layout.nodes"
           :key="node.iri"
           :transform="`translate(${node.x},${node.y})`"
           class="node"
-          :class="{ center: neighborhood && node.distance === 0 }"
+          :class="{
+            center: neighborhood && node.distance === 0,
+            highlighted: nodeHighlighted(node.iri),
+          }"
           tabindex="0"
           role="button"
           :aria-label="t('graph.exploreEntity', { iri: node.iri })"
@@ -116,8 +161,19 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
             {{ String(node.attrs.name ?? node.row_key).slice(0, 18) }}
           </text>
           <text y="16" text-anchor="middle" class="node-type">
-            {{ shortName(node.type_iri).slice(0, 22) }}
+            {{ isSchema ? nodeBadgeText(node) : shortName(node.type_iri).slice(0, 22) }}
           </text>
+          <circle
+            v-if="nodeFlagged(node.iri)"
+            cx="70"
+            cy="-18"
+            r="8"
+            class="quality-flag"
+            role="img"
+            :aria-label="t('graph.qualityFlagged')"
+          >
+            <title>{{ t('graph.qualityFlagged') }}</title>
+          </circle>
         </g>
       </svg>
     </div>
@@ -154,6 +210,9 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
 .legend.derived::before {
   border-top: 2px dashed var(--graph-derived);
 }
+.legend.flagged::before {
+  border-top: 2px dotted var(--danger, #d03050);
+}
 .edge {
   fill: none;
   stroke: var(--text-secondary);
@@ -162,6 +221,16 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
 .edge.derived {
   stroke: var(--graph-derived);
   stroke-dasharray: 7 5;
+}
+.edge-props {
+  fill: var(--text-secondary);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--bg-subtle);
+  stroke-width: 3px;
+}
+.edge-props.derived {
+  fill: var(--graph-derived);
 }
 .arrow-direct {
   fill: var(--text-secondary);
@@ -191,6 +260,13 @@ const paths = computed(() => graphPaths(layout.value.nodes, props.graph.edges))
 .node .node-type {
   fill: var(--text-secondary);
   font-size: 11px;
+}
+.quality-flag {
+  fill: var(--danger, #d03050);
+}
+.node.highlighted rect {
+  stroke: var(--info, #2080f0);
+  stroke-width: 3;
 }
 .group-label {
   fill: var(--text-secondary);
