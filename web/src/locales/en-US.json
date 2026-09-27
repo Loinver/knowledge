@@ -381,7 +381,10 @@
       "control_chain": "Control chain",
       "supply_chain": "Supply chain",
       "timeline": "Timeline",
-      "schema": "Ontology schema"
+      "schema": "Ontology schema",
+      "sunburst": "Sunburst",
+      "treemap": "Treemap",
+      "pack": "Circle packing"
     },
     "reason": {
       "hierarchy": "Ontology has self-referencing/transitive relation ({edge}); a tree form fits",

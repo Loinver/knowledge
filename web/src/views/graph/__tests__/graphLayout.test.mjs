@@ -66,6 +66,9 @@ test('registry exposes every P0 form id and default fallback by center', () => {
     'chord',
     'geo',
     'impact',
+    'sunburst',
+    'treemap',
+    'pack',
   ])
   assert.equal(resolveLayout(undefined, true).id, 'ring')
   assert.equal(resolveLayout(undefined, false).id, 'type_grid')
@@ -255,4 +258,53 @@ test('sankey and chord aggregate to type level with counts', () => {
   assert.equal(chordLayout.nodes.length, 2)
   const person = chordLayout.nodes.find((item) => item.iri === 'Person')
   assert.equal(person.attrs.__typeCount__, 2)
+})
+
+test('sunburst encodes types inner and instances outer with valid angles', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const layout = layoutOf('sunburst', nodes, [])
+  const marks = layout.marks
+  assert.equal(marks.filter((m) => m.id.startsWith('type:')).length, 2)
+  const instances = marks.filter((m) => m.id.startsWith('inst:'))
+  assert.equal(instances.length, 3)
+  assert.ok(
+    instances.every((m) => m.iri),
+    '实例扇区必须可下钻',
+  )
+  assert.ok(
+    marks.every((m) => !/NaN/.test(m.path)),
+    '扇区路径不能有 NaN',
+  )
+  // 同类型同色
+  const pa = marks.find((m) => m.id === 'inst:a')
+  const pb = marks.find((m) => m.id === 'inst:b')
+  assert.equal(pa.fill, pb.fill)
+})
+
+test('treemap places instance rects inside canvas without NaN', () => {
+  const nodes = [
+    node('a', 'Person'),
+    node('b', 'Person'),
+    node('c', 'Project'),
+    node('d', 'Project'),
+    node('e', 'Project'),
+  ]
+  const layout = layoutOf('treemap', nodes, [])
+  const rects = layout.marks.filter((m) => m.kind === 'rect' && m.id.startsWith('inst:'))
+  assert.equal(rects.length, 5)
+  assert.equal(layout.marks.filter((m) => m.id.startsWith('type:')).length, 2)
+  assert.ok(
+    rects.every((m) => m.w > 0 && m.h > 0 && m.x - m.w / 2 >= 0 && m.x + m.w / 2 <= layout.width),
+  )
+})
+
+test('pack nests instance circles inside type circles', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const layout = layoutOf('pack', nodes, [])
+  const circles = layout.marks.filter((m) => m.kind === 'circle')
+  assert.equal(circles.length, 5)
+  const typeCircles = circles.filter((m) => m.id.startsWith('type:'))
+  assert.ok(typeCircles.every((m) => m.r > 0))
+  const instances = circles.filter((m) => m.id.startsWith('inst:'))
+  assert.ok(instances.every((m) => m.r > 0))
 })

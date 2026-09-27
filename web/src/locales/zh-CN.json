@@ -381,7 +381,10 @@
       "control_chain": "实际控制人链",
       "supply_chain": "客商供应链图",
       "timeline": "时间轴",
-      "schema": "本体模式图"
+      "schema": "本体模式图",
+      "sunburst": "旭日图",
+      "treemap": "矩形树图",
+      "pack": "圆形打包图"
     },
     "reason": {
       "hierarchy": "本体存在自引用/传递关系（{edge}），适合层级树形态",

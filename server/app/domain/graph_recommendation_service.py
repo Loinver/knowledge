@@ -39,7 +39,15 @@ LAYOUT_TIMELINE = "timeline"
 
 # 不依赖语义信号、任何图谱都可用的通用形态。
 # path（G-12）与 diff（G-24）是查询/对比模式，不是布局，由前端单独提供。
-GENERIC_LAYOUTS = ["type_grid", "ring", "force", "schema"]
+GENERIC_LAYOUTS = [
+    "type_grid",
+    "ring",
+    "force",
+    "schema",
+    "sunburst",
+    "treemap",
+    "pack",
+]
 
 
 def recommend_layouts(session: Session, graph_revision_id: int) -> dict:

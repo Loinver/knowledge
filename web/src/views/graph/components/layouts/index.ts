@@ -10,7 +10,14 @@
  * path（G-12）与 diff（G-24）是查询/对比模式，由 GraphBrowse 单独实现。
  */
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceSimulation } from 'd3-force'
-import { hierarchy, tree as d3tree } from 'd3-hierarchy'
+import {
+  hierarchy,
+  pack as d3pack,
+  partition as d3partition,
+  tree as d3tree,
+  treemap as d3treemap,
+  treemapSquarify,
+} from 'd3-hierarchy'
 
 import type { GraphView } from '@/api/graph'
 
@@ -19,6 +26,28 @@ export type GraphViewEdge = GraphView['edges'][number]
 export type PositionedNode = GraphViewNode & { x: number; y: number }
 export type EdgePathOverride = { path: string; label?: { x: number; y: number } }
 
+export type LayoutMark = {
+  id: string
+  /** 实例 IRI：携带则点击可下钻；类型区块不可点。 */
+  iri?: string
+  kind: 'rect' | 'circle' | 'sector'
+  /** 标签锚点（也是 rect/circle 的几何中心）。 */
+  x: number
+  y: number
+  /** rect 尺寸（中心对称）。 */
+  w?: number
+  h?: number
+  /** circle 半径。 */
+  r?: number
+  /** sector 的完整 SVG path（环形扇区）。 */
+  path?: string
+  /** 类型色。 */
+  fill: string
+  label?: string
+  sublabel?: string
+  labelY?: number
+}
+
 export type LayoutResult = {
   width: number
   height: number
@@ -26,6 +55,8 @@ export type LayoutResult = {
   nodes: PositionedNode[]
   /** 布局可覆写边路径（树形折线等）；缺省时用 graphPaths 的曲线。 */
   edgePaths?: Record<number, EdgePathOverride>
+  /** 划分图标记（旭日/矩形树/打包）：存在时画布只渲染标记，不渲染节点-边。 */
+  marks?: LayoutMark[]
 }
 
 export type LayoutCompute = (graph: Pick<GraphView, 'nodes' | 'edges'>) => LayoutResult
@@ -870,6 +901,213 @@ const impact: LayoutPlugin = {
   },
 }
 
+// ===== 划分图（G-03/04/05）：本体 → 类型 → 实例 的层级面积编码 =====
+
+const MARK_PALETTE = [
+  '#2563eb',
+  '#059669',
+  '#d97706',
+  '#7c3aed',
+  '#dc2626',
+  '#0891b2',
+  '#65a30d',
+  '#ea580c',
+  '#db2777',
+  '#4f46e5',
+]
+
+/** 类型 → 调色板色的确定性映射（同一图谱内同名同色）。 */
+export function typeColor(type: string, types: string[]): string {
+  const index = types.indexOf(type)
+  return MARK_PALETTE[(index < 0 ? 0 : index) % MARK_PALETTE.length]
+}
+
+type PartitionDatum = {
+  name: string
+  iri?: string
+  typeIri?: string
+  children?: PartitionDatum[]
+}
+
+function partitionRoot(graph: Pick<GraphView, 'nodes'>): PartitionDatum {
+  const byType = new Map<string, GraphViewNode[]>()
+  for (const node of graph.nodes) {
+    byType.set(node.type_iri, [...(byType.get(node.type_iri) ?? []), node])
+  }
+  return {
+    name: '__ontology__',
+    children: [...byType.entries()].map(([type, members]) => ({
+      name: type,
+      typeIri: type,
+      children: members.map((member) => ({
+        name: String(member.attrs.name ?? member.row_key),
+        iri: member.iri,
+        typeIri: type,
+      })),
+    })),
+  }
+}
+
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+function shortType(iri: string): string {
+  return iri.split(/[/#]/).filter(Boolean).at(-1) || iri
+}
+
+/** 环形扇区 path（角度从正上方顺时针）。 */
+function sectorPath(
+  cx: number,
+  cy: number,
+  inner: number,
+  outer: number,
+  a0: number,
+  a1: number,
+): string {
+  const point = (radius: number, angle: number) =>
+    `${(cx + radius * Math.sin(angle)).toFixed(2)},${(cy - radius * Math.cos(angle)).toFixed(2)}`
+  const largeArc = a1 - a0 > Math.PI ? 1 : 0
+  return [
+    `M ${point(outer, a0)}`,
+    `A ${outer} ${outer} 0 ${largeArc} 1 ${point(outer, a1)}`,
+    `L ${point(inner, a1)}`,
+    `A ${inner} ${inner} 0 ${largeArc} 0 ${point(inner, a0)}`,
+    'Z',
+  ].join(' ')
+}
+
+/** G-03 旭日图：内环类型、外环实例，实例角度按计数占比分配。 */
+const sunburst: LayoutPlugin = {
+  id: 'sunburst',
+  compute: (graph) => {
+    const W = 760
+    const cx = W / 2
+    const cy = W / 2
+    const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
+    const root = d3partition<PartitionDatum>().size([2 * Math.PI, 1])(
+      hierarchy<PartitionDatum>(partitionRoot(graph), (d) => d.children).count(),
+    )
+    const r0 = 120
+    const r1 = 250
+    const r2 = W / 2 - 16
+    const marks: LayoutMark[] = []
+    root.each((item) => {
+      if (item.depth === 0) return
+      const isType = item.depth === 1
+      const typeIri = item.data.typeIri ?? ''
+      const inner = isType ? r0 : r1
+      const outer = isType ? r1 : r2
+      const mid = (item.x0 + item.x1) / 2
+      const labelRadius = (inner + outer) / 2
+      marks.push({
+        id: isType ? `type:${typeIri}` : `inst:${item.data.iri}`,
+        iri: isType ? undefined : item.data.iri,
+        kind: 'sector',
+        path: sectorPath(cx, cy, inner, outer, item.x0, item.x1),
+        x: cx + labelRadius * Math.sin(mid),
+        y: cy - labelRadius * Math.cos(mid),
+        fill: typeColor(typeIri, types),
+        label:
+          item.x1 - item.x0 > 0.16
+            ? clip(isType ? shortType(typeIri) : item.data.name, 10)
+            : undefined,
+        sublabel: isType ? `${item.value ?? 0}` : undefined,
+      })
+    })
+    return {
+      width: W,
+      height: W,
+      groups: types.map((type) => ({ type, y: 0, nodes: [] })),
+      nodes: [],
+      marks,
+    }
+  },
+}
+
+/** G-04 矩形树图：类型分块、实例占面积（按实例计数），可下钻点击。 */
+const treemapLayout: LayoutPlugin = {
+  id: 'treemap',
+  compute: (graph) => {
+    const W = 1240
+    const H = 760
+    const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
+    const root = d3treemap<PartitionDatum>()
+      .tile(treemapSquarify)
+      .size([W, H])
+      .paddingInner(3)
+      .paddingTop(22)(hierarchy<PartitionDatum>(partitionRoot(graph), (d) => d.children).count())
+    const marks: LayoutMark[] = []
+    root.each((item) => {
+      if (item.depth === 0) return
+      const isType = item.depth === 1
+      const w = item.x1 - item.x0
+      const h = item.y1 - item.y0
+      const typeIri = item.data.typeIri ?? ''
+      marks.push({
+        id: isType ? `type:${typeIri}` : `inst:${item.data.iri}`,
+        iri: isType ? undefined : item.data.iri,
+        kind: 'rect',
+        x: (item.x0 + item.x1) / 2,
+        y: (item.y0 + item.y1) / 2,
+        w,
+        h,
+        fill: typeColor(typeIri, types),
+        label:
+          w > 76 && h > 28
+            ? clip(isType ? shortType(typeIri) : item.data.name, isType ? 16 : 12)
+            : undefined,
+        sublabel: isType && h > 50 ? `${item.value ?? 0} 实例` : undefined,
+        labelY: isType ? item.y0 + 14 : undefined,
+      })
+    })
+    return {
+      width: W,
+      height: H,
+      groups: types.map((type) => ({ type, y: 0, nodes: [] })),
+      nodes: [],
+      marks,
+    }
+  },
+}
+
+/** G-05 圆形打包图：类型大圆嵌套实例小圆（按实例计数定半径）。 */
+const pack: LayoutPlugin = {
+  id: 'pack',
+  compute: (graph) => {
+    const W = 760
+    const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
+    const root = d3pack<PartitionDatum>().size([W, W]).padding(4)(
+      hierarchy<PartitionDatum>(partitionRoot(graph), (d) => d.children).count(),
+    )
+    const marks: LayoutMark[] = []
+    root.each((item) => {
+      if (item.depth === 0) return
+      const isType = item.depth === 1
+      const typeIri = item.data.typeIri ?? ''
+      marks.push({
+        id: isType ? `type:${typeIri}` : `inst:${item.data.iri}`,
+        iri: isType ? undefined : item.data.iri,
+        kind: 'circle',
+        x: item.x ?? 0,
+        y: item.y ?? 0,
+        r: item.r ?? 0,
+        fill: typeColor(typeIri, types),
+        label:
+          (item.r ?? 0) > 26 ? clip(isType ? shortType(typeIri) : item.data.name, 12) : undefined,
+        sublabel: isType && (item.r ?? 0) > 40 ? `${item.value ?? 0}` : undefined,
+      })
+    })
+    return {
+      width: W,
+      height: W,
+      groups: types.map((type) => ({ type, y: 0, nodes: [] })),
+      nodes: [],
+      marks,
+    }
+  },
+}
+
 export const LAYOUTS: LayoutPlugin[] = [
   typeGrid,
   ring,
@@ -890,6 +1128,9 @@ export const LAYOUTS: LayoutPlugin[] = [
   chord,
   geo,
   impact,
+  sunburst,
+  treemapLayout,
+  pack,
 ]
 
 export const LAYOUT_IDS = LAYOUTS.map((layout) => layout.id)
