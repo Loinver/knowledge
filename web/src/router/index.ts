@@ -74,6 +74,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ontology/RelationTypes.vue'),
       },
       {
+        path: 'ontology/relation-types/:id',
+        name: 'relation-detail',
+        component: () => import('@/views/ontology/RelationDetail.vue'),
+      },
+      {
         path: 'ontology/domains',
         name: 'domains',
         component: () => import('@/views/ontology/Domains.vue'),

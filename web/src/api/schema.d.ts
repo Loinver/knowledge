@@ -1024,6 +1024,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/relations/{relation_id}/usages': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Relation Usages
+     * @description 详情页「规则 / 引用与版本」两个页签的数据。
+     */
+    get: operations['relation_usages_api_v1_relations__relation_id__usages_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/relations/{relation_id}': {
     parameters: {
       query?: never
@@ -2982,6 +3002,23 @@ export interface components {
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['RelationTypeOut'] | null
     }
+    /** ApiResponse[RelationTypeUsagesOut] */
+    ApiResponse_RelationTypeUsagesOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['RelationTypeUsagesOut'] | null
+    }
     /** ApiResponse[ReverseTraceOut] */
     ApiResponse_ReverseTraceOut_: {
       /**
@@ -4594,13 +4631,11 @@ export interface components {
     }
     /**
      * EntityTypeUsagesOut
-     * @description 类型详情页「关联关系 / 规则 / 引用与版本」三个页签的数据源。
+     * @description 实体类型详情页「关联关系 / 规则 / 引用与版本」三个页签的数据源。
      *
-     *     一次请求取全，避免详情页为每个页签发一串请求。
+     *     比共用部分多一个「关联关系」页签：该类型作为定义域或值域参与的对象属性。
      */
     EntityTypeUsagesOut: {
-      /** Relations */
-      relations?: components['schemas']['TypeRelationUsageOut'][]
       /** Rules */
       rules?: components['schemas']['TypeRuleUsageOut'][]
       /** Domains */
@@ -4611,6 +4646,8 @@ export interface components {
       revisions?: components['schemas']['TypeRevisionOut'][]
       /** Validations */
       validations?: components['schemas']['TypeValidationOut'][]
+      /** Relations */
+      relations?: components['schemas']['TypeRelationUsageOut'][]
     }
     /** EnumDictionaryInput */
     EnumDictionaryInput: {
@@ -5996,6 +6033,25 @@ export interface components {
       if_match: number
       /** Edit Revision */
       edit_revision?: number | null
+    }
+    /**
+     * RelationTypeUsagesOut
+     * @description 关系类型详情页「规则 / 引用与版本」两个页签的数据源。
+     *
+     *     关系不是别的类型的定义域或值域，所以没有实体类型那一个「关联关系」页签；
+     *     端点与基数由 GET /relations/{id} 自身返回。
+     */
+    RelationTypeUsagesOut: {
+      /** Rules */
+      rules?: components['schemas']['TypeRuleUsageOut'][]
+      /** Domains */
+      domains?: components['schemas']['TypeDomainUsageOut'][]
+      /** Ontologies */
+      ontologies?: components['schemas']['TypeOntologyUsageOut'][]
+      /** Revisions */
+      revisions?: components['schemas']['TypeRevisionOut'][]
+      /** Validations */
+      validations?: components['schemas']['TypeValidationOut'][]
     }
     /**
      * ResourceKind
@@ -9538,6 +9594,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_RelationTypeOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  relation_usages_api_v1_relations__relation_id__usages_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        relation_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_RelationTypeUsagesOut_']
         }
       }
       /** @description Validation Error */

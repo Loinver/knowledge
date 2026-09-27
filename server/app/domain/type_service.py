@@ -12,20 +12,14 @@ from app.core.errors import KGError
 from app.domain.enum_dictionary_service import lock_dictionary, resolve_reference
 from app.domain.iri_service import build_resource_iri, validate_name
 from app.domain.status_service import lock_resource_edit, publish_resource
-from app.models.domain import (
-    BusinessDomain,
-    DomainMember,
-    Ontology,
-    OntologyResourceRef,
-)
+from app.domain.usages_service import resource_usages
+from app.models.domain import DomainMember
 from app.models.enums import ResourceKind, ResourceStatus, ValidationState
-from app.models.governance import Rule
 from app.models.resource import (
     DatatypePropDetail,
     ModelResource,
     ResourceParent,
     ResourceRef,
-    ResourceRevision,
 )
 from app.models.validation import ValidationReport, ValidationResult
 from app.schemas.type import (
@@ -439,97 +433,8 @@ def entity_type_usages(session: Session, resource: ModelResource) -> dict[str, o
             }
         )
 
-    # ── 规则：按目标 IRI 命中 ──
-    rules = [
-        {
-            "id": rule.id,
-            "identifier": rule.identifier,
-            "name_i18n": rule.name_i18n,
-            "severity": rule.severity,
-        }
-        for rule in session.scalars(
-            select(Rule)
-            .where(Rule.target_iri == resource.iri)
-            .order_by(Rule.identifier)
-        )
-    ]
-
-    # ── 引用面：业务域归属 + 引用了它的本体 ──
-    member_rows = session.execute(
-        select(DomainMember, BusinessDomain)
-        .join(BusinessDomain, BusinessDomain.id == DomainMember.domain_id)
-        .where(DomainMember.resource_id == resource.id)
-        .order_by(BusinessDomain.name)
-    ).all()
-    domains = [
-        {
-            "id": domain.id,
-            "name": domain.name,
-            "label_i18n": domain.label_i18n,
-            "as_ref": member.as_ref,
-        }
-        for member, domain in member_rows
-    ]
-
-    ontology_rows = session.execute(
-        select(Ontology)
-        .join(OntologyResourceRef, OntologyResourceRef.ontology_id == Ontology.id)
-        .where(OntologyResourceRef.resource_id == resource.id)
-        .order_by(Ontology.name)
-    ).scalars()
-    ontologies = [
-        {
-            "id": item.id,
-            "name": item.name,
-            "label_i18n": item.label_i18n,
-            "status": item.status,
-            "current_revision": item.current_revision,
-        }
-        for item in ontology_rows
-    ]
-
-    # ── 版本历史 ──
-    revisions = [
-        {"revision": row.revision, "published_at": row.published_at}
-        for row in session.scalars(
-            select(ResourceRevision)
-            .where(ResourceRevision.resource_id == resource.id)
-            .order_by(ResourceRevision.revision.desc())
-        )
-    ]
-
-    # ── 校验状态：最近一次资产层报告里焦点节点命中该类型的检查项 ──
-    validations: list[dict[str, object]] = []
-    latest = session.scalar(
-        select(func.max(ValidationReport.id)).where(
-            ValidationReport.scope == "ontology"
-        )
-    )
-    if latest is not None:
-        validations = [
-            {
-                "check_code": row.check_code,
-                "state": row.state.value,
-                "message": row.message,
-            }
-            for row in session.scalars(
-                select(ValidationResult)
-                .where(
-                    ValidationResult.report_id == latest,
-                    ValidationResult.focus_node == resource.iri,
-                )
-                .order_by(ValidationResult.check_code)
-            )
-        ]
-
-    return {
-        "relations": relations,
-        "rules": rules,
-        "domains": domains,
-        "ontologies": ontologies,
-        "revisions": revisions,
-        "validations": validations,
-    }
+    # 规则 / 业务域 / 本体 / 版本历史 / 校验状态与资源种类无关，见 usages_service。
+    return {"relations": relations, **resource_usages(session, resource)}
 
 
 def get_entity_type(session: Session, type_id: int) -> ModelResource:

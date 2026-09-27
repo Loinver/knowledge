@@ -11,6 +11,15 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import ResourceKind, ResourceStatus
+from app.schemas.type import ResourceUsagesOut
+
+
+class RelationTypeUsagesOut(ResourceUsagesOut):
+    """关系类型详情页「规则 / 引用与版本」两个页签的数据源。
+
+    关系不是别的类型的定义域或值域，所以没有实体类型那一个「关联关系」页签；
+    端点与基数由 GET /relations/{id} 自身返回。
+    """
 
 
 class CardinalitySpec(BaseModel):

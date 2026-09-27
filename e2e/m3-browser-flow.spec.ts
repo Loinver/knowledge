@@ -143,7 +143,7 @@ async function seedOntology(request: APIRequestContext) {
     ref_resource_ids: memberIds,
   })
   await postData(request, '/ontologies/' + ontology.id + '/publish')
-  return { ontologyId: ontology.id, entityTypes }
+  return { ontologyId: ontology.id, entityTypes, relationTypes }
 }
 
 function field(target_attr: string, source_field: string, transform = 'IDENTITY') {
@@ -630,6 +630,10 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     { path: '/ontology/namespaces', pageHeader: true },
     { path: '/ontology/entity-types/' + ontology.entityTypes.E2EEmployee.id, pageHeader: true },
     { path: '/ontology/relation-types', pageHeader: true },
+    {
+      path: '/ontology/relation-types/' + ontology.relationTypes[0].id,
+      pageHeader: true,
+    },
     { path: '/ontology/domains', pageHeader: true },
     { path: '/ontology/designer', pageHeader: false },
     { path: '/datasources', pageHeader: true },

@@ -9,9 +9,12 @@
 from __future__ import annotations
 
 import pytest
-from app.core.db import Base
+from app.api.errors import install_error_handler
+from app.api.v1.relations import router as relations_router
+from app.core.db import Base, get_session
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.domain_service import add_member, create_domain
 from app.domain.iri_service import register_namespace
 from app.domain.relation_service import (
     create_relation_type,
@@ -23,8 +26,10 @@ from app.domain.relation_service import (
     validate_owl_compatibility,
 )
 from app.domain.type_service import create_entity_type
+from app.domain.usages_service import resource_usages
 from app.models.enums import ResourceKind, ResourceStatus
 from app.models.resource import ModelResource
+from app.schemas.domain import DomainCreate, DomainMemberAdd
 from app.schemas.relation import (
     CardinalitySpec,
     EndpointSpec,
@@ -33,6 +38,8 @@ from app.schemas.relation import (
     RelationTypeUpdate,
 )
 from app.schemas.type import EntityTypeCreate
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -502,3 +509,77 @@ def test_duplicate_name_rejected(session, ns, employee_type, department_type):
             ),
         )
     assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+
+
+# ---------------------------------------------------------------------------
+# 详情页数据：关系类型与实体类型共用同一套引用面 / 版本历史
+# ---------------------------------------------------------------------------
+
+
+def _make_relation(session, ns, domain_type, range_type, name="WorksIn"):
+    relation = create_relation_type(
+        session,
+        RelationTypeCreate(
+            name=name,
+            namespace_id=ns.id,
+            label_i18n={"zh-CN": "就职于", "en-US": "works in"},
+            domain_spec=EndpointSpec(type_id=domain_type.id),
+            range_spec=EndpointSpec(type_id=range_type.id),
+        ),
+    )
+    session.commit()
+    return relation
+
+
+def test_relation_usages_carry_domains_and_revisions(
+    session, ns, employee_type, department_type
+):
+    """关系类型的引用面与版本历史走与实体类型同一套共用逻辑。"""
+    relation = _make_relation(session, ns, employee_type, department_type)
+    domain = create_domain(
+        session,
+        DomainCreate(
+            name="HR",
+            iri="https://example.org/kg#hr",
+            label_i18n={"zh-CN": "人力", "en-US": "HR"},
+        ),
+    )
+    add_member(session, domain.id, DomainMemberAdd(resource_id=relation.id))
+    publish_relation_type(session, relation)
+    session.commit()
+
+    usages = resource_usages(session, relation)
+
+    assert [item["name"] for item in usages["domains"]] == ["HR"]
+    assert [item["revision"] for item in usages["revisions"]] == [1]
+    assert usages["rules"] == []
+    assert usages["ontologies"] == []
+    assert usages["validations"] == []
+    # 关系不是别的类型的域/值域，共用部分不含「关联关系」页签
+    assert "relations" not in usages
+
+
+def test_relation_usages_endpoint_returns_the_shared_payload(
+    session, ns, employee_type, department_type
+):
+    """GET /relations/{id}/usages 是详情页「规则 / 引用与版本」的数据源。"""
+    relation = _make_relation(session, ns, employee_type, department_type)
+    app = FastAPI()
+    app.include_router(relations_router, prefix="/api/v1")
+    install_error_handler(app)
+    app.dependency_overrides[get_session] = lambda: session
+    with TestClient(app) as client:
+        response = client.get(f"/api/v1/relations/{relation.id}/usages")
+        missing = client.get("/api/v1/relations/9999/usages")
+
+    assert response.status_code == 200, response.text
+    # conftest 的垫片会把成功外壳解包，这里断言的是业务数据本身
+    body = response.json()
+    assert set(body) == {
+        "rules",
+        "domains",
+        "ontologies",
+        "revisions",
+        "validations",
+    }
+    assert missing.status_code == 404

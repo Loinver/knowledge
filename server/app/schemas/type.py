@@ -159,18 +159,26 @@ class TypeValidationOut(BaseModel):
     message: str | None = None
 
 
-class EntityTypeUsagesOut(BaseModel):
-    """类型详情页「关联关系 / 规则 / 引用与版本」三个页签的数据源。
+class ResourceUsagesOut(BaseModel):
+    """资源的引用面与版本历史（实体类型与关系类型详情页共用）。
 
     一次请求取全，避免详情页为每个页签发一串请求。
     """
 
-    relations: list[TypeRelationUsageOut] = Field(default_factory=list)
     rules: list[TypeRuleUsageOut] = Field(default_factory=list)
     domains: list[TypeDomainUsageOut] = Field(default_factory=list)
     ontologies: list[TypeOntologyUsageOut] = Field(default_factory=list)
     revisions: list[TypeRevisionOut] = Field(default_factory=list)
     validations: list[TypeValidationOut] = Field(default_factory=list)
+
+
+class EntityTypeUsagesOut(ResourceUsagesOut):
+    """实体类型详情页「关联关系 / 规则 / 引用与版本」三个页签的数据源。
+
+    比共用部分多一个「关联关系」页签：该类型作为定义域或值域参与的对象属性。
+    """
+
+    relations: list[TypeRelationUsageOut] = Field(default_factory=list)
 
 
 class RevisionOut(BaseModel):

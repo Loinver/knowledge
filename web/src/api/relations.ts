@@ -7,10 +7,19 @@ export type RelationTypeBrief = S['RelationTypeBrief']
 export type RelationTypeDetail = S['RelationTypeOut']
 export type RelationTypeCreate = S['RelationTypeCreate']
 export type RelationTypeUpdate = S['RelationTypeUpdate']
+export type RelationTypeUsages = S['RelationTypeUsagesOut']
+export type TypeRuleUsage = S['TypeRuleUsageOut']
+export type TypeDomainUsage = S['TypeDomainUsageOut']
+export type TypeOntologyUsage = S['TypeOntologyUsageOut']
+export type TypeRevision = S['TypeRevisionOut']
+export type TypeValidation = S['TypeValidationOut']
 
 export const relationsApi = {
   list: (params?: { q?: string; page?: number; page_size?: number }, signal?: AbortSignal) =>
     http.get<RelationTypeBrief[]>('/relations', { params, signal }).then((r) => r.data),
+  /** 详情页两个页签的数据：规则 / 引用与版本（端点与基数由 get 返回）。 */
+  usages: (id: number, signal?: AbortSignal) =>
+    http.get<RelationTypeUsages>(`/relations/${id}/usages`, { signal }).then((r) => r.data),
   get: (id: number, signal?: AbortSignal) =>
     http.get<RelationTypeDetail>(`/relations/${id}`, { signal }).then((r) => r.data),
   create: (payload: RelationTypeCreate) => http.post('/relations', payload).then((r) => r.data),

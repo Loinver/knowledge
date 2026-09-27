@@ -17,6 +17,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
@@ -31,6 +32,7 @@ import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
 
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
+const router = useRouter()
 
 const loading = ref(false)
 const detailsLoading = ref(false)
@@ -150,9 +152,14 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
   {
     title: t('common.actions'),
     key: 'actions',
-    width: 168,
+    width: 232,
     render: (row) =>
       h(NSpace, { size: 4, wrap: false }, () => [
+        h(
+          NButton,
+          { size: 'small', quaternary: true, onClick: () => goToDetail(row.id) },
+          { default: () => t('common.view') },
+        ),
         h(
           NButton,
           { size: 'small', quaternary: true, onClick: () => void openEdit(row.id) },
@@ -337,6 +344,11 @@ async function handleCreate() {
   } finally {
     creating.value = false
   }
+}
+
+/** 详情页与实体类型对齐：端点、基数、OWL 特征、规则命中与引用面。 */
+function goToDetail(id: number) {
+  void router.push({ name: 'relation-detail', params: { id } })
 }
 
 async function openEdit(id: number) {

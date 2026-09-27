@@ -15,6 +15,7 @@ from app.domain.relation_service import (
     publish_relation_type,
     update_relation_type,
 )
+from app.domain.usages_service import resource_usages
 from app.models.resource import ModelResource
 from app.schemas.relation import (
     AttributeDefOut,
@@ -25,6 +26,7 @@ from app.schemas.relation import (
     RelationTypeCreate,
     RelationTypeOut,
     RelationTypeUpdate,
+    RelationTypeUsagesOut,
 )
 from app.schemas.response import ApiResponse
 from app.schemas.type import RevisionOut as TypeRevisionOut
@@ -120,6 +122,15 @@ def create_relation(
     resource = create_relation_type(session, payload)
     session.commit()
     return _to_out(session, resource)
+
+
+@router.get("/{relation_id}/usages", response_model=ApiResponse[RelationTypeUsagesOut])
+def relation_usages(
+    relation_id: int, session: Session = Depends(get_session)
+) -> RelationTypeUsagesOut:
+    """详情页「规则 / 引用与版本」两个页签的数据。"""
+    resource = get_relation_type(session, relation_id)
+    return RelationTypeUsagesOut.model_validate(resource_usages(session, resource))
 
 
 @router.get("/{relation_id}", response_model=ApiResponse[RelationTypeOut])

@@ -20,6 +20,7 @@ export const GROUP_PREFIX = 'group:'
 /** 详情页没有独立菜单项，高亮与面包屑回到它的列表页。 */
 const detailFallback: Record<string, string> = {
   'entity-detail': 'entity-types',
+  'relation-detail': 'relation-types',
   'graph-entity-detail': 'graph-entities',
 }
 
