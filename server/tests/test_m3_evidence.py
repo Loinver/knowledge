@@ -390,6 +390,7 @@ def test_entity_evidence_api_shape_and_no_connection_secrets(
             "table_name",
             "row_key",
             "columns",
+            "column_transforms",
             "run_id",
             "evidence_type",
             "quarantined",

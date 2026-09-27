@@ -92,6 +92,9 @@ class FactEvidenceOut(BaseModel):
     table_name: str
     row_key: str
     columns: list
+    # 与 columns 对齐的转换链：{column, target, transform, params}。
+    # 历史行可能为 None（该列是后加的），前端按"未记录"显示。
+    column_transforms: list | None = None
     run_id: int
     evidence_type: str
     mapping_revision_id: int | None = None
@@ -175,6 +178,7 @@ class EvidenceTraceItem(FactOut):
     table_name: str
     row_key: str
     columns: list[str]
+    column_transforms: list | None = None
     run_id: int
     evidence_type: str
     quarantined: bool

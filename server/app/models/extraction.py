@@ -167,6 +167,9 @@ class FactEvidence(Base):
     table_name: Mapped[str] = mapped_column(String(128), nullable=False)
     row_key: Mapped[str] = mapped_column(String(256), nullable=False)
     columns: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # 与 columns 对齐的转换链：每个来源列经哪个转换、带什么参数、落到哪个目标属性。
+    # columns 只回答"用了哪些列"，这一列才回答"这个值是怎么算出来的"。
+    column_transforms: Mapped[list | None] = mapped_column(JSON, default=None)
     run_id: Mapped[int] = mapped_column(ForeignKey("extraction_run.id"), nullable=False)
     evidence_type: Mapped[str] = mapped_column(String(32), nullable=False)
     mapping_revision_id: Mapped[int | None] = mapped_column(Integer, default=None)

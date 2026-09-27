@@ -4742,6 +4742,8 @@ export interface components {
       row_key: string
       /** Columns */
       columns: string[]
+      /** Column Transforms */
+      column_transforms?: unknown[] | null
       /** Run Id */
       run_id: number
       /** Evidence Type */
@@ -4880,6 +4882,8 @@ export interface components {
       row_key: string
       /** Columns */
       columns: unknown[]
+      /** Column Transforms */
+      column_transforms?: unknown[] | null
       /** Run Id */
       run_id: number
       /** Evidence Type */

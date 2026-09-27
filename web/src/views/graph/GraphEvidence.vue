@@ -103,6 +103,28 @@ const chainItem = ref<EvidenceItem | null>(null)
 function showChain(item: EvidenceItem) {
   chainItem.value = item
 }
+
+type TransformEntry = {
+  column?: string | null
+  target?: string | null
+  transform?: string | null
+  params?: Record<string, unknown> | null
+}
+
+/** 属性级转换链：columns 只说"用了哪些列"，这一列才说"值是怎么算出来的"。 */
+function transformText(item: EvidenceItem) {
+  const chain = (item.column_transforms ?? []) as TransformEntry[]
+  if (!chain.length) return t('graph.chainNoTransform')
+  return chain
+    .map((entry) => {
+      const params =
+        entry.params && Object.keys(entry.params).length ? ` ${JSON.stringify(entry.params)}` : ''
+      const target = entry.target ? ` → ${entry.target}` : ''
+      return `${entry.column ?? '?'}${target}: ${entry.transform ?? 'IDENTITY'}${params}`
+    })
+    .join('； ')
+}
+
 const frozenChain = computed(() => {
   const item = chainItem.value
   if (!item) return []
@@ -113,6 +135,7 @@ const frozenChain = computed(() => {
       value: `${item.source_name ?? item.source_id} · ${item.table_name} · ${item.row_key}`,
     },
     { label: t('graph.chainFields'), value: item.columns.join(', ') },
+    { label: t('graph.chainTransforms'), value: transformText(item) },
     { label: t('graph.chainRun'), value: `#${item.run_id}` },
     {
       label: t('graph.chainMapping'),

@@ -525,6 +525,15 @@ def _phase1_entity(
                 row_key,
                 [fm.get("source_field") for fm in field_maps],
                 "ENTITY",
+                [
+                    {
+                        "column": fm.get("source_field"),
+                        "target": fm.get("target_attr"),
+                        "transform": fm.get("transform", "IDENTITY"),
+                        "params": fm.get("transform_params") or {},
+                    }
+                    for fm in field_maps
+                ],
             )
         )
         evidence_n += 1
@@ -667,6 +676,14 @@ def _phase2_relation(
                     row_key,
                     [fk_field],
                     "RELATION",
+                    [
+                        {
+                            "column": fk_field,
+                            "target": None,
+                            "transform": "IDENTITY",
+                            "params": {},
+                        }
+                    ],
                 )
             )
             triple_n += 1
@@ -751,6 +768,16 @@ def _phase2_relation(
                     row_key,
                     cols,
                     "RELATION",
+                    # 多态端点用的是原始外键值与判别列，这一路没有值转换。
+                    [
+                        {
+                            "column": col,
+                            "target": None,
+                            "transform": "IDENTITY",
+                            "params": {},
+                        }
+                        for col in cols
+                    ],
                 )
             )
             triple_n += 1
@@ -939,8 +966,13 @@ def _make_evidence(
     row_key: str,
     columns: list[str],
     ev_type: str,
+    column_transforms: list[dict] | None = None,
 ) -> FactEvidence:
-    """构造证据行并冻结当时的映射/本体/资源/规则版本。"""
+    """构造证据行并冻结当时的映射/本体/资源/规则版本。
+
+    column_transforms 与 columns 对齐，记录每个来源列的转换与落点；
+    没传就留空，读回时按"未记录"处理而不是伪造成 IDENTITY。
+    """
     cfg = run.cfg_snapshot if isinstance(run.cfg_snapshot, dict) else {}
     pins = cfg.get("pins") or {}
     return FactEvidence(
@@ -952,6 +984,7 @@ def _make_evidence(
         table_name=table,
         row_key=str(row_key),
         columns=list(columns),
+        column_transforms=list(column_transforms) if column_transforms else None,
         run_id=run.id,
         evidence_type=ev_type,
         mapping_revision_id=pins.get("mapping_revision_id"),

@@ -466,6 +466,8 @@
     "chainFact": "Fact",
     "chainSource": "Source row",
     "chainFields": "Source fields",
+    "chainTransforms": "Field transform chain",
+    "chainNoTransform": "No field transform recorded for this fact (legacy data or direct column)",
     "chainRun": "Extraction run",
     "chainMapping": "Frozen mapping",
     "chainOntology": "Frozen ontology",

@@ -32,6 +32,7 @@ from app.domain.metadata_service import capture_metadata
 from app.domain.source_service import create_datasource
 from app.models.domain import Ontology, OntologyRevision
 from app.models.enums import RunResult
+from app.models.extraction import FactEvidence
 from app.schemas.datasource import DatasourceCreate
 from app.schemas.mapping import (
     EntityMapCreate,
@@ -42,7 +43,7 @@ from app.schemas.mapping import (
     RelMapCreate,
     RelMode,
 )
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -399,6 +400,70 @@ def test_evidence_traceability(session: Session, source_db: str) -> None:
             assert [item.row_key for item in evidence] == [
                 expected_keys[fact.predicate]
             ]
+
+
+def _mapping_with_transform(session, onto):
+    """只建一个实体映射：name 走 TEMPLATE 转换，用来验证转换链落库。"""
+    m = create_mapping(session, MappingCreate(name="tpl", ontology_id=onto.id))
+    session.commit()
+    save_draft(
+        session,
+        m.id,
+        MappingRevisionCreate(
+            entity_maps=[
+                EntityMapCreate(
+                    entity_type="Enterprise",
+                    table="enterprise",
+                    field_maps=[
+                        FieldMap(
+                            target_attr="name",
+                            source_field="name",
+                            transform="TEMPLATE",
+                            transform_params={"template": "企业-{value}"},
+                        ),
+                        FieldMap(
+                            target_attr="credit_code",
+                            source_field="credit_code",
+                        ),
+                    ],
+                    key_fields=["id"],
+                )
+            ],
+            rel_maps=[],
+        ),
+        if_match=0,
+    )
+    session.commit()
+    rev = publish_mapping(session, m.id, if_match=0)
+    session.commit()
+    return rev
+
+
+def test_evidence_records_per_attribute_transform_chain(session, source_db):
+    """B-9/V-TR-02：证据要能回答「这个值是怎么算出来的」，不只是「用了哪些列」。"""
+    onto = _setup_onto(session)
+    ds = _setup_ds(session, source_db)
+    rev = _mapping_with_transform(session, onto)
+
+    start_run(session, rev.id, ds.id, "https://example.org/kg/")
+    session.commit()
+
+    evidences = list(
+        session.scalars(
+            select(FactEvidence).where(FactEvidence.evidence_type == "ENTITY")
+        )
+    )
+    assert evidences
+    row = evidences[0]
+    assert row.column_transforms, "实体证据必须带属性级转换链"
+    chain = {item["column"]: item for item in row.column_transforms}
+    # 转换链与 columns 一一对齐，前端才能并排显示
+    assert set(chain) == set(row.columns) == {"name", "credit_code"}
+    assert chain["name"]["transform"] == "TEMPLATE"
+    assert chain["name"]["params"] == {"template": "企业-{value}"}
+    assert chain["name"]["target"] == "name"
+    # 没配转换的列如实记 IDENTITY，不省略
+    assert chain["credit_code"]["transform"] == "IDENTITY"
 
 
 def test_cannot_run_draft(session, source_db):

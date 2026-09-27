@@ -466,6 +466,8 @@
     "chainFact": "事实",
     "chainSource": "来源行",
     "chainFields": "来源字段",
+    "chainTransforms": "字段转换链",
+    "chainNoTransform": "该事实没有记录字段转换（历史数据或直取列）",
     "chainRun": "抽取运行",
     "chainMapping": "冻结映射版本",
     "chainOntology": "冻结本体版本",

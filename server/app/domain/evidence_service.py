@@ -161,6 +161,7 @@ def _flatten_evidence(
                 "table_name": ev.table_name,
                 "row_key": ev.row_key,
                 "columns": list(ev.columns or []),
+                "column_transforms": ev.column_transforms,
                 "run_id": ev.run_id,
                 "evidence_type": ev.evidence_type,
                 "quarantined": is_quarantined,
