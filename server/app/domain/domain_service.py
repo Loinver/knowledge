@@ -82,6 +82,40 @@ def _assert_no_cycle(
         cursor = session.get(BusinessDomain, cursor.parent_id)
 
 
+def _check_owner_domain_unique(
+    session: Session, resource_id: int, owner_domain_id: int
+) -> None:
+    """维护责任域唯一：同一资源至多由一个业务域声明维护责任。
+
+    已有维护域时，只有再次声明同一个维护域才允许（重复声明同一责任域不算冲突）。
+    """
+    owner = session.get(BusinessDomain, owner_domain_id)
+    if owner is None:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND, {"owner_domain_id": owner_domain_id}
+        )
+    conflicting = (
+        session.execute(
+            select(DomainMember).where(
+                DomainMember.resource_id == resource_id,
+                DomainMember.owner_domain_id.is_not(None),
+                DomainMember.owner_domain_id != owner_domain_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if conflicting is not None:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {
+                "reason": "owner_domain_conflict",
+                "resource_id": resource_id,
+                "owner_domain_id": conflicting.owner_domain_id,
+            },
+        )
+
+
 def add_member(
     session: Session, domain_id: int, payload: DomainMemberAdd
 ) -> DomainMember:
@@ -103,6 +137,10 @@ def add_member(
         raise KGError(
             ErrorCode.ALREADY_PUBLISHED,
             {"resource_id": payload.resource_id, "reason": "member_exists"},
+        )
+    if payload.owner_domain_id is not None:
+        _check_owner_domain_unique(
+            session, payload.resource_id, payload.owner_domain_id
         )
     member = DomainMember(
         domain_id=domain_id,

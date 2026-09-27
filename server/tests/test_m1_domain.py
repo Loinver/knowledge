@@ -207,3 +207,64 @@ def test_cross_domain_ref(session, published_type):
     members = list_members(session, domain_b.id)
     assert members[0].as_ref is True
     assert members[0].owner_domain_id == domain_a.id
+
+
+def test_owner_domain_must_be_unique_per_resource(session, published_type):
+    """维护责任域唯一：同一资源被第二个域声明维护责任时必须拒绝。"""
+    domain_a = _make_domain(session, name="HR")
+    domain_b = _make_domain(session, name="Finance")
+    session.commit()
+    add_member(
+        session,
+        domain_a.id,
+        DomainMemberAdd(resource_id=published_type.id, owner_domain_id=domain_a.id),
+    )
+    session.commit()
+
+    with pytest.raises(KGError) as exc:
+        add_member(
+            session,
+            domain_b.id,
+            DomainMemberAdd(resource_id=published_type.id, owner_domain_id=domain_b.id),
+        )
+    assert exc.value.code == ErrorCode.VALIDATION_VIOLATION
+    assert exc.value.params["reason"] == "owner_domain_conflict"
+    assert exc.value.params["owner_domain_id"] == domain_a.id
+
+
+def test_owner_domain_allows_repeating_same_owner(session, published_type):
+    """重复声明同一个维护域不算冲突，跨域引用仍可保留同一责任域。"""
+    domain_a = _make_domain(session, name="HR")
+    domain_b = _make_domain(session, name="Finance")
+    session.commit()
+    add_member(
+        session,
+        domain_a.id,
+        DomainMemberAdd(resource_id=published_type.id, owner_domain_id=domain_a.id),
+    )
+    add_member(
+        session,
+        domain_b.id,
+        DomainMemberAdd(
+            resource_id=published_type.id,
+            as_ref=True,
+            owner_domain_id=domain_a.id,
+        ),
+    )
+    session.commit()
+    members = list_members(session, domain_b.id)
+    assert members[0].owner_domain_id == domain_a.id
+
+
+def test_owner_domain_must_exist(session, published_type):
+    """维护责任域必须指向已存在的业务域。"""
+    domain = _make_domain(session, name="HR")
+    session.commit()
+    with pytest.raises(KGError) as exc:
+        add_member(
+            session,
+            domain.id,
+            DomainMemberAdd(resource_id=published_type.id, owner_domain_id=9999),
+        )
+    assert exc.value.code == ErrorCode.RESOURCE_NOT_FOUND
+    assert exc.value.params["owner_domain_id"] == 9999
