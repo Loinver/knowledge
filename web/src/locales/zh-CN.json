@@ -383,6 +383,7 @@
     "resetZoom": "重置缩放",
     "directRelation": "直接关系事实",
     "canvasHint": "点击节点展开其邻域，也可用 Tab 和 Enter 操作。下方表格保留每条事实及其证据入口。",
+    "minimap": "图谱缩略图：蓝框是当前视口，点击可把视口移到该处",
     "exploreEntity": "探索 {iri}",
     "depth": "邻域深度",
     "oneDegree": "1 度",

@@ -383,6 +383,7 @@
     "resetZoom": "Reset zoom",
     "directRelation": "Direct facts",
     "canvasHint": "Select a node to explore its neighborhood. Tab and Enter also work. The tables below retain every fact and its evidence link.",
+    "minimap": "Graph overview: the blue box is the current viewport; click to move the viewport there",
     "exploreEntity": "Explore {iri}",
     "depth": "Neighborhood depth",
     "oneDegree": "1 degree",
