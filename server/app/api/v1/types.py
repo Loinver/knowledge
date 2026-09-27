@@ -47,6 +47,7 @@ def _data_props(session: Session, resource: ModelResource) -> list[DataTypePropO
         out.append(
             DataTypePropOut(
                 name=detail.prop_name if detail else prop.name.split(".")[-1],
+                iri=prop.iri,
                 label_i18n=prop.label_i18n,
                 definition_i18n=prop.definition_i18n,
                 datatype=detail.datatype if detail else "string",

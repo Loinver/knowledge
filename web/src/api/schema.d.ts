@@ -4116,6 +4116,8 @@ export interface components {
     DataTypePropOut: {
       /** Name */
       name: string
+      /** Iri */
+      iri?: string | null
       /** Label I18N */
       label_i18n?: {
         [key: string]: string

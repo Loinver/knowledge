@@ -25,6 +25,9 @@ class DataTypePropCreate(BaseModel):
 class DataTypePropOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     name: str
+    # 属性子资源的 IRI（= 所属类型 IRI + "/" + 属性名）。
+    # GB/T 48000.3 附录 A 要求属性可定位到 IRI，此前只在库内派生、未对外返回。
+    iri: str | None = None
     label_i18n: dict[str, str] | None = None
     definition_i18n: dict[str, str] | None = None
     datatype: str

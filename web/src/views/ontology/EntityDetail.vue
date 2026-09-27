@@ -457,6 +457,11 @@ const defaultOptions = computed(() =>
 const propColumns = computed(() => [
   { title: t('common.name'), key: 'name' },
   {
+    title: t('common.iri'),
+    key: 'iri',
+    render: (prop: DataTypeProp) => prop.iri ?? '—',
+  },
+  {
     title: t('common.label'),
     key: 'label_i18n',
     render: (prop: DataTypeProp) => localized(prop.label_i18n),

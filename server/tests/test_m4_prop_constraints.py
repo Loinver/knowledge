@@ -125,6 +125,7 @@ def test_data_prop_constraints_survive_create_and_read(
     assert created["data_props"] == [
         {
             "name": "code",
+            "iri": f"{created['iri']}/code",
             "label_i18n": None,
             "definition_i18n": None,
             "datatype": "string",
@@ -135,6 +136,7 @@ def test_data_prop_constraints_survive_create_and_read(
         },
         {
             "name": "level",
+            "iri": f"{created['iri']}/level",
             "label_i18n": {"zh-CN": "职级"},
             "definition_i18n": None,
             "datatype": "enum",
@@ -144,6 +146,19 @@ def test_data_prop_constraints_survive_create_and_read(
             "default_value": "P3",
         },
     ]
+
+
+def test_data_prop_exposes_iri_for_standard_traceability(
+    client: TestClient, namespace_id: int
+) -> None:
+    """GB/T 48000.3 附录 A 要求属性可定位到 IRI：读回必须带属性 IRI。"""
+    created = make_type(client, namespace_id, [{"name": "code", "datatype": "string"}])
+    prop = created["data_props"][0]
+    assert prop["iri"] == f"{created['iri']}/code"
+    assert prop["iri"].startswith("https://example.org/kg#Employee")
+
+    fetched = client.get(f"/api/v1/entity-types/{created['id']}").json()
+    assert fetched["data_props"][0]["iri"] == prop["iri"]
 
 
 def test_new_enum_property_requires_explicit_dictionary_revision(
@@ -184,6 +199,7 @@ def test_data_prop_constraints_survive_update(
     assert updated.status_code == 200, updated.text
     assert updated.json()["data_props"][0] == {
         "name": "level",
+        "iri": f"{updated.json()['iri']}/level",
         "label_i18n": None,
         "definition_i18n": None,
         "datatype": "integer",
