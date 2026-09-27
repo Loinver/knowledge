@@ -103,7 +103,9 @@
 | 规模压测（P2-03）                          | `scripts/benchmark_scale.py` 实测：1 万企业源 + 5 万任职行 → 抽取成功产出 6 万实体（含 5 万 stub）/ 5 万事实，耗时 299 秒（SQLite+逐行证据写入为主瓶颈）；图谱视图全图查询 0.08 秒；结果存 `/tmp/kg-benchmark/result.json`                                                                         | `scripts/benchmark_scale.py`                                                                                   |
 | 主 chunk 拆包（P2-04 部分）                | Vite `manualChunks`：业务主 chunk 700 kB → 121 kB；naive-ui（792 kB，可缓存）与 vue/d3 各自成块                                                                                                                                                                                                    | `web/vite.config.ts` 构建产物                                                                                  |
 
-诚实说明：G-03/04/05（旭日/矩形树/圆形打包）需要专属划分图渲染而非节点-边画布，本轮未实现；G-22 甘特需要区间条渲染；G-29 融合解释图与 G-31 小多图未实现——均保持未实现结论，不以近似实现冒充。许可 allow-only 追加 `cryptography`（Apache-2.0 OR BSD-3-Clause）与 `cffi`（MIT-0），均在白名单许可族内。
+划分图补充（2026-09-27 第二轮）：G-03 旭日图、G-04 矩形树图、G-05 圆形打包图已实现——布局层新增 marks 标记通道（扇形/矩形/圆，d3-hierarchy partition/treemap/pack 真实布局），画布按标记渲染，层级为"本体 → 类型 → 实例"（面积按实例计数），实例点击下钻、类型色图例、双语；形态选择器与推荐通用列表同步。实测截图：![旭日图](./assets/kg-accept-11-sunburst.png)、![矩形树图](./assets/kg-accept-12-treemap.png)、![圆形打包图](./assets/kg-accept-13-pack.png)。
+
+诚实说明：G-22 甘特需要区间条渲染、G-29 融合解释图与 G-31 小多图未实现——均保持未实现结论，不以近似实现冒充。许可 allow-only 追加 `cryptography`（Apache-2.0 OR BSD-3-Clause）与 `cffi`（MIT-0），均在白名单许可族内。
 
 ## 8. 结论
 
