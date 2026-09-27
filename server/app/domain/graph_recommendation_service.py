@@ -36,6 +36,7 @@ LAYOUT_PATH = "path"
 LAYOUT_SCHEMA = "schema"
 LAYOUT_SUPPLY_CHAIN = "supply_chain"
 LAYOUT_TIMELINE = "timeline"
+LAYOUT_GANTT = "gantt"
 
 # 不依赖语义信号、任何图谱都可用的通用形态。
 # path（G-12）与 diff（G-24）是查询/对比模式，不是布局，由前端单独提供。
@@ -47,6 +48,7 @@ GENERIC_LAYOUTS = [
     "sunburst",
     "treemap",
     "pack",
+    "small_multiples",
 ]
 
 
@@ -116,6 +118,14 @@ def recommend_layouts(session: Session, graph_revision_id: int) -> dict:
             {
                 "layout_id": LAYOUT_TIMELINE,
                 "reason_key": "graph.reason.dateAttr",
+                "reason_params": {"count": len(signals["date_attrs"])},
+            }
+        )
+        # 同一批日期属性也支持按起止区间画甘特条（G-22），与时间轴并列推荐。
+        recommendations.append(
+            {
+                "layout_id": LAYOUT_GANTT,
+                "reason_key": "graph.reason.dateRange",
                 "reason_params": {"count": len(signals["date_attrs"])},
             }
         )

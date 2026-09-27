@@ -48,6 +48,14 @@ export type LayoutMark = {
   labelY?: number
 }
 
+export type LayoutTitle = {
+  id: string
+  x: number
+  y: number
+  text: string
+  anchor?: 'start' | 'middle' | 'end'
+}
+
 export type LayoutResult = {
   width: number
   height: number
@@ -57,6 +65,10 @@ export type LayoutResult = {
   edgePaths?: Record<number, EdgePathOverride>
   /** 划分图标记（旭日/矩形树/打包）：存在时画布只渲染标记，不渲染节点-边。 */
   marks?: LayoutMark[]
+  /** 纯文字标注（甘特时间轴刻度、小多图图块标题）：不参与交互，只做刻度与分组说明。 */
+  titles?: LayoutTitle[]
+  /** 布局可收窄参与绘制的边（小多图各图块只画块内边）；缺省时画布用原始边。 */
+  edges?: GraphViewEdge[]
 }
 
 export type LayoutCompute = (graph: Pick<GraphView, 'nodes' | 'edges'>) => LayoutResult
@@ -1108,6 +1120,210 @@ const pack: LayoutPlugin = {
   },
 }
 
+// ===== 时间与组合（G-22 甘特、G-31 小多图）=====
+
+/** 从 attrs 里取全部 ISO 日期，返回 [最早, 最晚]；只有一个日期即零长度区间。 */
+function dateRange(attrs: Record<string, unknown>): [string, string] | null {
+  const dates = Object.values(attrs)
+    .filter((value): value is string => typeof value === 'string' && ISO_DATE.test(value))
+    .map((value) => value.slice(0, 10))
+    .sort()
+  if (!dates.length) return null
+  return [dates[0]!, dates[dates.length - 1]!]
+}
+
+/**
+ * G-22 履历甘特图：按类型分泳道，每个有起止日期的实体画一根甘特条，
+ * 横轴是统一时间轴（顶部给出年月刻度）。同一泳道内时间上重叠的区间
+ * 用告警色高亮，便于发现"同一部门同时有两条在职记录"这类问题。
+ */
+const gantt: LayoutPlugin = {
+  id: 'gantt',
+  compute: (graph) => {
+    const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
+    const rows = graph.nodes
+      .map((node) => ({ node, range: dateRange(node.attrs) }))
+      .filter(
+        (item): item is { node: GraphViewNode; range: [string, string] } => item.range !== null,
+      )
+    if (!rows.length) {
+      return { width: 1240, height: 480, groups: [], nodes: [], marks: [], titles: [] }
+    }
+
+    const times = rows.flatMap((item) => item.range.map((date) => new Date(date).getTime()))
+    const min = Math.min(...times)
+    const max = Math.max(...times)
+    const span = Math.max(1, max - min)
+
+    const GUTTER = 130
+    const PLOT = 1010
+    const ROW_H = 40
+    const LANE_GAP = 30
+    const plotX = (time: number) => GUTTER + ((time - min) / span) * PLOT
+
+    const marks: LayoutMark[] = []
+    const titles: LayoutTitle[] = []
+    const groups: { type: string; y: number; nodes: PositionedNode[] }[] = []
+    const placed: PositionedNode[] = []
+
+    // 顶部时间刻度：最多 7 个等距年月，首尾必在轴端点内。
+    const ticks = Math.min(7, Math.max(2, new Set(rows.map((r) => r.range[0].slice(0, 7))).size))
+    for (let index = 0; index < ticks; index += 1) {
+      const ratio = ticks === 1 ? 0 : index / (ticks - 1)
+      const time = min + ratio * span
+      titles.push({
+        id: `tick-${index}`,
+        x: plotX(time),
+        y: 34,
+        text: new Date(time).toISOString().slice(0, 7),
+        anchor: 'middle',
+      })
+    }
+
+    let y = 80
+    for (const type of types) {
+      const lane = rows.filter((item) => item.node.type_iri === type)
+      if (!lane.length) continue
+      groups.push({ type, y: y - 16, nodes: [] })
+      for (const { node, range } of lane) {
+        const start = new Date(range[0]).getTime()
+        const end = new Date(range[1]).getTime()
+        const x0 = plotX(start)
+        const x1 = plotX(end)
+        const width = Math.max(12, x1 - x0)
+        const overlapped = lane.some(
+          (other) =>
+            other.node.iri !== node.iri &&
+            new Date(other.range[0]).getTime() < end &&
+            start < new Date(other.range[1]).getTime(),
+        )
+        marks.push({
+          id: `bar:${node.iri}`,
+          iri: node.iri,
+          kind: 'rect',
+          x: x0 + width / 2,
+          y,
+          w: width,
+          h: 20,
+          fill: overlapped ? '#dc2626' : typeColor(type, types),
+          label: clip(String(node.attrs.name ?? node.row_key), 16),
+          sublabel: `${range[0]} → ${range[1]}`,
+        })
+        placed.push({ ...node, x: x0 + width / 2, y })
+        y += ROW_H
+      }
+      y += LANE_GAP
+    }
+
+    return {
+      width: GUTTER + PLOT + 70,
+      height: Math.max(480, y + 40),
+      groups,
+      nodes: placed,
+      marks,
+      titles,
+    }
+  },
+}
+
+/**
+ * G-31 小多图对比：取实例最多的那一类实体，按度数取前若干个作为小图中心，
+ * 每个中心画一张 1 跳邻域小图，网格并排、**统一半径**（同一比例尺），
+ * 便于横向比较不同企业的关系规模；图块标题标注中心实体与邻居数。
+ */
+const smallMultiples: LayoutPlugin = {
+  id: 'small_multiples',
+  compute: (graph) => {
+    const degree = new Map<string, number>()
+    const neighbours = new Map<string, string[]>()
+    for (const edge of graph.edges) {
+      degree.set(edge.subject, (degree.get(edge.subject) ?? 0) + 1)
+      degree.set(edge.object_, (degree.get(edge.object_) ?? 0) + 1)
+      const forward = neighbours.get(edge.subject) ?? []
+      forward.push(edge.object_)
+      neighbours.set(edge.subject, forward)
+      const backward = neighbours.get(edge.object_) ?? []
+      backward.push(edge.subject)
+      neighbours.set(edge.object_, backward)
+    }
+    const byIri = new Map(graph.nodes.map((node) => [node.iri, node] as const))
+    const byType = new Map<string, GraphViewNode[]>()
+    for (const node of graph.nodes) {
+      byType.set(node.type_iri, [...(byType.get(node.type_iri) ?? []), node])
+    }
+    const target = [...byType.entries()].sort(
+      (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+    )[0]
+    if (!target) {
+      return { width: 940, height: 480, groups: [], nodes: [], titles: [] }
+    }
+    const centres = [...target[1]]
+      .sort(
+        (a, b) => (degree.get(b.iri) ?? 0) - (degree.get(a.iri) ?? 0) || a.iri.localeCompare(b.iri),
+      )
+      .slice(0, 6)
+
+    const TILE_W = 470
+    const TILE_H = 400
+    // 统一比例尺：所有小图用同一邻居半径，图块大小也一致。
+    const RADIUS = 125
+    const MAX_NEIGHBOURS = 6
+    const columns = Math.min(3, centres.length)
+    const rowsCount = Math.ceil(centres.length / columns)
+
+    const titles: LayoutTitle[] = []
+    const placed: PositionedNode[] = []
+    const used = new Set<string>()
+    const tileSets: Set<string>[] = []
+
+    centres.forEach((centre, index) => {
+      if (used.has(centre.iri)) return
+      const cx = (index % columns) * TILE_W + TILE_W / 2
+      const cy = Math.floor(index / columns) * TILE_H + TILE_H / 2
+      const ring = [...new Set(neighbours.get(centre.iri) ?? [])]
+        .filter((iri) => !used.has(iri) && byIri.has(iri))
+        .sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || a.localeCompare(b))
+        .slice(0, MAX_NEIGHBOURS)
+      const members = [centre, ...ring.map((iri) => byIri.get(iri)!)]
+      const tile = new Set(members.map((node) => node.iri))
+      tileSets.push(tile)
+      members.forEach((node) => used.add(node.iri))
+
+      placed.push({ ...centre, x: cx, y: cy })
+      ring.forEach((iri, ringIndex) => {
+        const node = byIri.get(iri)!
+        const angle = (2 * Math.PI * ringIndex) / ring.length - Math.PI / 2
+        placed.push({
+          ...node,
+          x: cx + Math.cos(angle) * RADIUS,
+          y: cy + Math.sin(angle) * RADIUS,
+        })
+      })
+      titles.push({
+        id: `tile:${centre.iri}`,
+        x: cx,
+        y: cy - TILE_H / 2 + 30,
+        text: `${String(centre.attrs.name ?? centre.row_key)} · ${ring.length}`,
+        anchor: 'middle',
+      })
+    })
+
+    // 只保留落在同一个图块内的边：跨图块的边会把两张小图连起来，破坏"并排对比"。
+    const edges = graph.edges.filter((edge) =>
+      tileSets.some((tile) => tile.has(edge.subject) && tile.has(edge.object_)),
+    )
+
+    return {
+      width: columns * TILE_W,
+      height: Math.max(480, rowsCount * TILE_H),
+      groups: [],
+      nodes: placed,
+      titles,
+      edges,
+    }
+  },
+}
+
 export const LAYOUTS: LayoutPlugin[] = [
   typeGrid,
   ring,
@@ -1131,6 +1347,8 @@ export const LAYOUTS: LayoutPlugin[] = [
   sunburst,
   treemapLayout,
   pack,
+  gantt,
+  smallMultiples,
 ]
 
 export const LAYOUT_IDS = LAYOUTS.map((layout) => layout.id)

@@ -27,7 +27,7 @@ const layout = computed(() =>
 const marks = computed(() => layout.value.marks ?? null)
 const legendTypes = computed(() => layout.value.groups.map((group) => group.type))
 const paths = computed(() =>
-  graphPaths(layout.value.nodes, props.graph.edges, layout.value.edgePaths),
+  graphPaths(layout.value.nodes, layout.value.edges ?? props.graph.edges, layout.value.edgePaths),
 )
 const isSchema = computed(() => props.layoutId === 'schema')
 const edgeLabel = (edge: { props?: Record<string, unknown> | null; kind: string }) => {
@@ -116,6 +116,16 @@ const nodeBadgeText = (node: GraphView['nodes'][number]) => {
           class="group-label"
         >
           {{ shortName(group.type) }}
+        </text>
+        <text
+          v-for="title in layout.titles ?? []"
+          :key="title.id"
+          :x="title.x"
+          :y="title.y"
+          :text-anchor="title.anchor ?? 'middle'"
+          class="layout-title"
+        >
+          {{ title.text }}
         </text>
         <template v-if="marks">
           <g v-for="mark in marks" :key="mark.id">
@@ -349,6 +359,11 @@ const nodeBadgeText = (node: GraphView['nodes'][number]) => {
   fill: var(--text-secondary);
   font-size: 15px;
   font-weight: 600;
+}
+.layout-title {
+  fill: var(--text-secondary);
+  font-size: 12px;
+  pointer-events: none;
 }
 .mark {
   cursor: pointer;

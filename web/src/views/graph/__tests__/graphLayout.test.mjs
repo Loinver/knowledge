@@ -69,6 +69,8 @@ test('registry exposes every P0 form id and default fallback by center', () => {
     'sunburst',
     'treemap',
     'pack',
+    'gantt',
+    'small_multiples',
   ])
   assert.equal(resolveLayout(undefined, true).id, 'ring')
   assert.equal(resolveLayout(undefined, false).id, 'type_grid')
@@ -307,4 +309,83 @@ test('pack nests instance circles inside type circles', () => {
   assert.ok(typeCircles.every((m) => m.r > 0))
   const instances = circles.filter((m) => m.id.startsWith('inst:'))
   assert.ok(instances.every((m) => m.r > 0))
+})
+
+test('gantt draws one bar per dated node and flags overlapping ranges', () => {
+  const nodes = [
+    node('p1', 'Person', 0, {
+      name: 'A',
+      start_date: '2024-01-01',
+      end_date: '2024-06-30',
+    }),
+    node('p2', 'Person', 0, {
+      name: 'B',
+      start_date: '2024-03-01',
+      end_date: '2024-12-31',
+    }),
+    node('p3', 'Project', 0, { name: 'C', start_date: '2025-01-01' }),
+    node('p4', 'Person', 0, { name: 'D' }),
+  ]
+  const layout = layoutOf('gantt', nodes, [])
+  const bars = layout.marks
+  assert.equal(bars.length, 3, '只有带日期的节点画甘特条')
+  assert.equal(layout.nodes.length, 3, '无日期节点不参与甘特布局')
+  assert.ok(bars.every((bar) => bar.kind === 'rect' && bar.h === 20 && bar.w >= 12))
+
+  // p1 与 p2 时间重叠 → 告警色；p3 只有一个日期 → 零长度区间取最小宽度
+  assert.equal(bars.find((bar) => bar.iri === 'p1').fill, '#dc2626')
+  assert.equal(bars.find((bar) => bar.iri === 'p2').fill, '#dc2626')
+  assert.equal(bars.find((bar) => bar.iri === 'p3').w, 12)
+  assert.notEqual(bars.find((bar) => bar.iri === 'p3').fill, '#dc2626')
+
+  // 时间轴刻度：2~7 个，且都在画布内
+  assert.ok(layout.titles.length >= 2 && layout.titles.length <= 7)
+  assert.ok(layout.titles.every((title) => title.x >= 0 && title.x <= layout.width))
+  assert.ok(layout.titles.every((title) => /^\d{4}-\d{2}$/.test(title.text)))
+
+  // 泳道按类型分组，且标签落在左留白内
+  const lanes = layout.groups.map((group) => group.type).sort()
+  assert.deepEqual(lanes, ['Person', 'Project'])
+  assert.ok(layout.groups.every((group) => group.y > 0))
+})
+
+test('gantt degrades to an empty canvas when no node carries a date', () => {
+  const layout = layoutOf('gantt', [node('a', 'Person'), node('b', 'Person')], [])
+  assert.deepEqual(layout.marks, [])
+  assert.deepEqual(layout.nodes, [])
+  assert.ok(layout.width > 0 && layout.height > 0)
+})
+
+test('small multiples tile 1-hop neighbourhoods on one shared scale', () => {
+  const nodes = [
+    node('a', 'Person', 0, { name: 'A' }),
+    node('b', 'Person', 0, { name: 'B' }),
+    node('c', 'Person', 0, { name: 'C' }),
+    node('d', 'Person', 0, { name: 'D' }),
+  ]
+  const edges = [edge(1, 'a', 'b'), edge(2, 'c', 'd')]
+  const layout = layoutOf('small_multiples', nodes, edges)
+
+  assert.equal(layout.nodes.length, 4, '每个实体只出现在一个小图里')
+  assert.equal(layout.titles.length, 2, '两个中心各一张小图')
+  assert.ok(layout.titles.every((title) => title.text.includes('·')))
+
+  // 统一比例尺：每张小图的邻居到中心的距离完全一致
+  // 图块中心 = 标题下方 170（TILE_H/2 - 30），邻居落在同一半径上
+  const radii = layout.titles.map((title) => {
+    const cx = title.x
+    const cy = title.y + 170
+    const centre = layout.nodes.find((item) => item.x === cx && item.y === cy)
+    assert.ok(centre, '每个图块标题下必须有中心实体')
+    const neighbour = layout.nodes.find(
+      (item) => item.iri !== centre.iri && Math.hypot(item.x - cx, item.y - cy) < 200,
+    )
+    assert.ok(neighbour, '每个图块必须有邻居实体')
+    return Math.round(Math.hypot(neighbour.x - cx, neighbour.y - cy))
+  })
+  assert.equal(radii.length, 2)
+  assert.equal(radii[0], radii[1], '小图之间必须同比例尺')
+
+  // 跨图块的边不参与绘制
+  assert.equal(layout.edges.length, 2)
 })
