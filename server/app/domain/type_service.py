@@ -71,10 +71,29 @@ def create_entity_type(session: Session, payload: EntityTypeCreate) -> ModelReso
     return resource
 
 
+def _ancestor_ids(session: Session, start_id: int) -> set[int]:
+    """沿 parent 方向向上收集 start_id 的全部祖先（含 start_id 自身）。"""
+    seen: set[int] = set()
+    frontier = [start_id]
+    while frontier:
+        current = frontier.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        frontier.extend(
+            session.execute(
+                select(ResourceParent.parent_id).where(
+                    ResourceParent.child_id == current
+                )
+            ).scalars()
+        )
+    return seen
+
+
 def _set_parents(
     session: Session, resource: ModelResource, parent_ids: list[int]
 ) -> None:
-    """设置类型层级（继承）。按 IRI 去重，避免环。"""
+    """设置类型层级（继承）。按 IRI 去重，并拒绝形成继承环。"""
     session.execute(
         select(ResourceParent).where(ResourceParent.child_id == resource.id)
     )
@@ -89,6 +108,17 @@ def _set_parents(
         parent = session.get(ModelResource, pid)
         if parent is None:
             raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"parent_id": pid})
+        # 新边尚未落库，此处判定的是"应用本次 parent_ids 之后"的层级图：
+        # 若候选父的祖先链上出现自己，则本次设置会形成 A→B→A 继承环。
+        if resource.id in _ancestor_ids(session, pid):
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {
+                    "reason": "hierarchy_cycle",
+                    "child_id": resource.id,
+                    "parent_id": pid,
+                },
+            )
         session.add(ResourceParent(child_id=resource.id, parent_id=pid))
         seen.add(pid)
 

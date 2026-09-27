@@ -121,6 +121,67 @@ def test_type_hierarchy(session, ns):
     assert get_parent_ids(session, child) == [parent.id]
 
 
+def test_type_hierarchy_rejects_direct_cycle(session, ns):
+    """A→B 之后把 A 的父设为 B，必须拒绝，且不得留下任何边。"""
+    a = _make_type(session, ns, name="A")
+    b = _make_type(session, ns, name="B")
+    session.commit()
+    update_entity_type(session, b, EntityTypeUpdate(parent_ids=[a.id], if_match=0))
+    session.commit()
+
+    with pytest.raises(KGError) as exc:
+        update_entity_type(session, a, EntityTypeUpdate(parent_ids=[b.id], if_match=0))
+    assert exc.value.code == ErrorCode.VALIDATION_VIOLATION
+    assert exc.value.params["reason"] == "hierarchy_cycle"
+    session.rollback()
+
+    assert get_parent_ids(session, a) == []
+
+
+def test_type_hierarchy_rejects_indirect_cycle(session, ns):
+    """A→B→C 之后把 A 的父设为 C，间接环同样必须拒绝。"""
+    a = _make_type(session, ns, name="A")
+    b = _make_type(session, ns, name="B")
+    c = _make_type(session, ns, name="C")
+    session.commit()
+    update_entity_type(session, b, EntityTypeUpdate(parent_ids=[a.id], if_match=0))
+    update_entity_type(session, c, EntityTypeUpdate(parent_ids=[b.id], if_match=0))
+    session.commit()
+
+    with pytest.raises(KGError) as exc:
+        update_entity_type(session, a, EntityTypeUpdate(parent_ids=[c.id], if_match=0))
+    assert exc.value.code == ErrorCode.VALIDATION_VIOLATION
+    assert exc.value.params["reason"] == "hierarchy_cycle"
+
+
+def test_type_hierarchy_still_skips_self_parent(session, ns):
+    """自父沿用原有语义：静默跳过，不报环。"""
+    a = _make_type(session, ns, name="A")
+    session.commit()
+    update_entity_type(session, a, EntityTypeUpdate(parent_ids=[a.id], if_match=0))
+    session.commit()
+    assert get_parent_ids(session, a) == []
+
+
+def test_type_hierarchy_allows_reparent_after_removing_edge(session, ns):
+    """解除旧边后可以重新挂到原祖先之上，说明判定的是"本次设置之后"的图。"""
+    a = _make_type(session, ns, name="A")
+    b = _make_type(session, ns, name="B")
+    session.commit()
+    update_entity_type(session, b, EntityTypeUpdate(parent_ids=[a.id], if_match=0))
+    session.commit()
+
+    # B 先解除父边，再把 A 挂到 B 之下：此时不存在环，应当允许。
+    update_entity_type(
+        session, b, EntityTypeUpdate(parent_ids=[], if_match=0, edit_revision=1)
+    )
+    session.commit()
+    update_entity_type(session, a, EntityTypeUpdate(parent_ids=[b.id], if_match=0))
+    session.commit()
+    assert get_parent_ids(session, a) == [b.id]
+    assert get_parent_ids(session, b) == []
+
+
 def test_publish_freezes_revision(session, ns):
     res = _make_type(session, ns)
     session.commit()
