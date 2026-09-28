@@ -2,7 +2,7 @@
 
 执行日期：2026-09-26（Asia/Shanghai）
 执行基线：工作区（报告基线 commit `5a5e0d3` + 未提交的命名空间修复）
-对应缺口清单：[docs/kg-platform-completeness-report.zh-CN.md](./kg-platform-completeness-report.zh-CN.md)
+对应缺口清单：2026-09-25 完整性核验报告（该报告文件已删除，缺口清单已由本验收记录与 `docs/kg-platform-remaining-tasks.zh-CN.md` 承接）。
 
 本记录对照完整性核验报告的第 9 节修复分批，逐项说明本轮实际落地的内容、自动化与浏览器实测证据，以及如实保留的遗留事项。未在本轮范围的项目保持报告原结论，不做改写。
 

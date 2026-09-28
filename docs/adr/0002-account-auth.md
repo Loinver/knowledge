@@ -2,7 +2,7 @@
 
 - 状态：已接受
 - 日期：2026-09-22
-- 相关：`server/app/models/account.py`、`server/app/domain/account_service.py`、`docs/frontend-redesign-plan.zh-CN.md` 第 3 节
+- 相关：`server/app/models/account.py`、`server/app/domain/account_service.py`（原 `docs/frontend-redesign-plan.zh-CN.md` 第 3 节已随改版计划删除，账号体系前后端契约以本 ADR 为准）
 
 ## 背景
 
