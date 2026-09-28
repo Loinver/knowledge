@@ -22,6 +22,8 @@ import type { DomainBrief, DomainDetail, DomainMember, PublishCheckResult } from
 import { domainsApi } from '@/api/domains'
 import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
+import type { RelationTypeBrief } from '@/api/relations'
+import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
@@ -31,6 +33,7 @@ const { toMessage } = useApiError()
 const loading = ref(true)
 const items = ref<DomainBrief[]>([])
 const typeList = ref<EntityTypeBrief[]>([])
+const relationList = ref<RelationTypeBrief[]>([])
 const selected = ref<DomainBrief | null>(null)
 /**
  * 选中域的详情。列表接口只返回 brief（没有 definition_i18n），
@@ -106,9 +109,10 @@ const typeById = computed(() => {
   return map
 })
 
-const typeOptions = computed(() =>
-  typeList.value.map((tp) => ({ label: pickLabel(tp.label_i18n, tp.name), value: tp.id })),
-)
+const typeOptions = computed(() => [
+  ...typeList.value.map((tp) => ({ label: pickLabel(tp.label_i18n, tp.name), value: tp.id })),
+  ...relationList.value.map((r) => ({ label: pickLabel(r.label_i18n, r.name), value: r.id })),
+])
 
 /** 发布检查的四项子检查，逐项列出比只给一句「未通过」有用得多。 */
 const checkItems = computed(() => {
@@ -138,13 +142,15 @@ async function load() {
   loading.value = true
   listError.value = ''
   try {
-    const [next, types] = await Promise.all([
+    const [next, types, rels] = await Promise.all([
       domainsApi.list({}, controller.signal),
       entityTypesApi.list({}, controller.signal),
+      relationsApi.list({}, controller.signal),
     ])
     if (!alive || controller.signal.aborted) return null
     items.value = next
     typeList.value = types
+    relationList.value = rels
     // 选中对象的编辑版本只与随后重新读取的成员一起更新。
     return next
   } catch (err) {

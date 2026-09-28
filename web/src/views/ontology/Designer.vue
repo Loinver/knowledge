@@ -5,6 +5,10 @@ import {
   NDrawer,
   NDrawerContent,
   NEmpty,
+  NForm,
+  NFormItem,
+  NInput,
+  NModal,
   NSelect,
   NSpin,
   useMessage,
@@ -17,6 +21,8 @@ import type { DomainBrief, DomainMember } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
 import type { EntityType, EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
+import type { Namespace } from '@/api/namespaces'
+import { namespacesApi } from '@/api/namespaces'
 import type { CanvasPositions, Ontology, OntologyDetail, OntologyRef } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
 import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
@@ -831,6 +837,52 @@ async function addToCanvas(resourceId: number) {
   )
 }
 
+// B-7 画布直接建模：在资源池新建实体类型并加入画布（关系类型需端点，引导到关系类型库）
+const showCreate = ref(false)
+const createNamespace = ref<number | null>(null)
+const createName = ref('')
+const createLabelZh = ref('')
+const namespaceList = ref<Namespace[]>([])
+const createLoading = ref(false)
+const createError = ref('')
+const namespaceOptions = computed(() =>
+  namespaceList.value.map((ns) => ({ label: `${ns.prefix} → ${ns.iri}`, value: ns.id })),
+)
+async function openCreate() {
+  if (!canEdit.value) return
+  createNamespace.value = null
+  createName.value = ''
+  createLabelZh.value = ''
+  createError.value = ''
+  if (!namespaceList.value.length) {
+    try {
+      namespaceList.value = await namespacesApi.list()
+    } catch (err) {
+      createError.value = toMessage(err)
+    }
+  }
+  showCreate.value = true
+}
+async function submitCreate() {
+  if (!canEdit.value || !createNamespace.value || !createName.value.trim()) return
+  createLoading.value = true
+  createError.value = ''
+  try {
+    const labelZh = createLabelZh.value.trim() || createName.value.trim()
+    const created = await entityTypesApi.create({
+      name: createName.value.trim(),
+      namespace_id: createNamespace.value,
+      label_i18n: { 'zh-CN': labelZh },
+    })
+    await addToCanvas(created.id)
+    showCreate.value = false
+  } catch (err) {
+    createError.value = toMessage(err)
+  } finally {
+    createLoading.value = false
+  }
+}
+
 async function removeFromCanvas(resourceId: number) {
   const ref = refs.value.find((r) => r.resource_id === resourceId)
   if (!ref) return
@@ -1033,7 +1085,12 @@ onBeforeUnmount(() => {
     <div v-else-if="ontologies.length" class="body">
       <!-- 左：资源面板 -->
       <aside class="panel pool">
-        <div class="panel-head">{{ t('designer.resourcePool') }}</div>
+        <div class="panel-head">
+          <span>{{ t('designer.resourcePool') }}</span>
+          <NButton size="tiny" :disabled="!canEdit" @click="openCreate">
+            {{ t('designer.createOnCanvas') }}
+          </NButton>
+        </div>
         <div class="pool-body">
           <div class="pool-group">
             <span>{{ t('designer.inCanvas') }}</span>
@@ -1094,6 +1151,40 @@ onBeforeUnmount(() => {
         </div>
         <div class="pool-foot">{{ t('designer.layoutHint') }}</div>
       </aside>
+      <!-- B-7 画布直接建模：新建实体类型弹窗 -->
+      <NModal
+        v-model:show="showCreate"
+        preset="dialog"
+        :title="t('designer.createOnCanvas')"
+        :positive-text="t('common.create')"
+        :negative-text="t('common.cancel')"
+        :positive-button-props="{
+          loading: createLoading,
+          disabled: !createNamespace || !createName.trim(),
+        }"
+        @positive-click="submitCreate"
+      >
+        <NForm label-placement="top">
+          <NFormItem :label="t('designer.createNamespace')">
+            <NSelect
+              v-model:value="createNamespace"
+              :options="namespaceOptions"
+              :placeholder="t('designer.createNamespacePlaceholder')"
+              filterable
+            />
+          </NFormItem>
+          <NFormItem :label="t('common.name')" required>
+            <NInput v-model:value="createName" :placeholder="t('designer.createNamePlaceholder')" />
+          </NFormItem>
+          <NFormItem :label="t('common.labelZh')">
+            <NInput
+              v-model:value="createLabelZh"
+              :placeholder="t('designer.createLabelPlaceholder')"
+            />
+          </NFormItem>
+        </NForm>
+        <NAlert v-if="createError" type="error" class="feedback">{{ createError }}</NAlert>
+      </NModal>
 
       <!-- 中：画布 -->
       <div ref="canvasEl" class="canvas" @wheel="onWheel">
