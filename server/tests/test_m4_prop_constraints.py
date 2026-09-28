@@ -133,6 +133,11 @@ def test_data_prop_constraints_survive_create_and_read(
             "enum_dict_revision": None,
             "nullable": False,
             "default_value": None,
+            "min_cardinality": None,
+            "max_cardinality": None,
+            "min_value": None,
+            "max_value": None,
+            "source_clause_ref": None,
         },
         {
             "name": "level",
@@ -144,6 +149,11 @@ def test_data_prop_constraints_survive_create_and_read(
             "enum_dict_revision": 1,
             "nullable": True,
             "default_value": "P3",
+            "min_cardinality": None,
+            "max_cardinality": None,
+            "min_value": None,
+            "max_value": None,
+            "source_clause_ref": None,
         },
     ]
 
@@ -207,6 +217,11 @@ def test_data_prop_constraints_survive_update(
         "enum_dict_revision": None,
         "nullable": False,
         "default_value": "1",
+        "min_cardinality": None,
+        "max_cardinality": None,
+        "min_value": None,
+        "max_value": None,
+        "source_clause_ref": None,
     }
 
 
@@ -572,3 +587,39 @@ def test_migration_upgrade_downgrade_replays_prop_details(tmp_path: Path) -> Non
     assert "datatype_prop_detail" in tables
     assert "object_prop_detail" in tables
     engine.dispose()
+
+
+def test_data_prop_constraint_fields_round_trip(
+    client: TestClient, namespace_id: int
+) -> None:
+    """GB/T 48000.3 附录 A：基数/数值范围/来源条款在 create→read 全程无损。"""
+    created = make_type(
+        client,
+        namespace_id,
+        [
+            {
+                "name": "shareholding_ratio",
+                "datatype": "decimal",
+                "nullable": False,
+                "min_cardinality": 1,
+                "max_cardinality": 1,
+                "min_value": "0",
+                "max_value": "100",
+                "source_clause_ref": "GB/T 48000.3-2026 6.3.2",
+            }
+        ],
+    )
+    prop = created["data_props"][0]
+    assert prop["min_cardinality"] == 1
+    assert prop["max_cardinality"] == 1
+    assert prop["min_value"] == "0"
+    assert prop["max_value"] == "100"
+    assert prop["source_clause_ref"] == "GB/T 48000.3-2026 6.3.2"
+
+    fetched = client.get(f"/api/v1/entity-types/{created['id']}").json()
+    prop_again = fetched["data_props"][0]
+    assert prop_again["min_cardinality"] == 1
+    assert prop_again["max_cardinality"] == 1
+    assert prop_again["min_value"] == "0"
+    assert prop_again["max_value"] == "100"
+    assert prop_again["source_clause_ref"] == "GB/T 48000.3-2026 6.3.2"

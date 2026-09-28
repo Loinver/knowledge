@@ -210,6 +210,11 @@ def set_data_props(
                 enum_dict_revision=pin,
                 nullable=prop.nullable,
                 default_value=prop.default_value,
+                min_cardinality=prop.min_cardinality,
+                max_cardinality=prop.max_cardinality,
+                min_value=prop.min_value,
+                max_value=prop.max_value,
+                source_clause_ref=prop.source_clause_ref,
             )
         )
 

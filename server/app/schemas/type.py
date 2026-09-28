@@ -20,6 +20,12 @@ class DataTypePropCreate(BaseModel):
     enum_dict_revision: int | None = Field(default=None, gt=0)
     nullable: bool = True
     default_value: str | None = None
+    # GB/T 48000.3 附录 A：基数与数值范围约束，来源条款用于合规追溯。
+    min_cardinality: int | None = Field(default=None, ge=0)
+    max_cardinality: int | None = Field(default=None, ge=0)
+    min_value: str | None = None
+    max_value: str | None = None
+    source_clause_ref: str | None = None
 
 
 class DataTypePropOut(BaseModel):
@@ -35,6 +41,11 @@ class DataTypePropOut(BaseModel):
     enum_dict_revision: int | None = None
     nullable: bool = True
     default_value: str | None = None
+    min_cardinality: int | None = None
+    max_cardinality: int | None = None
+    min_value: str | None = None
+    max_value: str | None = None
+    source_clause_ref: str | None = None
 
 
 class EntityTypeCreate(BaseModel):

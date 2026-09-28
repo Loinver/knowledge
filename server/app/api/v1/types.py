@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.v1.governance_common import governance_session
+from app.domain.iri_service import rename_resource
 from app.domain.type_service import (
     create_entity_type,
     entity_type_metrics,
@@ -21,6 +22,7 @@ from app.domain.type_service import (
     update_entity_type,
 )
 from app.models.resource import ModelResource
+from app.schemas.common import RenameRequest
 from app.schemas.response import ApiResponse
 from app.schemas.type import (
     DataTypePropOut,
@@ -55,6 +57,11 @@ def _data_props(session: Session, resource: ModelResource) -> list[DataTypePropO
                 enum_dict_revision=detail.enum_dict_revision if detail else None,
                 nullable=detail.nullable if detail else True,
                 default_value=detail.default_value if detail else None,
+                min_cardinality=detail.min_cardinality if detail else None,
+                max_cardinality=detail.max_cardinality if detail else None,
+                min_value=detail.min_value if detail else None,
+                max_value=detail.max_value if detail else None,
+                source_clause_ref=detail.source_clause_ref if detail else None,
             )
         )
     return out
@@ -145,6 +152,19 @@ def update_type(
 ) -> EntityTypeOut:
     resource = get_entity_type(session, type_id)
     update_entity_type(session, resource, payload)
+    session.commit()
+    return _out(session, resource)
+
+
+@router.patch("/{type_id}/rename", response_model=ApiResponse[EntityTypeOut])
+def rename_type(
+    type_id: int,
+    payload: RenameRequest,
+    session: Session = Depends(governance_session),
+) -> EntityTypeOut:
+    """草稿态实体类型改名：重建 IRI 与子资源 IRI，同步规则引用面。"""
+    resource = get_entity_type(session, type_id)
+    rename_resource(session, resource.id, payload.name)
     session.commit()
     return _out(session, resource)
 

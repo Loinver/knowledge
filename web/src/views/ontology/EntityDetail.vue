@@ -12,6 +12,8 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NInputNumber,
+  NModal,
   NPopconfirm,
   NSelect,
   NSpace,
@@ -98,6 +100,11 @@ function emptyProperty() {
     enum_dict_revision: null as number | null,
     nullable: true,
     default_value: null as string | null,
+    min_cardinality: null as number | null,
+    max_cardinality: null as number | null,
+    min_value: null as string | null,
+    max_value: null as string | null,
+    source_clause_ref: null as string | null,
   }
 }
 
@@ -173,6 +180,33 @@ async function handlePublish() {
   try {
     await entityTypesApi.publish(data.value.id)
     if (alive && generation === loadGeneration) await loadDetail()
+  } catch (err) {
+    if (alive && generation === loadGeneration) error.value = failure(err)
+  } finally {
+    if (alive) busy.value = false
+  }
+}
+
+const showRename = ref(false)
+const renameValue = ref('')
+
+function openRename() {
+  if (!data.value || data.value.status !== 'DRAFT' || busy.value) return
+  renameValue.value = ''
+  showRename.value = true
+}
+
+async function submitRename() {
+  if (!data.value || !renameValue.value.trim() || busy.value) return
+  const generation = loadGeneration
+  busy.value = true
+  error.value = ''
+  try {
+    await entityTypesApi.rename(data.value.id, renameValue.value.trim())
+    if (alive && generation === loadGeneration) {
+      showRename.value = false
+      await loadDetail()
+    }
   } catch (err) {
     if (alive && generation === loadGeneration) error.value = failure(err)
   } finally {
@@ -314,6 +348,11 @@ function openProperty(prop?: DataTypeProp) {
         enum_dict_revision: prop.enum_dict_revision ?? null,
         nullable: prop.nullable,
         default_value: prop.default_value ?? null,
+        min_cardinality: prop.min_cardinality ?? null,
+        max_cardinality: prop.max_cardinality ?? null,
+        min_value: prop.min_value ?? null,
+        max_value: prop.max_value ?? null,
+        source_clause_ref: prop.source_clause_ref ?? null,
       }
     : emptyProperty()
   editorError.value = ''
@@ -336,6 +375,11 @@ function propertyInput(prop: DataTypeProp): DataTypePropInput {
     enum_dict_revision: prop.enum_dict_revision,
     nullable: prop.nullable,
     default_value: prop.default_value,
+    min_cardinality: prop.min_cardinality,
+    max_cardinality: prop.max_cardinality,
+    min_value: prop.min_value,
+    max_value: prop.max_value,
+    source_clause_ref: prop.source_clause_ref,
   }
 }
 
@@ -492,6 +536,31 @@ const propColumns = computed(() => [
     key: 'nullable',
     render: (prop: DataTypeProp) => t(prop.nullable ? 'common.yes' : 'common.no'),
   },
+  {
+    title: t('entityProps.minCardinality'),
+    key: 'min_cardinality',
+    render: (prop: DataTypeProp) => prop.min_cardinality ?? '—',
+  },
+  {
+    title: t('entityProps.maxCardinality'),
+    key: 'max_cardinality',
+    render: (prop: DataTypeProp) => prop.max_cardinality ?? '—',
+  },
+  {
+    title: t('entityProps.minValue'),
+    key: 'min_value',
+    render: (prop: DataTypeProp) => prop.min_value ?? '—',
+  },
+  {
+    title: t('entityProps.maxValue'),
+    key: 'max_value',
+    render: (prop: DataTypeProp) => prop.max_value ?? '—',
+  },
+  {
+    title: t('entityProps.sourceClauseRef'),
+    key: 'source_clause_ref',
+    render: (prop: DataTypeProp) => prop.source_clause_ref ?? '—',
+  },
   ...(isDraft.value
     ? [
         {
@@ -625,6 +694,9 @@ onBeforeUnmount(() => {
         <n-button v-if="data && isDraft" :disabled="busy" @click="openBasicEditor">
           {{ t('common.edit') }}
         </n-button>
+        <n-button v-if="data && isDraft" :disabled="busy" @click="openRename">
+          {{ t('common.rename') }}
+        </n-button>
         <n-button
           v-if="data && isDraft"
           type="primary"
@@ -636,6 +708,24 @@ onBeforeUnmount(() => {
         </n-button>
       </template>
     </PageHeader>
+    <n-modal
+      v-model:show="showRename"
+      preset="dialog"
+      :title="t('entityType.renameTitle')"
+      :positive-text="t('common.save')"
+      :negative-text="t('common.cancel')"
+      :positive-button-props="{ loading: busy, disabled: !renameValue.trim() }"
+      @positive-click="submitRename"
+    >
+      <n-space vertical>
+        <p>{{ t('entityType.renameHint', { current: data?.name }) }}</p>
+        <n-input
+          v-model:value="renameValue"
+          :placeholder="t('entityType.renamePlaceholder')"
+          @keyup.enter="submitRename"
+        />
+      </n-space>
+    </n-modal>
     <n-alert v-if="error" type="error" class="feedback"
       >{{ error }}
       <n-button size="small" :disabled="busy" @click="loadDetail">{{
@@ -950,6 +1040,45 @@ onBeforeUnmount(() => {
           <n-form-item :label="t('common.nullable')"
             ><n-switch v-model:value="form.nullable" :aria-label="t('common.nullable')"
           /></n-form-item>
+          <n-form-item :label="t('entityProps.minCardinality')">
+            <n-input-number
+              v-model:value="form.min_cardinality"
+              :min="0"
+              :placeholder="t('entityProps.noConstraint')"
+              clearable
+            />
+          </n-form-item>
+          <n-form-item :label="t('entityProps.maxCardinality')">
+            <n-input-number
+              v-model:value="form.max_cardinality"
+              :min="0"
+              :placeholder="t('entityProps.noConstraint')"
+              clearable
+            />
+          </n-form-item>
+          <n-form-item :label="t('entityProps.minValue')">
+            <n-input
+              :value="form.min_value"
+              :placeholder="t('entityProps.noConstraint')"
+              clearable
+              @update:value="form.min_value = $event === '' ? null : $event"
+            />
+          </n-form-item>
+          <n-form-item :label="t('entityProps.maxValue')">
+            <n-input
+              :value="form.max_value"
+              :placeholder="t('entityProps.noConstraint')"
+              clearable
+              @update:value="form.max_value = $event === '' ? null : $event"
+            />
+          </n-form-item>
+          <n-form-item :label="t('entityProps.sourceClauseRef')">
+            <n-input
+              v-model:value="form.source_clause_ref"
+              :placeholder="t('entityProps.noConstraint')"
+              clearable
+            />
+          </n-form-item>
         </n-form>
         <template #footer
           ><n-space>

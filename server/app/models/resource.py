@@ -197,6 +197,12 @@ class DatatypePropDetail(Base):
     enum_dict_revision: Mapped[int | None] = mapped_column(Integer, default=None)
     nullable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     default_value: Mapped[str | None] = mapped_column(String(256), default=None)
+    # GB/T 48000.3 附录 A 要求属性可声明基数与数值范围；来源条款用于合规追溯。
+    min_cardinality: Mapped[int | None] = mapped_column(Integer, default=None)
+    max_cardinality: Mapped[int | None] = mapped_column(Integer, default=None)
+    min_value: Mapped[str | None] = mapped_column(String(256), default=None)
+    max_value: Mapped[str | None] = mapped_column(String(256), default=None)
+    source_clause_ref: Mapped[str | None] = mapped_column(String(256), default=None)
 
 
 class ObjectPropDetail(Base):
