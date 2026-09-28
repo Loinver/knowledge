@@ -145,3 +145,18 @@
 门禁与实测：`make lint` 全绿（ESLint / vue-tsc / Prettier / Ruff / Mypy 113 文件 / 架构检查 122 项）；布局用例 23/23；关系类型测试 25 项通过；`playwright test` **实跑通过**（1 passed / 3.3 分钟），新详情页路由已加入双主题路由冒烟。
 
 如实保留：B-5 的基数 / 数值约束 / 来源条款（数据属性模型无对应列）、B-6 改名同步、B-7 画布直接建模、B-9 属性级转换链、B-10 完整 12 步零 API E2E、A-2 实体融合解释图、E-1 完整 OWL-DL，以及 C 组未验证项。
+
+## 11. 第六批：证据转换链与 UI 建模 spec 草稿（2026-09-28）
+
+| 报告缺口                     | 本轮落地                                                                                                                                                                                                                                                                                                                                                                                                                                | 关键文件与测试                                                                                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V-TR-02 属性级转换链未入证据 | 证据行此前只有 `columns`（用了哪些来源列），回答不了"这个值是怎么算出来的"。`FactEvidence` 增加与 `columns` 对齐的 `column_transforms`（column / target / transform / params），抽取时按实际映射填入；多态端点与 FK 两路用的是原始外键值与判别列，如实记 `IDENTITY` 而不是省略；历史行该列为空，读回按"未记录"处理，不伪造成 IDENTITY。迁移 `0017` 只加可空列；证据 schema 与 G-26 追溯链界面同步（"来源字段"之后补"字段转换链"一级）。 | `server/migrations/versions/0017_evidence_transforms.py`、`extraction_service.py`、`GraphEvidence.vue`、`test_m3_extraction.py`（新增 1 项）、`test_m3_evidence.py` |
+| B-10 完整 12 步零 API E2E    | **未完成，只写出第一段草稿。** `e2e/m3-ui-modeling-flow.spec.ts` 覆盖「命名空间 → 实体类型（含数据属性） → 关系类型（含端点） → 业务域（含成员、发布）」全程界面（除 `seed_admin.py` 环境准备外不调用业务 API）。**默认 `test.skip`**：解析与收集已确认（`playwright test --list` → 2 tests / 2 files），但选择器一次都没被真正验证，故不计为通过。本体装配需在设计器画布拖拽资源，未包含在内。                                         | `e2e/m3-ui-modeling-flow.spec.ts`（未验证草稿，文件头写明解除跳过步骤）                                                                                             |
+
+**B-10 未跑通的原因是环境而非代码**：两次尝试均撞沙箱 broker 超时——第一次 `[vite] Pre-transform error: Broker request timed out`（页面未渲染，登录页选择器都没机会验证），第二次 `execFileSync` 调 `seed_admin.py` 时 `browserContext._wrapApiCall: Broker request timed out`，单次耗时 42 分钟。同期主机 `uptime` 负载 13～69；既有基线要求 load < 10 才下结论。为避免给 `make test-e2e` 留下未验证的哑雷，spec 默认跳过。
+
+**开发库迁移**：`server/knowledge.db` 原本停在 `0014_view_template`，但 `extraction_task`（0015）与 `ai_suggestion`（0016）两张表已由 `KG_CREATE_TABLES_ON_STARTUP` 的 `create_all` 建好且列正确——即库结构领先于 alembic 版本记录。直接 `upgrade` 会撞 `table extraction_task already exists`。按实际情况 `alembic stamp 0016_ai_suggestion` 后 `upgrade head`，只应用真正缺失的 0017。升级前已留档 `knowledge.db.bak-0017`；升级后 `PRAGMA integrity_check` = ok，30 个建模资源与 3 个业务域完好。
+
+门禁：`make lint` 全绿（ESLint / vue-tsc / Prettier / Ruff / Mypy 113 文件 / 架构检查 122 项）；`test_m3_extraction.py`、`test_m3_evidence.py`、`test_m4_prop_constraints.py`、`test_m4_graph_analysis.py` 全部通过。
+
+如实保留：B-10 的剩余段与验证、B-5 的基数 / 数值约束 / 来源条款、B-6 改名同步、B-7 画布直接建模、A-2 实体融合解释图、E-1 完整 OWL-DL、E-2（已重新归类为功能开发），以及 C 组未验证项。
