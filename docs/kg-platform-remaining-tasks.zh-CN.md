@@ -79,6 +79,18 @@
 
 门禁状态：`make lint` 全绿（mypy 113 文件 / 架构检查 122 项）；布局用例 23/23；关系类型测试 25 项通过；`playwright test` **实跑通过**（1 passed / 3.3 分钟），新详情页路由已进双主题路由冒烟。后端全量套件未在本轮重跑；D-2 已定性为既有基线，不再是待归因项。
 
+### 2.2 前端样式与结构修复（2026-09-28）
+
+本节记录 2026-09-28 前端完整性核查后落地的 5 项修复（只改前端展示与导航，不涉及后端契约）。
+
+| 核查项                                           | 结论                                                                                                                                                                                                             | 证据                                                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 404 页与 403 页形态统一                          | ✅ 已修复。`NotFound.vue` 改用 `NResult status="404"` + 返回工作台按钮，与 `Forbidden.vue` 同构；新增 `page.notFoundHint` 双语文案，删除硬编码 `.page-placeholder` 样式                                          | `web/src/views/NotFound.vue`、`web/src/locales/*.json`                                             |
+| 账户页（个人中心 / 账号安全）面包屑空白          | ✅ 已修复。路由与入口不变（仍只从右上用户下拉进入），`breadcrumb` 对 `account-profile` / `account-security` 单列一级，不再返回空                                                                                 | `web/src/layout/useNavigation.ts`                                                                  |
+| 角色页完成度存疑                                 | ✅ 已定性为只读设计。后端仅 `GET /roles`（`RoleOut{code, member_count}`），角色枚举固定、无 CRUD；`system.rolesHint` 已写明“不可创建或删除，成员归属在用户管理中调整”，页头补 `NButton` 跳转用户管理             | `server/app/api/v1/accounts.py`、`server/app/schemas/account.py`、`web/src/views/system/Roles.vue` |
+| `GraphEntities` / `GraphEvidence` 页头裸文本链接 | ✅ 已修复。两处 `RouterLink` 改为 `NButton secondary` + 程序化跳转，与其他页面的 actions 槽一致                                                                                                                  | `web/src/views/graph/GraphEntities.vue`、`web/src/views/graph/GraphEvidence.vue`                   |
+| E2E 与后端套件重跑                               | ✅ 已验证（2026-09-28 实跑）。`make lint` 全绿；前端单测 88/88；`test_account.py` 38 项通过；`check-i18n-keys` 1166 键一致；Playwright 2/2 通过：建模链 21.1s、浏览器主流程与响应式冒烟 1.8m。后端全量套件未重跑 | 本节命令输出                                                                                       |
+
 ---
 
 ## 3. 未完成任务逐项清单
