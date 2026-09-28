@@ -46,3 +46,9 @@ class ImpactItem(BaseModel):
 class ImpactResponse(BaseModel):
     resource_id: int
     references: list[ImpactItem]
+
+
+class RenameRequest(BaseModel):
+    """资源改名请求（实体类型/关系类型共用，仅草稿态可用）。"""
+
+    name: str

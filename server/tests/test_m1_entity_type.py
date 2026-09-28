@@ -230,3 +230,58 @@ def test_get_nonexistent_raises(session):
     with pytest.raises(KGError) as exc:
         get_entity_type(session, 9999)
     assert exc.value.code == ErrorCode.RESOURCE_NOT_FOUND
+
+
+def test_rename_draft_rebuilds_iri_and_child_props(session, ns):
+    """B-6：草稿态改名重建自身 IRI 与子数据属性 IRI。"""
+    from app.domain.iri_service import rename_resource
+
+    res = create_entity_type(
+        session,
+        EntityTypeCreate(
+            name="Employee",
+            namespace_id=ns.id,
+            label_i18n={"zh-CN": "员工"},
+            data_props=[
+                DataTypePropCreate(
+                    name="code", datatype="string", label_i18n={"zh-CN": "工号"}
+                ),
+            ],
+        ),
+    )
+    session.commit()
+    old_iri = res.iri
+    old_prop_iri = get_data_props(session, res)[0].iri
+    assert old_prop_iri == f"{old_iri}/code"
+
+    rename_resource(session, res.id, "Staff")
+    session.commit()
+    assert res.name == "Staff"
+    assert res.iri == "https://example.org/kg#Staff"
+    # 子数据属性 IRI 随之重建
+    prop = get_data_props(session, res)[0]
+    assert prop.name == "Staff.code"
+    assert prop.iri == "https://example.org/kg#Staff/code"
+
+
+def test_rename_rejected_for_published_resource(session, ns):
+    """B-6：已发布资源的 IRI 被版本冻结，拒绝改名。"""
+    from app.domain.iri_service import rename_resource
+
+    res = create_entity_type(
+        session,
+        EntityTypeCreate(
+            name="Department",
+            namespace_id=ns.id,
+            label_i18n={"zh-CN": "部门"},
+        ),
+    )
+    session.commit()
+    publish_resource(session, res)
+    session.commit()
+    assert res.status == ResourceStatus.PUBLISHED
+
+    with pytest.raises(KGError) as exc:
+        rename_resource(session, res.id, "Dept")
+    assert exc.value.code == ErrorCode.VALIDATION_VIOLATION
+    assert "rename_requires_draft" in str(exc.value.params)

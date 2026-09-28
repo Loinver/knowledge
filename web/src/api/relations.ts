@@ -25,6 +25,10 @@ export const relationsApi = {
   create: (payload: RelationTypeCreate) => http.post('/relations', payload).then((r) => r.data),
   update: (id: number, payload: RelationTypeUpdate) =>
     http.put<RelationTypeDetail>(`/relations/${id}`, payload).then((r) => r.data),
+  /** 草稿态改名：重建 IRI，同步规则引用面（B-6）。 */
+  rename: (id: number, name: string) =>
+    http.patch<RelationTypeDetail>(`/relations/${id}/rename`, { name }).then((r) => r.data),
+
   /** 发布即冻结不可变版本；草稿态的关系类型必须发布后才能被本体装配引用。 */
   publish: (id: number) =>
     http

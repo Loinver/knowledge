@@ -37,5 +37,8 @@ export const entityTypesApi = {
     http.post<EntityType>('/entity-types', payload).then((r) => r.data),
   update: (id: number, payload: EntityTypeUpdate) =>
     http.put<EntityType>(`/entity-types/${id}`, payload).then((r) => r.data),
+  /** 草稿态改名：重建 IRI 与子资源 IRI，同步规则引用面（B-6）。 */
+  rename: (id: number, name: string) =>
+    http.patch<EntityType>(`/entity-types/${id}/rename`, { name }).then((r) => r.data),
   publish: (id: number) => http.post(`/entity-types/${id}/publish`).then((r) => r.data),
 }

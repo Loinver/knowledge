@@ -82,6 +82,78 @@ def scan_rename_impact(session: Session, resource_id: int) -> list[ImpactItem]:
     return [ImpactItem(source_id=r.source_id, role=r.role, ref_id=r.id) for r in refs]
 
 
+def rename_resource(session: Session, resource_id: int, new_name: str) -> ModelResource:
+    """草稿态资源改名：重建自身 IRI 与子资源 IRI，同步 IRI 引用面。
+
+    边界（遵循版本冻结硬规则）：
+    - 仅允许 DRAFT 态资源改名；已发布/归档的资源 IRI 已被快照冻结，拒绝改名。
+    - 自身 name → new_name，iri 由所属 namespace 重新派生。
+    - DATATYPE_PROP 子资源（name={type}.{prop}，iri={type_iri}/{prop}）一并重建。
+    - Rule.target_iri 指向旧 IRI 的，同步更新到新 IRI（规则按 IRI 命中类型）。
+    - ResourceRevision.payload 是已发布版本快照，不改动（版本冻结）。
+    - ResourceRef / DomainMember / OntologyResourceRef 均按 id 引用，无需改动。
+    """
+    from app.models.enums import ResourceStatus
+
+    validate_name(new_name)
+    resource = session.get(ModelResource, resource_id)
+    if resource is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"resource_id": resource_id})
+    if resource.status != ResourceStatus.DRAFT:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {
+                "reason": "rename_requires_draft",
+                "current_status": resource.status.value,
+            },
+        )
+    old_iri = resource.iri
+    namespace = session.get(Namespace, resource.namespace_id)
+    if namespace is None:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND, {"namespace_id": resource.namespace_id}
+        )
+    new_iri = build_resource_iri(namespace, new_name)
+    # IRI 唯一性：新 IRI 不能已存在
+    exists = session.scalar(select(ModelResource).where(ModelResource.iri == new_iri))
+    if exists is not None and exists.id != resource.id:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {"reason": "iri_already_exists", "iri": new_iri},
+        )
+
+    resource.name = new_name
+    resource.iri = new_iri
+
+    # 子数据属性子资源：name={type}.{prop}，iri={type_iri}/{prop}
+    child_refs = (
+        session.execute(select(ResourceRef).where(ResourceRef.source_id == resource.id))
+        .scalars()
+        .all()
+    )
+    for ref in child_refs:
+        child = session.get(ModelResource, ref.target_id)
+        if child is None or child.kind.value != "DATATYPE_PROP":
+            continue
+        # 子资源机读名格式 {TypeName}.{prop_name}
+        parts = child.name.split(".", 1)
+        if len(parts) == 2:
+            child.name = f"{new_name}.{parts[1]}"
+            child.iri = f"{new_iri}/{parts[1]}"
+
+    # Rule.target_iri 按 IRI 命中，同步到新 IRI
+    from app.models.governance import Rule
+
+    rules = (
+        session.execute(select(Rule).where(Rule.target_iri == old_iri)).scalars().all()
+    )
+    for rule in rules:
+        rule.target_iri = new_iri
+
+    session.flush()
+    return resource
+
+
 def delete_namespace(session: Session, namespace_id: int) -> None:
     """删除命名空间。protected=True 的核心命名空间不可删。"""
     ns = session.get(Namespace, namespace_id)

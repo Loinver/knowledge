@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.v1.governance_common import governance_session as get_session
+from app.domain.iri_service import rename_resource
 from app.domain.relation_service import (
     create_relation_type,
     get_assoc_attributes,
@@ -17,6 +18,7 @@ from app.domain.relation_service import (
 )
 from app.domain.usages_service import resource_usages
 from app.models.resource import ModelResource
+from app.schemas.common import RenameRequest
 from app.schemas.relation import (
     AttributeDefOut,
     CardinalitySpec,
@@ -149,6 +151,19 @@ def update_relation(
 ) -> RelationTypeOut:
     resource = get_relation_type(session, relation_id)
     update_relation_type(session, resource, payload)
+    session.commit()
+    return _to_out(session, resource)
+
+
+@router.patch("/{relation_id}/rename", response_model=ApiResponse[RelationTypeOut])
+def rename_relation(
+    relation_id: int,
+    payload: RenameRequest,
+    session: Session = Depends(get_session),
+) -> RelationTypeOut:
+    """草稿态关系类型改名：重建 IRI，同步规则引用面。"""
+    resource = get_relation_type(session, relation_id)
+    rename_resource(session, resource.id, payload.name)
     session.commit()
     return _to_out(session, resource)
 
