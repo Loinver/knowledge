@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
-import { NCard, NDataTable, NEmpty, NTag } from 'naive-ui'
+import { NButton, NCard, NDataTable, NEmpty, NTag } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import type { RoleInfo } from '@/api/auth'
 import { authApi } from '@/api/auth'
@@ -10,11 +11,16 @@ import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
 const { t } = useI18n()
+const router = useRouter()
 const { toMessage } = useApiError()
 
 const items = ref<RoleInfo[]>([])
 const loading = ref(false)
 const error = ref('')
+
+function goUsers() {
+  void router.push({ name: 'system-users' })
+}
 
 // 角色名与说明是界面文案，后端只给 code 与人数（硬规则：后端不下发中文句子）。
 const columns = computed<DataTableColumns<RoleInfo>>(() => [
@@ -46,7 +52,11 @@ onMounted(async () => {
 
 <template>
   <section>
-    <PageHeader :title="t('page.systemRoles')" :description="t('system.rolesHint')" />
+    <PageHeader :title="t('page.systemRoles')" :description="t('system.rolesHint')">
+      <template #actions>
+        <NButton secondary @click="goUsers">{{ t('page.systemUsers') }}</NButton>
+      </template>
+    </PageHeader>
     <NCard size="small">
       <NDataTable
         :columns="columns"

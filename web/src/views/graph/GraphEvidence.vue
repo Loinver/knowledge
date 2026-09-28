@@ -31,6 +31,9 @@ const object = ref('')
 const sourceId = ref<number | null>(null)
 const reverseTable = ref('')
 const reverseRowKey = ref('')
+function goEntities() {
+  void router.push({ name: 'graph-entities', query: { graph: route.query.graph } })
+}
 watch(
   () => route.query,
   (query) => {
@@ -176,9 +179,7 @@ const canSubmit = computed(() =>
   <section class="graph-page">
     <PageHeader :title="t('page.graphEvidence')" :description="t('graph.traceHint')">
       <template #actions>
-        <RouterLink :to="{ name: 'graph-entities', query: { graph: route.query.graph } }">{{
-          t('page.graphEntities')
-        }}</RouterLink>
+        <NButton secondary @click="goEntities">{{ t('page.graphEntities') }}</NButton>
       </template>
     </PageHeader>
     <form @submit.prevent="search">

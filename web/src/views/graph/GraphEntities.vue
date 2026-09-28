@@ -12,7 +12,7 @@ import {
 } from 'naive-ui'
 import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import type { GraphEntity } from '@/api/graph'
 import { graphApi } from '@/api/graph'
@@ -21,6 +21,7 @@ import { useAsyncData } from '@/composables/useAsyncData'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const input = ref('')
 const query = ref('')
 const page = ref(1)
@@ -65,13 +66,17 @@ function search() {
   query.value = input.value
   reload()
 }
+
+function goEvidence() {
+  void router.push({ name: 'graph-evidence' })
+}
 </script>
 
 <template>
   <section class="graph-page">
     <PageHeader :title="t('page.graphEntities')" :description="t('graph.searchHint')">
       <template #actions>
-        <RouterLink :to="{ name: 'graph-evidence' }">{{ t('page.graphEvidence') }}</RouterLink>
+        <NButton secondary @click="goEvidence">{{ t('page.graphEvidence') }}</NButton>
       </template>
     </PageHeader>
     <form @submit.prevent="search">

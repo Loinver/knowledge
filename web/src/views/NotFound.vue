@@ -1,18 +1,29 @@
 <script setup lang="ts">
+import { NButton, NResult } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
+const router = useRouter()
 </script>
 
 <template>
-  <div class="page-placeholder">{{ t('page.notFound') }}</div>
+  <div class="not-found">
+    <NResult status="404" :title="t('page.notFound')" :description="t('page.notFoundHint')">
+      <template #footer>
+        <NButton type="primary" @click="router.push({ name: 'dashboard' })">
+          {{ t('page.backToDashboard') }}
+        </NButton>
+      </template>
+    </NResult>
+  </div>
 </template>
 
 <style scoped>
-.page-placeholder {
-  padding: 24px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
+.not-found {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
 }
 </style>

@@ -173,6 +173,10 @@ export function useNavigation() {
   const breadcrumb = computed(() => {
     const key = activeKey.value
     if (key === 'dashboard') return [{ key: 'dashboard', label: t('menu.dashboard') }]
+    // 账户页没有侧栏菜单项（入口在右上用户下拉），在此单列一级面包屑，
+    // 避免顶栏在个人中心 / 账号安全页显示空白。
+    if (key === 'account-profile') return [{ key, label: t('account.profile') }]
+    if (key === 'account-security') return [{ key, label: t('account.security') }]
     const owner = ownerGroup(key)
     const leaf = owner?.items.find((item) => item.key === key)
     if (!owner || !leaf) return []
