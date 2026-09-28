@@ -63,9 +63,13 @@
 | B-8      | 图谱小地图（V-KG-03/P2-04）         | ✅ 已实现。全图缩略（按类型着色，超 1500 点抽样）+ 当前视口矩形（`vector-effect` 保证描边不随缩放变细），点击缩略图把视口居中。画布本身可滚动、无拖拽平移，故小地图定位为展示 + 指针快捷方式，不冒充键盘控件。                                                                                                                                | 提交 `c6004f3`；`GraphCanvas.vue`                                                                          |
 
 | B-9 | 属性级转换链进入证据（V-TR-02） | ✅ 已实现。`FactEvidence` 增加与 `columns` 对齐的 `column_transforms`（column / target / transform / params），抽取时按实际映射填入；多态端点与 FK 两路如实记 `IDENTITY`；历史行留空并按"未记录"处理，不伪造成 IDENTITY。迁移 `0017`；G-26 链路在"来源字段"后补"字段转换链"一级。 | 提交 `e5c3658`；`extraction_service.py`、`0017_evidence_transforms.py`、`test_m3_extraction.py`（新增 1 项） |
-| B-10 | 完整 12 步零 API E2E | ⚠️ 部分：第一段已写出但**未验证**。`e2e/m3-ui-modeling-flow.spec.ts` 覆盖「命名空间 → 实体类型（含数据属性） → 关系类型（含端点） → 业务域（含成员、发布）」全程界面，**默认 `test.skip`**。解析与收集已确认（`playwright test --list` → 2 tests / 2 files），但**选择器一次都没被真正验证**，因此不计为通过。 | `e2e/m3-ui-modeling-flow.spec.ts`（未验证草稿） |
+| B-10 | 完整 12 步零 API E2E | ⚠️ 部分：第一段已写出，**选择器已按真实失败校正，但仍未跑绿**。`e2e/m3-ui-modeling-flow.spec.ts` 覆盖「命名空间 → 实体类型（含数据属性） → 关系类型（含端点） → 业务域（含成员、发布）」全程界面，保持 `test.skip`。在负载回落到 6 的窗口里真跑起来过（0 次 broker 超时），据此修掉六个已确认的选择器错误；卡在最后一段「业务域成员添加与发布」。 | `e2e/m3-ui-modeling-flow.spec.ts`（提交 `e0f3fbc`、`898406c`） |
 
-**B-10 为什么没跑通（环境，不是代码）**：两次尝试都撞沙箱 broker 超时——第一次是 `[vite] Pre-transform error: Broker request timed out`（页面根本没渲染出来，登录页的选择器都没机会被验证），第二次是 `execFileSync` 调 `seed_admin.py` 时 `browserContext._wrapApiCall: Broker request timed out`，单次耗时 42 分钟。同期主机 `uptime` 负载 13～69，而既有基线要求 load < 10 才下结论。为避免让 `make test-e2e` 带上一个未验证的哑雷，spec 默认跳过；文件头写了「解除跳过并跑绿后再提交」的完整步骤。**本体装配**需要在设计器画布上拖拽资源，属另一段工作，未包含在本段内。
+**B-10 当前进度（截至 2026-09-28）**：spec 已能跑过「登录 → 登记命名空间 → 建两个实体类型 → 切卡片视图进详情 → 加数据属性 → 建关系类型（含端点）」，停在业务域成员段——成员区在右侧详情面板、需先在左列表选中该域，左列表项的选择器尚未从实际 DOM 确认（`.domain-item` 只在 Domains.vue 的样式表出现）。
+
+已确认并修正的六个选择器错误（都是真跑出来的，不是猜的）：naive-ui 的 NFormItem **不关联 label**（`getByLabel('机读名')` 一律失效，要按 `.n-form-item` 容器定位）；登录页可访问名来自 placeholder；三个列表页的**触发按钮是 `common.create`（"创建"）**而非抽屉标题；`getByPlaceholder` 默认**子串匹配**（`kg` 会命中 `https://example.org/kg#`）；命名空间下拉的 option label 是**前缀**而实体类型下拉是**中文标签**；实体类型列表默认表格视图、名字单元格不可点。
+
+**未跑通的外部原因**：最后一次尝试时机器重启（`up 5 mins`、load 456，重启把 /tmp 下日志一并清空），重启后 load 仍在 72，浏览器跑不动；此前两次尝试则撞沙箱 broker 超时（vite 预转换 / `execFileSync` 各一次，单次 42 分钟）。既有基线要求 load < 10 才下结论。**本体装配**需要在设计器画布上拖拽资源，属另一段工作，未包含在本段内。
 
 修复后仍未完成的项：A-2（G-29 实体融合解释图）、B-5 的基数/数值约束/来源条款、B-6（改名同步）、B-7（画布直接建模）、B-10 的剩余段与验证、C 组未验证项、E-1（OWL-DL）、E-2（审计端到端，已重新归类为功能开发）。
 
