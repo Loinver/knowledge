@@ -867,6 +867,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/entity-types/{type_id}/rename': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /**
+     * Rename Type
+     * @description 草稿态实体类型改名：重建 IRI 与子资源 IRI，同步规则引用面。
+     */
+    patch: operations['rename_type_api_v1_entity_types__type_id__rename_patch']
+    trace?: never
+  }
   '/api/v1/entity-types/{type_id}/publish': {
     parameters: {
       query?: never
@@ -1060,6 +1080,26 @@ export interface paths {
     options?: never
     head?: never
     patch?: never
+    trace?: never
+  }
+  '/api/v1/relations/{relation_id}/rename': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /**
+     * Rename Relation
+     * @description 草稿态关系类型改名：重建 IRI，同步规则引用面。
+     */
+    patch: operations['rename_relation_api_v1_relations__relation_id__rename_patch']
     trace?: never
   }
   '/api/v1/relations/{relation_id}/publish': {
@@ -1534,6 +1574,46 @@ export interface paths {
      * @description 实体维度的证据汇总。
      */
     get: operations['trace_entity_api_v1_extraction_evidence_trace_entity_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/evidence/fusion/{iri}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Trace Entity Fusion Route
+     * @description 实体融合解释（G-29）：来源行贡献与冲突值。
+     */
+    get: operations['trace_entity_fusion_route_api_v1_extraction_evidence_fusion__iri__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/extraction/evidence/fusion': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Trace Entity Fusion Route
+     * @description 实体融合解释（G-29）：来源行贡献与冲突值。
+     */
+    get: operations['trace_entity_fusion_route_api_v1_extraction_evidence_fusion_get']
     put?: never
     post?: never
     delete?: never
@@ -2420,6 +2500,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['EntityDetailOut'] | null
+    }
+    /** ApiResponse[EntityFusionOut] */
+    ApiResponse_EntityFusionOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['EntityFusionOut'] | null
     }
     /** ApiResponse[EntityPage] */
     ApiResponse_EntityPage_: {
@@ -4148,6 +4245,16 @@ export interface components {
       nullable: boolean
       /** Default Value */
       default_value?: string | null
+      /** Min Cardinality */
+      min_cardinality?: number | null
+      /** Max Cardinality */
+      max_cardinality?: number | null
+      /** Min Value */
+      min_value?: string | null
+      /** Max Value */
+      max_value?: string | null
+      /** Source Clause Ref */
+      source_clause_ref?: string | null
     }
     /** DataTypePropOut */
     DataTypePropOut: {
@@ -4176,6 +4283,16 @@ export interface components {
       nullable: boolean
       /** Default Value */
       default_value?: string | null
+      /** Min Cardinality */
+      min_cardinality?: number | null
+      /** Max Cardinality */
+      max_cardinality?: number | null
+      /** Min Value */
+      min_value?: string | null
+      /** Max Value */
+      max_value?: string | null
+      /** Source Clause Ref */
+      source_clause_ref?: string | null
     }
     /** DatasourceBrief */
     DatasourceBrief: {
@@ -4403,6 +4520,23 @@ export interface components {
       derived_edges: components['schemas']['DerivedEdgeOut'][]
       /** Evidence */
       evidence: components['schemas']['FactEvidenceOut'][]
+    }
+    /**
+     * EntityFusionOut
+     * @description 实体融合解释（G-29）：该实体由哪些来源行融合，是否存在冲突值。
+     */
+    EntityFusionOut: {
+      /** Graph Revision Id */
+      graph_revision_id: number
+      entity: components['schemas']['EntityTraceIdentity']
+      /** Source Rows */
+      source_rows: components['schemas']['FusionSourceRow'][]
+      /** Conflicts */
+      conflicts: components['schemas']['FusionConflict'][]
+      /** Source Count */
+      source_count: number
+      /** Row Count */
+      row_count: number
     }
     /** EntityIdentityOut */
     EntityIdentityOut: {
@@ -4957,6 +5091,38 @@ export interface components {
        * @default 0
        */
       expires_in: number
+    }
+    /**
+     * FusionConflict
+     * @description 同一谓词在多个来源间出现不一致值。
+     */
+    FusionConflict: {
+      /** Predicate */
+      predicate: string
+      /** Values */
+      values: {
+        [key: string]: unknown
+      }[]
+    }
+    /**
+     * FusionSourceRow
+     * @description 融合解释：单个来源行对实体的贡献。
+     */
+    FusionSourceRow: {
+      /** Source Id */
+      source_id: number
+      /** Source Name */
+      source_name: string | null
+      /** Table Name */
+      table_name: string
+      /** Row Key */
+      row_key: string
+      /** Contributions */
+      contributions: {
+        [key: string]: unknown
+      }[]
+      /** Quarantined */
+      quarantined: boolean
     }
     /** GraphDiffOut */
     GraphDiffOut: {
@@ -6056,6 +6222,14 @@ export interface components {
       revisions?: components['schemas']['TypeRevisionOut'][]
       /** Validations */
       validations?: components['schemas']['TypeValidationOut'][]
+    }
+    /**
+     * RenameRequest
+     * @description 资源改名请求（实体类型/关系类型共用，仅草稿态可用）。
+     */
+    RenameRequest: {
+      /** Name */
+      name: string
     }
     /**
      * ResourceKind
@@ -9171,6 +9345,41 @@ export interface operations {
       }
     }
   }
+  rename_type_api_v1_entity_types__type_id__rename_patch: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        type_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RenameRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EntityTypeOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   publish_type_api_v1_entity_types__type_id__publish_post: {
     parameters: {
       query?: never
@@ -9685,6 +9894,41 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': components['schemas']['RelationTypeUpdate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_RelationTypeOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  rename_relation_api_v1_relations__relation_id__rename_patch: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        relation_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RenameRequest']
       }
     }
     responses: {
@@ -10591,6 +10835,71 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_EntityTraceOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  trace_entity_fusion_route_api_v1_extraction_evidence_fusion__iri__get: {
+    parameters: {
+      query?: {
+        graph_revision_id?: number | null
+      }
+      header?: never
+      path: {
+        iri: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EntityFusionOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  trace_entity_fusion_route_api_v1_extraction_evidence_fusion_get: {
+    parameters: {
+      query: {
+        iri: string
+        graph_revision_id?: number | null
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EntityFusionOut_']
         }
       }
       /** @description Validation Error */
