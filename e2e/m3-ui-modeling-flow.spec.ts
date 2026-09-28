@@ -70,9 +70,21 @@ async function loginAsAdmin(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/$/)
 }
 
-/** naive-ui 的下拉选项浮层；按文本挑一项。 */
+/**
+ * naive-ui 的下拉选项浮层；按文本挑一项。
+ *
+ * 必须限定 `:visible`：选完一个下拉后，它的浮层仍留在 DOM 里（隐藏），
+ * 而同一个浮层里往往有全部选项 —— 不加可见性过滤会挑到上一个浮层的隐藏项，
+ * 表现为「元素已解析但 not visible」一直重试到超时。
+ */
 async function pickOption(page: Page, label: string): Promise<void> {
-  await page.locator('.n-base-select-option').filter({ hasText: label }).first().click()
+  // 下拉浮层渲染有延迟，先等目标选项出现再点。
+  await page
+    .locator('.n-base-select-option:visible')
+    .filter({ hasText: label })
+    .first()
+    .waitFor({ state: 'visible', timeout: 10000 })
+  await page.locator('.n-base-select-option:visible').filter({ hasText: label }).first().click()
 }
 
 /**
@@ -148,7 +160,10 @@ async function addDataProperty(
   propLabel: string,
 ): Promise<void> {
   await page.goto(`/ontology/entity-types/${typeId}`)
-  await page.getByRole('button', { name: '添加属性' }).first().click()
+  // 「添加属性」在「数据属性」页签里，不切页签找不到。
+  // naive-ui 的页签是 `.n-tabs-tab`，不是 role="tab"。
+  await page.locator('.n-tabs-tab').filter({ hasText: '数据属性' }).first().click()
+  await page.getByRole('button', { name: '添加属性', exact: true }).click()
   await fillField(page, '机读名', propName)
   await fillField(page, '中文标签', propLabel)
   await saveOverlay(page)
@@ -175,6 +190,26 @@ async function createRelationType(
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
 }
 
+/** 发布实体类型：详情页点发布按钮，等已发布状态出现。 */
+async function publishEntityType(page: Page, name: string): Promise<void> {
+  await page.goto('/ontology/entity-types')
+  // 卡片视图的卡片可访问名含机读名（cell-sub），按子串匹配。
+  await page.getByRole('button', { name: '卡片', exact: true }).click()
+  await page.getByRole('button', { name: name }).first().click()
+  await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
+  await page.getByRole('button', { name: '发布', exact: true }).first().click()
+  await expect(page.getByText('已发布').first()).toBeVisible({ timeout: 15000 })
+}
+
+/** 发布关系类型：列表页行内发布按钮。 */
+async function publishRelationType(page: Page, label: string): Promise<void> {
+  await page.goto('/ontology/relation-types')
+  // 行内发布按钮的父行包含关系类型名；naive-ui 的 NDataTable 行无 role，按文本定位。
+  const row = page.locator('tr').filter({ hasText: label }).first()
+  await row.getByRole('button', { name: '发布', exact: true }).click()
+  await expect(page.getByText('已发布').first()).toBeVisible({ timeout: 15000 })
+}
+
 async function createDomain(page: Page, name: string, iri: string, label: string): Promise<void> {
   await page.goto('/ontology/domains')
   await page.getByRole('button', { name: '创建', exact: true }).first().click()
@@ -182,12 +217,11 @@ async function createDomain(page: Page, name: string, iri: string, label: string
   await overlay(page).getByPlaceholder('urn:knowledge:domain:hr', { exact: true }).fill(iri)
   await fillField(page, '中文标签', label)
   await saveOverlay(page)
-  await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
+  // 业务域列表显示的是 label（pickLabel），不是机读名 name。
+  await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
 }
 
 // 未验证的草稿：默认跳过，理由与解除步骤见文件头。跑绿之后再删掉本行。
-test.skip(process.env.KG_E2E_UI_ONLY !== '1', '未验证草稿：需在机器空闲时显式开启')
-
 test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 → 业务域', async ({ page }) => {
   seedAdmin()
   const pageErrors: string[] = []
@@ -205,17 +239,22 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
   await createEntityType(page, `UiDepartment${stamp}`, `界面部门${stamp}`, prefix)
 
   // 类型 id 从详情页 URL 拿：切到卡片视图后点卡片进详情，全程不碰 API。
-  // （表格视图的名字单元格不可点，进入详情要走操作列按钮。）
+  // （表格视图的名字单元格不可点，进入详情要走操作列按钮；卡片本身是 button，
+  //  可访问名是整张卡片的文本，按子串匹配即可。）
   await page.goto('/ontology/entity-types')
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page
-    .locator('button.card')
-    .filter({ hasText: `UiEmployee${stamp}` })
+    .getByRole('button', { name: `UiEmployee${stamp}` })
     .first()
     .click()
   await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
   const typeId = Number(/entity-types\/(\d+)/.exec(page.url())![1])
-  await addDataProperty(page, typeId, 'hireDate', `入职日期${stamp}`)
+  // 属性机读名必须是 PascalCase（小写开头会被表单拒："请填写 PascalCase 属性名与中文标签"）。
+  await addDataProperty(page, typeId, 'HireDate', `入职日期${stamp}`)
+
+  // 业务域发布要求成员已有发布版本（版本冻结）：先发布实体类型与关系类型。
+  await publishEntityType(page, `UiEmployee${stamp}`)
+  await publishEntityType(page, `UiDepartment${stamp}`)
 
   await createRelationType(
     page,
@@ -225,6 +264,7 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
     `界面员工${stamp}`,
     `界面部门${stamp}`,
   )
+  await publishRelationType(page, `界面就职于${stamp}`)
 
   await createDomain(
     page,
@@ -232,12 +272,17 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
     `urn:knowledge:domain:ui${stamp}`,
     `界面业务域${stamp}`,
   )
-  // ⚠️ 以下成员与发布这一段**尚未跑通验证**：成员区在右侧详情面板里，
-  // 需要先在左列表选中刚建的域；左列表项的选择器还没从实际 DOM 确认过
-  // （Domains.vue 里 `.domain-item` 只出现在样式表，模板侧未找到对应元素）。
-  // 恢复运行后请先确认「选中域 → 成员面板出现」这一步的选择器。
+  // reload 确保成员下拉的类型/关系列表含刚创建并发布的资源
+  await page.reload()
+  // 成员区在右侧详情面板，只有「已选中某个域」时才渲染；左列表是 NTree。
+  await page
+    .locator('.n-tree-node-content')
+    .filter({ hasText: `界面业务域${stamp}` })
+    .first()
+    .click()
   for (const member of [`界面员工${stamp}`, `界面部门${stamp}`, `界面就职于${stamp}`]) {
-    await page.getByPlaceholder('添加成员', { exact: true }).click()
+    // NSelect 的 placeholder 在 loading 态不挂在 input 上，直接点触发器更稳。
+    await page.locator('.member-select .n-base-selection').click()
     await pickOption(page, member)
     await page.getByRole('button', { name: '添加成员', exact: true }).first().click()
     await expect(page.getByText(member).first()).toBeVisible()
