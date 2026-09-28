@@ -433,3 +433,40 @@ def test_associative_props_land_on_graph_edges(session, fusion_db):
     edges_with_props = [e for e in view["edges"] if e["props"]]
     assert edges_with_props, "ASSOCIATIVE 属性必须出现在边 props 上"
     assert any(e["props"].get("amount") is not None for e in edges_with_props)
+
+
+def test_entity_fusion_explanation_lists_source_rows(session, fusion_db):
+    """G-29 融合解释：同一 IRI 的来源行贡献与来源表可查。"""
+    from app.domain.evidence_service import trace_entity_fusion
+
+    onto = _setup_onto(session)
+    ds = create_datasource(
+        session,
+        DatasourceCreate(name="dsf", kind="sqlite", params={"database": fusion_db}),
+    )
+    session.commit()
+    capture_metadata(session, ds.id)
+    session.commit()
+    rev = _fusion_mapping(session, onto)
+
+    start_run(session, rev.id, ds.id, "https://example.org/kg/")
+    session.commit()
+    gr = get_current_graph(session)
+    assert gr is not None
+
+    partners = [
+        e
+        for e in list_entity_identities(session, gr.id, page_size=100)[0]
+        if e.type_iri.endswith("Partner")
+    ]
+    fused = next(e for e in partners if e.iri.endswith("C006"))
+
+    result = trace_entity_fusion(session, fused.iri, gr.id)
+    assert result["entity"]["iri"] == fused.iri
+    assert result["source_count"] >= 1
+    assert result["row_count"] >= 2
+    tables = {row["table_name"] for row in result["source_rows"]}
+    assert "crm_customer" in tables
+    assert "crm_supplier" in tables
+    # 融合实体的来源行都应可解释（每行至少一条贡献）
+    assert all(row["contributions"] for row in result["source_rows"])

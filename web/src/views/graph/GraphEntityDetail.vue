@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { NAlert, NButton, NDataTable, NEmpty, NSpace, NTabPane, NTabs } from 'naive-ui'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
+import type { EntityFusion } from '@/api/graph'
 import { graphApi } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
@@ -26,6 +27,61 @@ const attrs = computed(() =>
   })),
 )
 const attributeKey = (row: { key: string }) => row.key
+
+const fusion = ref<EntityFusion | null>(null)
+const fusionLoading = ref(false)
+const fusionError = ref('')
+const activeTab = ref('attrs')
+let fusionController: AbortController | null = null
+
+async function loadFusion() {
+  if (!data.value) return
+  const iri = data.value.detail.entity.iri
+  const grId = data.value.detail.entity.graph_revision_id
+  fusionController?.abort()
+  fusionController = new AbortController()
+  fusionLoading.value = true
+  fusionError.value = ''
+  try {
+    fusion.value = await graphApi.entityFusion(iri, grId, fusionController.signal)
+  } catch (err) {
+    fusionError.value = String(err)
+  } finally {
+    fusionLoading.value = false
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'fusion' && !fusion.value && !fusionLoading.value) void loadFusion()
+})
+
+const fusionColumns = computed(() => [
+  { key: 'source_name', title: t('graph.fusionSource') },
+  { key: 'table_name', title: t('graph.fusionTable') },
+  { key: 'row_key', title: t('graph.fusionRowKey') },
+  {
+    key: 'contributions',
+    title: t('graph.fusionContributions'),
+    render: (row: { contributions: unknown[] }) => row.contributions.length,
+  },
+  {
+    key: 'quarantined',
+    title: t('graph.fusionQuarantined'),
+    render: (row: { quarantined: boolean }) => t(row.quarantined ? 'common.yes' : 'common.no'),
+  },
+])
+const fusionRowKey = (row: { source_id: number; table_name: string; row_key: string }) =>
+  `${row.source_id}:${row.table_name}:${row.row_key}`
+const conflictColumns = computed(() => [
+  { key: 'predicate', title: t('graph.fusionPredicate') },
+  {
+    key: 'values',
+    title: t('graph.fusionValues'),
+    render: (row: { values: { table_name: string; row_key: string; value: string }[] }) =>
+      row.values.map((v) => `${v.table_name}:${v.row_key}=${v.value}`).join(', '),
+  },
+])
+const conflictRowKey = (row: { predicate: string }) => row.predicate
 </script>
 
 <template>
@@ -72,7 +128,7 @@ const attributeKey = (row: { key: string }) => row.key
           >{{ t('graph.chainTitle') }}</RouterLink
         >
       </NSpace>
-      <NTabs type="line" animated>
+      <NTabs v-model:value="activeTab" type="line" animated>
         <NTabPane name="attrs" :tab="t('entityType.dataProps')">
           <NDataTable
             :columns="[
@@ -109,6 +165,33 @@ const attributeKey = (row: { key: string }) => row.key
           }}</NAlert>
           <NEmpty v-if="!data.evidence.total_count" :description="t('graph.noEvidence')" />
           <EvidenceTable v-else :items="data.evidence.evidences" />
+        </NTabPane>
+        <NTabPane name="fusion" :tab="t('graph.fusionTitle')">
+          <p v-if="fusionLoading" role="status">{{ t('common.loading') }}</p>
+          <NAlert v-if="fusionError" type="error">{{ fusionError }}</NAlert>
+          <NEmpty v-if="fusion && !fusion.source_rows.length" :description="t('graph.noFusion')" />
+          <template v-if="fusion && fusion.source_rows.length">
+            <NAlert v-if="fusion.conflicts.length" type="warning" class="notice">{{
+              t('graph.fusionConflictHint', { count: fusion.conflicts.length })
+            }}</NAlert>
+            <p>
+              {{
+                t('graph.fusionSummary', { sources: fusion.source_count, rows: fusion.row_count })
+              }}
+            </p>
+            <NDataTable
+              :columns="fusionColumns"
+              :data="fusion.source_rows"
+              :row-key="fusionRowKey"
+            />
+            <h3 v-if="fusion.conflicts.length">{{ t('graph.fusionConflicts') }}</h3>
+            <NDataTable
+              v-if="fusion.conflicts.length"
+              :columns="conflictColumns"
+              :data="fusion.conflicts"
+              :row-key="conflictRowKey"
+            />
+          </template>
         </NTabPane>
       </NTabs>
     </template>

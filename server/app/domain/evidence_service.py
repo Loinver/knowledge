@@ -230,3 +230,123 @@ def trace_source_rows(
         "facts": facts,
         "entities": sorted(entities),
     }
+
+
+def trace_entity_fusion(
+    session: Session, iri: str, graph_revision_id: int | None = None
+) -> dict:
+    """实体融合解释（G-29）：该实体由哪些来源行融合，是否存在冲突值。
+
+    只读聚合 FactEvidence：按 (source_id, table_name, row_key) 分组来源行，
+    平铺每行贡献的谓词→值，并检出同一谓词在多来源间的不一致值。
+    不修改任何数据。
+    """
+    gr = resolve_graph(session, graph_revision_id)
+
+    entity = (
+        session.execute(
+            select(EntityIdentity).where(
+                EntityIdentity.iri == iri,
+                EntityIdentity.graph_revision_id == gr.id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if entity is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"iri": iri})
+
+    raw_evidences = list(
+        session.execute(
+            select(FactEvidence).where(
+                (FactEvidence.subject == iri) | (FactEvidence.object_ == iri),
+                FactEvidence.graph_revision_id == gr.id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    source_ids = {e.source_id for e in raw_evidences}
+    sources = {
+        ds.id: ds
+        for ds in session.scalars(
+            select(Datasource).where(Datasource.id.in_(source_ids))
+        )
+    }
+    run_ids = {e.run_id for e in raw_evidences}
+    quarantine_set: set[tuple[int, str, str]] = set()
+    if run_ids:
+        qs = list(
+            session.execute(select(Quarantine).where(Quarantine.run_id.in_(run_ids)))
+            .scalars()
+            .all()
+        )
+        quarantine_set = {(q.run_id, q.table_name, q.row_key) for q in qs}
+
+    # 按 (source_id, table_name, row_key) 分组来源行
+    rows: dict[tuple[int, str, str], list[FactEvidence]] = {}
+    for ev in raw_evidences:
+        key = (ev.source_id, ev.table_name, ev.row_key)
+        rows.setdefault(key, []).append(ev)
+
+    source_rows: list[dict] = []
+    # 谓词→{(source_id,table,row_key): value} 用于冲突检出
+    predicate_values: dict[str, dict[tuple[int, str, str], str]] = {}
+    for (src_id, tbl, rk), evs in rows.items():
+        contributions = []
+        for ev in evs:
+            # _entity_attrs 谓词承载属性值；其他谓词是关系边
+            contributions.append(
+                {
+                    "predicate": ev.predicate,
+                    "object": ev.object_,
+                    "evidence_type": ev.evidence_type,
+                    "columns": list(ev.columns or []),
+                }
+            )
+            if ev.predicate != "_entity_attrs":
+                predicate_values.setdefault(ev.predicate, {})[(src_id, tbl, rk)] = (
+                    ev.object_
+                )
+        ds = sources.get(src_id)
+        source_rows.append(
+            {
+                "source_id": src_id,
+                "source_name": ds.name if ds else None,
+                "table_name": tbl,
+                "row_key": rk,
+                "contributions": contributions,
+                "quarantined": any(
+                    (ev.run_id, tbl, rk) in quarantine_set for ev in evs
+                ),
+            }
+        )
+
+    conflicts: list[dict] = []
+    for predicate, value_map in predicate_values.items():
+        distinct = set(value_map.values())
+        if len(distinct) > 1:
+            conflicts.append(
+                {
+                    "predicate": predicate,
+                    "values": [
+                        {
+                            "source_id": sid,
+                            "table_name": tbl,
+                            "row_key": rk,
+                            "value": val,
+                        }
+                        for (sid, tbl, rk), val in value_map.items()
+                    ],
+                }
+            )
+
+    return {
+        "graph_revision_id": gr.id,
+        "entity": {"iri": iri, "type_iri": entity.type_iri},
+        "source_rows": source_rows,
+        "conflicts": conflicts,
+        "source_count": len(source_ids),
+        "row_count": len(rows),
+    }

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_session
 from app.domain.evidence_service import (
     trace_entity_evidence,
+    trace_entity_fusion,
     trace_source_rows,
 )
 from app.domain.evidence_service import trace_fact as trace_fact_evidence
@@ -41,6 +42,7 @@ from app.domain.graph_view_service import graph_view
 from app.domain.run_export_service import export_run
 from app.schemas.extraction import (
     EntityDetailOut,
+    EntityFusionOut,
     EntityIdentityOut,
     EntityPage,
     EntityTraceOut,
@@ -337,6 +339,17 @@ def trace_entity(
 ) -> dict:
     """实体维度的证据汇总。"""
     return trace_entity_evidence(session, iri, graph_revision_id)
+
+
+@router.get("/evidence/fusion", response_model=ApiResponse[EntityFusionOut])
+@router.get("/evidence/fusion/{iri:path}", response_model=ApiResponse[EntityFusionOut])
+def trace_entity_fusion_route(
+    iri: str,
+    graph_revision_id: int | None = Query(None, ge=1),
+    session: Session = Depends(get_session),
+) -> dict:
+    """实体融合解释（G-29）：来源行贡献与冲突值。"""
+    return trace_entity_fusion(session, iri, graph_revision_id)
 
 
 @router.get("/evidence/trace/reverse", response_model=ApiResponse[ReverseTraceOut])

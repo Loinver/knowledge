@@ -11,6 +11,7 @@ export type GraphDiff = Schemas['GraphDiffOut']
 export type GraphPath = Schemas['PathOut']
 export type GraphRecommendations = Schemas['GraphRecommendationOut']
 export type ReverseTrace = Schemas['ReverseTraceOut']
+export type EntityFusion = Schemas['EntityFusionOut']
 export type ViewTemplate = Schemas['ViewTemplateOut']
 export type ViewTemplatePage = Schemas['ViewTemplatePage']
 
@@ -39,6 +40,13 @@ export const graphApi = {
   entityEvidence: (iri: string, graph_revision_id: number | undefined, signal: AbortSignal) =>
     http
       .get<Schemas['EntityTraceOut']>('/extraction/evidence/trace/entity', {
+        params: { iri, graph_revision_id },
+        signal,
+      })
+      .then((r) => r.data),
+  entityFusion: (iri: string, graph_revision_id: number | undefined, signal: AbortSignal) =>
+    http
+      .get<EntityFusion>('/extraction/evidence/fusion', {
         params: { iri, graph_revision_id },
         signal,
       })

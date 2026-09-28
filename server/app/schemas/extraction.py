@@ -253,3 +253,33 @@ class ReverseTraceOut(BaseModel):
     row_key: str
     facts: list[ReverseTraceFact]
     entities: list[str]
+
+
+class FusionSourceRow(BaseModel):
+    """融合解释：单个来源行对实体的贡献。"""
+
+    source_id: int
+    source_name: str | None
+    table_name: str
+    row_key: str
+    # 该来源行贡献的谓词→值（按证据记录的 predicate/object 平铺）。
+    contributions: list[dict[str, object]]
+    quarantined: bool
+
+
+class FusionConflict(BaseModel):
+    """同一谓词在多个来源间出现不一致值。"""
+
+    predicate: str
+    values: list[dict[str, object]]
+
+
+class EntityFusionOut(BaseModel):
+    """实体融合解释（G-29）：该实体由哪些来源行融合，是否存在冲突值。"""
+
+    graph_revision_id: int
+    entity: EntityTraceIdentity
+    source_rows: list[FusionSourceRow]
+    conflicts: list[FusionConflict]
+    source_count: int
+    row_count: int
