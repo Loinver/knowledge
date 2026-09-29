@@ -84,16 +84,24 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
 
     resource_revision 只增不改；current_revision 前移。
     已发布状态的资源不能再次发布（需先改草稿再发新版本）。
+    并发双发布：用带 status 条件的原子 UPDATE 抢占发布权，输家拿到
+    409 ALREADY_PUBLISHED，而不是双双通过后撞 (resource_id, revision)
+    唯一约束变成 503。
     """
-    resource = session.scalars(
+    claimed = session.scalar(
         update(ModelResource)
-        .where(ModelResource.id == resource.id)
-        .values(edit_revision=ModelResource.edit_revision)
+        .where(
+            ModelResource.id == resource.id,
+            ModelResource.status == ResourceStatus.DRAFT,
+        )
+        .values(edit_revision=ModelResource.edit_revision + 1)
         .returning(ModelResource)
         .execution_options(populate_existing=True)
-    ).one()
-    if resource.status == ResourceStatus.PUBLISHED:
+    )
+    if claimed is None:
+        session.refresh(resource)
         raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource": resource.name})
+    resource = claimed
     new_rev = resource.current_revision + 1
     payload = {
         "name": resource.name,
@@ -193,7 +201,7 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
     )
     session.add(rev)
     resource.current_revision = new_rev
-    resource.edit_revision += 1
+    # edit_revision 已在抢占发布的原子 UPDATE 里递增，使在途编辑令牌全部失效。
     resource.status = ResourceStatus.PUBLISHED
     session.flush()
     return rev

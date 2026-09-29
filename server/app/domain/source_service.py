@@ -19,8 +19,9 @@ from app.core.crypto import (
 )
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
-from app.models.data_access import Datasource
-from app.schemas.datasource import DatasourceCreate
+from app.models.data_access import Datasource, MetadataSnapshot
+from app.models.extraction import ExtractionTask, FactEvidence
+from app.schemas.datasource import DatasourceCreate, DatasourceUpdate
 
 
 def create_datasource(session: Session, payload: DatasourceCreate) -> Datasource:
@@ -30,7 +31,7 @@ def create_datasource(session: Session, payload: DatasourceCreate) -> Datasource
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"name": payload.name, "reason": "datasource_name_taken"},
         )
     credential_cipher = None
@@ -109,8 +110,92 @@ def get_display_params(ds: Datasource) -> dict:
     return mask_credential(ds.params or {})
 
 
+def update_datasource(
+    session: Session, ds_id: int, payload: DatasourceUpdate
+) -> Datasource:
+    """更新连接信息：改名、换参数、换凭据。
+
+    凭据重新加密后存；参数或凭据变化后旧连接状态不再可信，重置为
+    DISCONNECTED，等下一次显式测试连接再翻转。
+    """
+    ds = get_datasource(session, ds_id)
+    if payload.name is not None and payload.name != ds.name:
+        existing = session.execute(
+            select(Datasource).where(Datasource.name == payload.name)
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise KGError(
+                ErrorCode.ALREADY_EXISTS,
+                {"name": payload.name, "reason": "datasource_name_taken"},
+            )
+        ds.name = payload.name
+    if payload.params is not None:
+        ds.params = payload.params
+        ds.status = "DISCONNECTED"
+    if payload.credential is not None:
+        ds.credential_cipher = encrypt(payload.credential)
+        ds.status = "DISCONNECTED"
+    session.flush()
+    return ds
+
+
+def test_stored_connection(session: Session, ds_id: int) -> dict:
+    """用库里的参数与凭据测试连接，并把结果落到 status。
+
+    之前 test_connection 只返回结果不落库，status 建库后永远是
+    DISCONNECTED，前端的状态列是死值。
+    """
+    ds = get_datasource(session, ds_id)
+    try:
+        credential = decrypt(ds.credential_cipher) if ds.credential_cipher else None
+    except KGError:
+        result = {"ok": False, "message": "credential_unreadable", "table_count": None}
+    else:
+        result = test_connection(ds.kind, ds.params or {}, credential)
+    ds.status = "CONNECTED" if result["ok"] else "DISCONNECTED"
+    session.flush()
+    return {**result, "status": ds.status}
+
+
 def delete_datasource(session: Session, ds_id: int) -> None:
     ds = get_datasource(session, ds_id)
+    # 快照、抽取任务、证据都按 datasource_id 钉住来源；删源会让证据链
+    # 反向追溯（/evidence/trace/reverse）断链。有引用一律拒绝删除。
+    referenced = (
+        (
+            session.scalar(
+                select(func.count())
+                .select_from(MetadataSnapshot)
+                .where(MetadataSnapshot.datasource_id == ds_id)
+            )
+            or 0
+        )
+        + (
+            session.scalar(
+                select(func.count())
+                .select_from(ExtractionTask)
+                .where(ExtractionTask.datasource_id == ds_id)
+            )
+            or 0
+        )
+        + (
+            session.scalar(
+                select(func.count())
+                .select_from(FactEvidence)
+                .where(FactEvidence.source_id == ds_id)
+            )
+            or 0
+        )
+    )
+    if referenced:
+        raise KGError(
+            ErrorCode.RESOURCE_IN_USE,
+            {
+                "datasource_id": ds_id,
+                "count": referenced,
+                "reason": "datasource_in_use",
+            },
+        )
     session.delete(ds)
     session.flush()
 

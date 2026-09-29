@@ -159,7 +159,7 @@ def _ensure_name_unique(session: Session, name: str) -> None:
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"name": name, "reason": "name_taken"},
         )
 
@@ -299,21 +299,27 @@ def _set_owl_and_meta(
     detail = _relation_detail(session, relation)
     detail.owl = owl.model_dump()
 
-    # 关系型引用整体重写：先清旧，再按 payload 重建（None = 不改）
-    refs_to_rewrite = (
-        payload.inverse_of is not None
-        or payload.union_of is not None
-        or payload.intersection_of is not None
-    )
-    if not refs_to_rewrite:
+    # 关系型引用按角色改写：字段未出现在请求里 = 不修改（保留库中旧值）；
+    # union_of / intersection_of 显式传列表（含空表）= 整体重写；
+    # inverse_of 显式传 null = 清除，传 id = 设置。
+    # 之前只要任一字段出现就把三种角色全删重建，更新 inverse_of 会静默
+    # 抹掉已有的 union_of / intersection_of。
+    rewrite_roles: list[str] = []
+    if "inverse_of" in payload.model_fields_set:
+        rewrite_roles.append("inverse_of")
+    if payload.union_of is not None:
+        rewrite_roles.append("union_of")
+    if payload.intersection_of is not None:
+        rewrite_roles.append("intersection_of")
+    if not rewrite_roles:
         return
     session.execute(
         delete(ResourceRef).where(
             ResourceRef.source_id == relation.id,
-            ResourceRef.role.in_(["inverse_of", "union_of", "intersection_of"]),
+            ResourceRef.role.in_(rewrite_roles),
         )
     )
-    if payload.inverse_of is not None:
+    if "inverse_of" in payload.model_fields_set and payload.inverse_of is not None:
         session.add(
             ResourceRef(
                 source_id=relation.id,

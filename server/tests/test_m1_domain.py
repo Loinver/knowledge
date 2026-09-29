@@ -78,7 +78,7 @@ def test_create_duplicate_rejected(session):
     _make_domain(session)
     with pytest.raises(KGError) as exc:
         _make_domain(session)
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 def test_add_member(session, published_type):
@@ -101,7 +101,7 @@ def test_add_duplicate_member_rejected(session, published_type):
     add_member(session, domain.id, DomainMemberAdd(resource_id=published_type.id))
     with pytest.raises(KGError) as exc:
         add_member(session, domain.id, DomainMemberAdd(resource_id=published_type.id))
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 def test_add_nonexistent_member_rejected(session):

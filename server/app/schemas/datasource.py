@@ -23,10 +23,12 @@ class DatasourceCreate(BaseModel):
 
 
 class DatasourceUpdate(BaseModel):
+    """连接信息更新。数据源没有版本列，连接参数按最后写入生效；
+    唯一性由服务层校验（重名 409 ALREADY_EXISTS）。"""
+
     name: str | None = None
     params: dict | None = None
     credential: str | None = None
-    if_match: int
 
     _validate_params = field_validator("params")(_public_params_only)
 

@@ -87,7 +87,7 @@ def test_create_duplicate_rejected(session):
     _make_ontology(session)
     with pytest.raises(KGError) as exc:
         _make_ontology(session)
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 def test_add_ref_deduped_by_resource(session, published_type):
@@ -95,7 +95,7 @@ def test_add_ref_deduped_by_resource(session, published_type):
     ref = add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
     with pytest.raises(KGError) as exc:
         add_ref(session, onto.id, OntologyRefAdd(resource_id=published_type.id))
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
     assert ref.resource_id == published_type.id
 
 

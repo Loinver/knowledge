@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy import inspect as sqlalchemy_inspect
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from app.domain.template_service import (
     template_resources,
     validate_resources,
 )
+from app.models.data_access import Mapping
 from app.models.domain import (
     CanvasLayout,
     Ontology,
@@ -40,7 +41,7 @@ def create_ontology(session: Session, payload: OntologyCreate) -> Ontology:
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"name": payload.name, "reason": "ontology_name_taken"},
         )
     pins: dict[int, int | None] = {}
@@ -127,7 +128,7 @@ def add_ref(
                 },
             )
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"resource_id": payload.resource_id, "reason": "ref_exists"},
         )
     ref = OntologyResourceRef(
@@ -272,6 +273,51 @@ def update_ontology(
             )
     session.flush()
     return onto
+
+
+def delete_ontology(session: Session, ontology_id: int) -> None:
+    """删除本体：引用它的映射一律拒绝；清理 refs/规则引用/修订/画布。
+
+    草稿与已发布本体都可删——已发布本体的修订只在被映射钉住时才有下游，
+    没有映射引用时删除不会静默影响任何下游资产。
+    """
+    onto = get_ontology(session, ontology_id)
+    mapping_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(Mapping)
+            .where(Mapping.ontology_id == ontology_id)
+        )
+        or 0
+    )
+    if mapping_count:
+        raise KGError(
+            ErrorCode.RESOURCE_IN_USE,
+            {
+                "ontology_id": ontology_id,
+                "count": mapping_count,
+                "reason": "ontology_in_use",
+            },
+        )
+    session.execute(
+        delete(OntologyResourceRef).where(
+            OntologyResourceRef.ontology_id == ontology_id
+        )
+    )
+    session.execute(
+        delete(OntologyRuleRef).where(OntologyRuleRef.ontology_id == ontology_id)
+    )
+    session.execute(
+        delete(OntologyRevision).where(OntologyRevision.ontology_id == ontology_id)
+    )
+    session.execute(
+        delete(CanvasLayout).where(
+            CanvasLayout.scope == "ontology_designer",
+            CanvasLayout.owner_id == ontology_id,
+        )
+    )
+    session.delete(onto)
+    session.flush()
 
 
 def get_canvas_layout(session: Session, scope: str, owner_id: int) -> CanvasLayout:

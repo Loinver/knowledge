@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
-from app.models.domain import BusinessDomain, DomainMember
+from app.models.domain import BusinessDomain, DomainMember, DomainRevision
 from app.models.enums import ResourceStatus
 from app.models.resource import ModelResource
 from app.schemas.domain import (
@@ -25,7 +25,7 @@ def create_domain(session: Session, payload: DomainCreate) -> BusinessDomain:
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"name": payload.name, "reason": "domain_name_taken"},
         )
     domain = BusinessDomain(
@@ -135,7 +135,7 @@ def add_member(
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"resource_id": payload.resource_id, "reason": "member_exists"},
         )
     if payload.owner_domain_id is not None:
@@ -173,6 +173,32 @@ def list_members(session: Session, domain_id: int) -> list[DomainMember]:
             select(DomainMember).where(DomainMember.domain_id == domain_id)
         ).scalars()
     )
+
+
+def delete_domain(session: Session, domain_id: int) -> None:
+    """删除业务域：有子域一律拒绝；成员归属随域删除，成员资源本身不动。"""
+    domain = get_domain(session, domain_id)
+    child_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(BusinessDomain)
+            .where(BusinessDomain.parent_id == domain_id)
+        )
+        or 0
+    )
+    if child_count:
+        raise KGError(
+            ErrorCode.RESOURCE_IN_USE,
+            {
+                "domain_id": domain_id,
+                "count": child_count,
+                "reason": "domain_has_children",
+            },
+        )
+    session.execute(delete(DomainMember).where(DomainMember.domain_id == domain_id))
+    session.execute(delete(DomainRevision).where(DomainRevision.domain_id == domain_id))
+    session.delete(domain)
+    session.flush()
 
 
 def get_domain(session: Session, domain_id: int) -> BusinessDomain:

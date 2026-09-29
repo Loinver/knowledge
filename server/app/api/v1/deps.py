@@ -72,6 +72,25 @@ def require_admin(user: User = Depends(current_user)) -> User:
     return user
 
 
+# 逻辑只读的「写形」端点：只做测试/预览，不落库。对 VIEWER 放行，否则只读角色
+# 连连接测试、样例预览、规则试跑都点不了。精确匹配：compile 与 validation 语义
+# 偏读但会把预览行/报告落库，/{id}/test-connection 会写状态，都不放行。
+_READ_ONLY_POST_PATHS = frozenset(
+    {
+        "/api/v1/datasources/test-connection",
+        "/api/v1/datasources/preview",
+    }
+)
+
+
+def _is_read_only_operation(method: str, path: str) -> bool:
+    if method != "POST":
+        return False
+    if path in _READ_ONLY_POST_PATHS:
+        return True
+    return path.startswith("/api/v1/governance/rules/") and path.endswith("/test")
+
+
 def authorize_business_request(
     request: Request,
     token: str = Depends(access_token),
@@ -81,8 +100,13 @@ def authorize_business_request(
     # SELECT 会触发 autobegin；鉴权使用独立短会话，让业务路由自行管理事务。
     with Session(bind=session.get_bind()) as auth_session:
         user = resolve_session(auth_session, token)
-        if request.method not in {"GET", "HEAD", "OPTIONS"} and user.role not in {
-            UserRole.EDITOR,
-            UserRole.ADMIN,
-        }:
+        if (
+            request.method not in {"GET", "HEAD", "OPTIONS"}
+            and user.role
+            not in {
+                UserRole.EDITOR,
+                UserRole.ADMIN,
+            }
+            and not _is_read_only_operation(request.method, request.url.path)
+        ):
             raise KGError(ErrorCode.FORBIDDEN, {"role": str(user.role)})

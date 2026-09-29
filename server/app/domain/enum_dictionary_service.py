@@ -227,21 +227,33 @@ def list_references(session: Session, dictionary_id: int) -> list[EnumReferenceO
 def delete_dictionary(session: Session, dictionary_id: int, revision: int) -> None:
     item = lock_dictionary(session, dictionary_id)
     check_revision(item, revision)
-    referenced = session.scalar(
-        select(DatatypePropDetail.resource_id)
-        .where(DatatypePropDetail.enum_dict_id == dictionary_id)
-        .limit(1)
+    live_refs = set(
+        session.scalars(
+            select(DatatypePropDetail.resource_id)
+            .where(DatatypePropDetail.enum_dict_id == dictionary_id)
+            .distinct()
+        )
     )
     # 历史发布版本也算引用；不能因为当前草稿移除了属性就破坏历史追溯。
-    frozen = any(
-        prop.get("enum_dict_id") == dictionary_id
-        for payload in session.scalars(select(ResourceRevision.payload))
-        for prop in payload.get("datatype_props", [])
-    )
-    if referenced is not None or frozen:
+    frozen_refs = {
+        resource_id
+        for resource_id, payload in session.execute(
+            select(ResourceRevision.resource_id, ResourceRevision.payload)
+        )
+        if any(
+            prop.get("enum_dict_id") == dictionary_id
+            for prop in (payload or {}).get("datatype_props", [])
+        )
+    }
+    count = len(live_refs | frozen_refs)
+    if count:
         raise KGError(
-            ErrorCode.REVISION_CONFLICT,
-            {"reason": "enum_dictionary_in_use", "dictionary_id": dictionary_id},
+            ErrorCode.RESOURCE_IN_USE,
+            {
+                "dictionary_id": dictionary_id,
+                "count": count,
+                "reason": "enum_dictionary_in_use",
+            },
         )
     session.execute(
         delete(EnumDictionaryRevision).where(

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.models.domain import OntologyRuleRef
 from app.models.enums import ValidationState
 from app.models.governance import Rule
 from app.schemas.governance import (
@@ -72,7 +73,7 @@ def list_rules(
 
 def _duplicate_identifier(identifier: str) -> KGError:
     return KGError(
-        ErrorCode.ALREADY_PUBLISHED,
+        ErrorCode.ALREADY_EXISTS,
         {"identifier": identifier, "reason": "rule_identifier_taken"},
     )
 
@@ -111,6 +112,18 @@ def update_rule(
 
 def delete_rule(session: Session, rule_id: int, revision: int) -> None:
     check_revision(get_rule(session, rule_id), revision)
+    # 被本体引用的规则不允许删：否则本体-规则链接悬挂，
+    # 本体发布/导出会带着指向已删规则的死引用。
+    referenced = session.scalar(
+        select(func.count())
+        .select_from(OntologyRuleRef)
+        .where(OntologyRuleRef.rule_id == rule_id)
+    )
+    if referenced:
+        raise KGError(
+            ErrorCode.RESOURCE_IN_USE,
+            {"rule_id": rule_id, "count": referenced, "reason": "rule_in_use"},
+        )
     deleted = session.scalar(
         delete(Rule)
         .where(Rule.id == rule_id, Rule.revision == revision)

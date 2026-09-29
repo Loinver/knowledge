@@ -119,7 +119,7 @@ def test_duplicate_name_rejected(session):
     session.commit()
     with pytest.raises(KGError) as exc:
         create_mapping(session, MappingCreate(name="dup", ontology_id=onto.id))
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 def test_one_table_multiple_types(session):

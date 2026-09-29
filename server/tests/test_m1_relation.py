@@ -508,7 +508,7 @@ def test_duplicate_name_rejected(session, ns, employee_type, department_type):
                 range_spec=EndpointSpec(type_id=department_type.id),
             ),
         )
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 # ---------------------------------------------------------------------------

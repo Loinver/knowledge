@@ -69,7 +69,7 @@ def test_create_duplicate_name_rejected(session, ns):
     _make_type(session, ns)
     with pytest.raises(KGError) as exc:
         _make_type(session, ns)
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 def test_create_invalid_name_rejected(session, ns):

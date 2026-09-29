@@ -207,7 +207,7 @@ def test_explicit_reference_default_validation_and_delete_protection(
     assert references.json()[0]["enum_dict_revision"] == 1
     blocked = client.delete(f"{URL}/{created['id']}", headers={"If-Match": "1"})
     assert blocked.status_code == 409
-    assert blocked.json()["code"] == "KG.REVISION_CONFLICT"
+    assert blocked.json()["code"] == "KG.RESOURCE_IN_USE"
     assert blocked.json()["params"]["reason"] == "enum_dictionary_in_use"
 
 

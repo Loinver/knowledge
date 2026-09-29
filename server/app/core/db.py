@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import get_settings
@@ -19,14 +19,29 @@ class Base(DeclarativeBase):
     """所有 ORM 模型的基类。"""
 
 
+def _is_sqlite(url: str) -> bool:
+    return url.startswith("sqlite")
+
+
 _engine = create_engine(
     get_settings().database_url,
     # SQLite 需要这个才能在多线程/async 下正常工作
     connect_args={"check_same_thread": False}
-    if get_settings().database_url.startswith("sqlite")
+    if _is_sqlite(get_settings().database_url)
     else {},
     echo=False,
 )
+# SQLite 默认不强制外键；模型声明的 FK 只有开启 pragma 才生效。
+# 不开的话，删除父行会静默留下孤儿子行（数据损坏）。
+if _is_sqlite(get_settings().database_url):
+
+    @event.listens_for(_engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection: object, _record: object) -> None:
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 _SessionFactory = sessionmaker(bind=_engine, expire_on_commit=False, class_=Session)
 
 

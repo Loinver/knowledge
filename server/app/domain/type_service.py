@@ -45,7 +45,7 @@ def create_entity_type(session: Session, payload: EntityTypeCreate) -> ModelReso
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED,
+            ErrorCode.ALREADY_EXISTS,
             {"name": payload.name, "reason": "name_taken"},
         )
     resource = ModelResource(
@@ -88,9 +88,6 @@ def _set_parents(
     session: Session, resource: ModelResource, parent_ids: list[int]
 ) -> None:
     """设置类型层级（继承）。按 IRI 去重，并拒绝形成继承环。"""
-    session.execute(
-        select(ResourceParent).where(ResourceParent.child_id == resource.id)
-    )
     # 清除旧的
     session.query(ResourceParent).filter(
         ResourceParent.child_id == resource.id

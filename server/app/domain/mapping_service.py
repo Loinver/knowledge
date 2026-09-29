@@ -8,12 +8,12 @@ mapping + mapping_revision：草稿可反复改，发布生成不可变 revision
 
 from __future__ import annotations
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
-from app.models.data_access import Mapping, MappingRevision
+from app.models.data_access import Mapping, MappingPreview, MappingRevision
 from app.models.domain import Ontology, OntologyRevision
 from app.models.enums import ResourceStatus
 from app.schemas.mapping import (
@@ -52,7 +52,7 @@ def _ensure_name_unique(session: Session, name: str) -> None:
     ).scalar_one_or_none()
     if existing is not None:
         raise KGError(
-            ErrorCode.ALREADY_PUBLISHED, {"name": name, "reason": "mapping_name_taken"}
+            ErrorCode.ALREADY_EXISTS, {"name": name, "reason": "mapping_name_taken"}
         )
 
 
@@ -370,5 +370,19 @@ def delete_mapping(
     session: Session, mapping_id: int, if_edit_match: int | None = None
 ) -> None:
     m = _lock_mapping_edit(session, mapping_id, if_edit_match=if_edit_match)
+    # preview 挂在 revision 上，先清子行再删映射；否则留下孤儿版本与预览，
+    # 开启外键强制后删除也会直接失败。
+    session.execute(
+        delete(MappingPreview).where(
+            MappingPreview.mapping_revision_id.in_(
+                select(MappingRevision.id).where(
+                    MappingRevision.mapping_id == mapping_id
+                )
+            )
+        )
+    )
+    session.execute(
+        delete(MappingRevision).where(MappingRevision.mapping_id == mapping_id)
+    )
     session.delete(m)
     session.flush()

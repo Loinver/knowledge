@@ -79,7 +79,7 @@ def test_create_duplicate_rejected(session):
                 params={"database": "/tmp/hr2.db"},
             ),
         )
-    assert exc.value.code == ErrorCode.ALREADY_PUBLISHED
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
 
 
 def test_test_connection_sqlite_success():
@@ -241,3 +241,103 @@ def test_encrypt_decrypt_roundtrip():
     cipher = encrypt(plaintext)
     assert cipher != plaintext
     assert decrypt(cipher) == plaintext
+
+
+def test_update_datasource_renames_and_reencrypts(session):
+    """PUT 更新：改名、换参数、换凭据（重新加密），凭据不出后端。"""
+    from app.domain.source_service import update_datasource
+    from app.schemas.datasource import DatasourceUpdate
+
+    ds = create_datasource(
+        session,
+        DatasourceCreate(
+            name="hr-db",
+            kind="sqlite",
+            params={"database": "/tmp/hr.db"},
+            credential="secret123",
+        ),
+    )
+    session.commit()
+
+    updated = update_datasource(
+        session,
+        ds.id,
+        DatasourceUpdate(name="finance-db", credential="new-secret"),
+    )
+    session.commit()
+    assert updated.name == "finance-db"
+    assert decrypt(updated.credential_cipher) == "new-secret"
+
+
+def test_update_datasource_duplicate_name_rejected(session):
+    from app.domain.source_service import update_datasource
+    from app.schemas.datasource import DatasourceUpdate
+
+    create_datasource(
+        session,
+        DatasourceCreate(name="hr-db", kind="sqlite", params={"database": "/tmp/a.db"}),
+    )
+    other = create_datasource(
+        session,
+        DatasourceCreate(
+            name="fin-db", kind="sqlite", params={"database": "/tmp/b.db"}
+        ),
+    )
+    session.commit()
+    with pytest.raises(KGError) as exc:
+        update_datasource(session, other.id, DatasourceUpdate(name="hr-db"))
+    assert exc.value.code == ErrorCode.ALREADY_EXISTS
+
+
+def test_update_datasource_resets_status(session):
+    """换参数/换凭据后旧连接状态不可信，重置为 DISCONNECTED。"""
+    from app.domain.source_service import update_datasource
+    from app.schemas.datasource import DatasourceUpdate
+
+    ds = create_datasource(
+        session,
+        DatasourceCreate(
+            name="hr-db", kind="sqlite", params={"database": "/tmp/hr.db"}
+        ),
+    )
+    ds.status = "CONNECTED"
+    session.commit()
+
+    updated = update_datasource(
+        session, ds.id, DatasourceUpdate(params={"database": "/tmp/other.db"})
+    )
+    session.commit()
+    assert updated.status == "DISCONNECTED"
+
+
+def test_stored_test_connection_persists_status(session, tmp_path):
+    """测试连接结果落库：ok → CONNECTED，失败 → DISCONNECTED。"""
+    from app.domain.source_service import test_stored_connection
+
+    db_file = tmp_path / "hr.db"
+    db_file.write_text("")
+    ds = create_datasource(
+        session,
+        DatasourceCreate(
+            name="hr-db", kind="sqlite", params={"database": str(db_file)}
+        ),
+    )
+    session.commit()
+
+    result = test_stored_connection(session, ds.id)
+    session.commit()
+    assert result["ok"] is True
+    assert result["status"] == "CONNECTED"
+    assert get_datasource(session, ds.id).status == "CONNECTED"
+
+    bad = create_datasource(
+        session,
+        DatasourceCreate(
+            name="ghost", kind="sqlite", params={"database": "/nonexistent/x.db"}
+        ),
+    )
+    session.commit()
+    failed = test_stored_connection(session, bad.id)
+    session.commit()
+    assert failed["ok"] is False
+    assert failed["status"] == "DISCONNECTED"
