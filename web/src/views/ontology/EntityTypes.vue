@@ -34,6 +34,7 @@ const router = useRouter()
 
 const loading = ref(false)
 const items = ref<EntityTypeBrief[]>([])
+const loadError = ref('')
 const searchQuery = ref('')
 const showCreate = ref(false)
 const namespaces = ref<Namespace[]>([])
@@ -224,13 +225,16 @@ function goToDetail(id: number) {
 
 async function loadList() {
   loading.value = true
+  loadError.value = ''
   try {
     items.value = await entityTypesApi.list({
       q: searchQuery.value,
       domain_id: domainFilter.value ?? undefined,
     })
-  } catch {
+  } catch (err) {
+    // 加载失败静默清空会让用户以为「没有数据」；至少给出可见的错误提示
     items.value = []
+    loadError.value = toMessage(err)
   } finally {
     loading.value = false
   }
@@ -402,6 +406,7 @@ watch(domainFilter, () => void loadList())
     </div>
 
     <NSpin :show="loading">
+      <NAlert v-if="loadError" type="error" class="list-error">{{ loadError }}</NAlert>
       <div v-if="view === 'table'" class="card">
         <NDataTable
           :columns="columns"
@@ -718,6 +723,10 @@ watch(domainFilter, () => void loadList())
 }
 
 .create-error {
+  margin-bottom: var(--space-3);
+}
+
+.list-error {
   margin-bottom: var(--space-3);
 }
 

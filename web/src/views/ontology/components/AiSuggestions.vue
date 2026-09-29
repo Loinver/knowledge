@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { aiApi, type AiSuggestion, type SuggestionKind, suggestionPayloadLines } from '@/api/ai'
+import { useApiError } from '@/composables/useApiError'
 
 /**
  * AI 建议审阅面板（V-DS-05 / V-EX-07 共用）：
@@ -22,6 +23,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ applied: [id: number] }>()
 const { t } = useI18n()
+const { toMessage } = useApiError()
 const items = ref<AiSuggestion[]>([])
 const loading = ref(false)
 const busyId = ref<number | null>(null)
@@ -44,7 +46,7 @@ async function generate(text?: string) {
     }
     loaded.value = true
   } catch (cause) {
-    error.value = String(cause)
+    error.value = toMessage(cause)
   } finally {
     loading.value = false
   }
@@ -59,7 +61,7 @@ async function apply(id: number) {
     notice.value = t('ai.applied')
     emit('applied', id)
   } catch (cause) {
-    error.value = String(cause)
+    error.value = toMessage(cause)
   } finally {
     busyId.value = null
   }
@@ -72,7 +74,7 @@ async function discard(id: number) {
     await aiApi.discard(id)
     items.value = items.value.filter((item) => item.id !== id)
   } catch (cause) {
-    error.value = String(cause)
+    error.value = toMessage(cause)
   } finally {
     busyId.value = null
   }

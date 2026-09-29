@@ -2,17 +2,20 @@
 import { NAlert, NButton, NDataTable, NEmpty, NSpace, NTabPane, NTabs } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import type { EntityFusion } from '@/api/graph'
+import type { EntityFusion, EvidenceItem } from '@/api/graph'
 import { graphApi } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
 import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 
 const { t } = useI18n()
+const { toMessage } = useApiError()
 const route = useRoute()
+const router = useRouter()
 const { data, error, loading, reload } = useAsyncData(async (signal) => {
   const iri = String(route.params.id)
   const graphId = route.query.graph ? Number(route.query.graph) : undefined
@@ -45,7 +48,7 @@ async function loadFusion() {
   try {
     fusion.value = await graphApi.entityFusion(iri, grId, fusionController.signal)
   } catch (err) {
-    fusionError.value = String(err)
+    fusionError.value = toMessage(err)
   } finally {
     fusionLoading.value = false
   }
@@ -54,6 +57,19 @@ async function loadFusion() {
 watch(activeTab, (tab) => {
   if (tab === 'fusion' && !fusion.value && !fusionLoading.value) void loadFusion()
 })
+
+/** 「查看证据链」跳到证据页并按三元组定位，与证据页 triple 模式共用查询参数。 */
+function openChain(item: EvidenceItem) {
+  void router.push({
+    name: 'graph-evidence',
+    query: {
+      graph: route.query.graph,
+      subject: item.subject,
+      predicate: item.predicate,
+      object: item.object,
+    },
+  })
+}
 
 const fusionColumns = computed(() => [
   { key: 'source_name', title: t('graph.fusionSource') },
@@ -164,7 +180,7 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
             t('graph.quarantineWarning')
           }}</NAlert>
           <NEmpty v-if="!data.evidence.total_count" :description="t('graph.noEvidence')" />
-          <EvidenceTable v-else :items="data.evidence.evidences" />
+          <EvidenceTable v-else :items="data.evidence.evidences" @chain="openChain" />
         </NTabPane>
         <NTabPane name="fusion" :tab="t('graph.fusionTitle')">
           <p v-if="fusionLoading" role="status">{{ t('common.loading') }}</p>

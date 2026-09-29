@@ -41,9 +41,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
     try {
       user.value = await authApi.me()
-    } catch {
-      // 拿不到用户信息时保留 token 判断，由 401 拦截器决定是否跳登录
-      user.value = null
+    } catch (err) {
+      const status = (err as { status?: number } | undefined)?.status
+      // 401/403 才认定会话失效；5xx 或网络抖动不能把后端故障当成登出，
+      // 保留现有登录态（isAuthenticated 还会看 token）。
+      if (status === 401 || status === 403) {
+        user.value = null
+      }
     }
   }
 

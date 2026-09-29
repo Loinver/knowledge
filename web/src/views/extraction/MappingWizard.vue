@@ -3,6 +3,8 @@ import {
   NAlert,
   NButton,
   NCard,
+  NDrawer,
+  NDrawerContent,
   NEmpty,
   NInput,
   NInputNumber,
@@ -2086,7 +2088,7 @@ onBeforeUnmount(() => {
               :disabled="
                 (step === 1 && (!selectedOntologyId || !mappingName.trim())) ||
                 (step === 2 && (!selectedDatasourceId || !catalog)) ||
-                (step === 3 && (!canSaveDraft || !selectedMappingId || working)) ||
+                (step === 3 && (!canSaveDraft || working)) ||
                 (step === 4 && !preview)
               "
               :loading="step === 3 && working"
@@ -2192,7 +2194,7 @@ onBeforeUnmount(() => {
   place-items: center;
   border: 1px solid var(--border);
   border-radius: 50%;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 .wizard-step.active {
@@ -2303,7 +2305,7 @@ onBeforeUnmount(() => {
 .table-scroll th small {
   display: block;
   color: var(--text-disabled);
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-weight: 400;
 }
 .table-scroll tbody tr:hover {
@@ -2415,7 +2417,7 @@ onBeforeUnmount(() => {
 }
 .subtle-copy {
   overflow-wrap: anywhere;
-  font-family: var(--mono);
+  font-family: var(--font-mono);
 }
 .field-table {
   border: 1px solid var(--border-subtle);
@@ -2426,7 +2428,7 @@ onBeforeUnmount(() => {
   min-width: 150px;
 }
 .mono {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
 }
 .key-fields {
   display: flex;
@@ -2529,7 +2531,7 @@ onBeforeUnmount(() => {
 }
 .stat-card strong {
   color: var(--text);
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 500;
 }

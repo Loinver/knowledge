@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
 import AiSuggestions from '@/views/ontology/components/AiSuggestions.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const ontologyId = ref<number | null>(null)
 const text = ref('')
 const panelRef = ref<InstanceType<typeof AiSuggestions> | null>(null)
@@ -23,13 +23,17 @@ const {
   controller = new AbortController()
   return ontologyApi.list({ page: 1, page_size: 200 }, controller.signal)
 })
+/** 与 OntologyExport 一致：按当前界面语言取标签，语言缺失回退 zh-CN，再回退机读名。 */
+function pickLabel(labels: Record<string, string> | null | undefined, fallback: string): string {
+  return labels?.[locale.value] ?? labels?.['zh-CN'] ?? fallback
+}
 const ontologyOptions = ref<{ value: number; label: string }[]>([])
 watch(
   ontologies,
   (items) => {
     ontologyOptions.value = (items ?? []).map((item) => ({
       value: item.id,
-      label: `${item.label_i18n?.['zh-CN'] || item.name} · ${item.name}`,
+      label: `${pickLabel(item.label_i18n, item.name)} · ${item.name}`,
     }))
   },
   { immediate: true },

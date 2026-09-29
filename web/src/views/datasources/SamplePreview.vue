@@ -244,10 +244,12 @@ async function loadDatasources() {
     const sources = await datasourcesApi.list()
     if (!active) return
     datasources.value = sources
+    // 无论带没带 URL 参数，选定数据源后都自动拉元数据：
+    // 从菜单进入时也会默认选中第一个数据源，不拉取的话下拉一直是空的。
     const routeId = Number(queryString('datasourceId'))
     datasourceId.value =
       datasources.value.find((item) => item.id === routeId)?.id ?? datasources.value[0]?.id ?? null
-    if (queryString('datasourceId') && datasourceId.value !== null) await loadLatestMetadata()
+    if (datasourceId.value !== null) await loadLatestMetadata()
   } catch (error) {
     if (active) datasourcesError.value = errorCode(error)
   } finally {

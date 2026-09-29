@@ -112,6 +112,10 @@
       "INVALID_REQUEST": "The request parameters are invalid. Review them and retry.",
       "REVISION_NOT_FOUND": "The requested resource revision does not exist",
       "VALIDATION_VIOLATION": "Semantic validation failed. Review the validation details.",
+      "LLM_NOT_CONFIGURED": "The AI assistant is not configured. Set up model credentials on the server first.",
+      "LLM_UNAVAILABLE": "The AI service is unavailable. Please retry later.",
+      "LLM_RESPONSE_INVALID": "The AI response could not be parsed. Retry or adjust the input.",
+      "SUGGESTION_NOT_APPLICABLE": "This suggestion is stale or already handled. Refresh to review.",
       "SOURCE_UNREACHABLE": "The data source is unavailable",
       "REASONER_UNAVAILABLE": "The reasoning or validation engine is unavailable. Please retry later.",
       "DATABASE_ERROR": "The metadata database is unavailable or its schema is behind this build. Make sure migrations have been applied (alembic upgrade head).",
@@ -262,7 +266,8 @@
     "revisionHistory": "Revision history",
     "noRevisions": "Not published yet.",
     "ontologyRef": "{name} · revision v{revision}",
-    "revisionValue": "v{revision}"
+    "revisionValue": "v{revision}",
+    "loadFailed": "Failed to load entity types"
   },
   "relation": {
     "list": "Relation Type List",
@@ -274,6 +279,7 @@
     "edit": "Edit Relation Type",
     "editIncomplete": "Enter the Chinese label, domain and range",
     "namePattern": "Machine name must start with an uppercase letter and contain only letters and digits",
+    "nameDraftHint": "The machine name can only change while draft; renaming rebuilds the IRI and syncs rule references.",
     "nameHint": "PascalCase, e.g. WorksIn",
     "loadFailed": "Failed to load relation type",
     "publishFailed": "Failed to publish the relation type",
@@ -347,7 +353,8 @@
     "versionsAvailable": "Versions Available",
     "dependenciesComplete": "Dependencies Complete",
     "noCircularRef": "No Circular Reference",
-    "memberNo": "Member #{n}"
+    "memberNo": "Member #{n}",
+    "removeMemberConfirm": "Remove this member from the domain?"
   },
   "graph": {
     "notFound": "No result set is available, or the entity/fact is not in this result set. Run extraction or select another result set.",
@@ -472,6 +479,8 @@
     "templateName": "Template name",
     "templateSave": "Save current view",
     "templateStale": "Ontology updated",
+    "templateDelete": "Delete current template",
+    "templateDeleteConfirm": "Delete template \"{name}\"?",
     "edgeProps": "Edge props",
     "chain": "Chain",
     "chainView": "View chain",
@@ -939,7 +948,10 @@
     "clauseNumber": "Clause",
     "clauseNumberPlaceholder": "7.2",
     "description": "Self-authored note",
-    "nature": "Appendix nature",
+    "nature": {
+      "NORMATIVE": "Normative",
+      "INFORMATIVE": "Informative"
+    },
     "normative": "Normative",
     "informative": "Informative",
     "productFallback": "Product fallback",
@@ -984,7 +996,9 @@
         "create": "New data source",
         "delete": "Delete",
         "save": "Save",
-        "test": "Test connection"
+        "test": "Test connection",
+        "edit": "Edit",
+        "testStored": "Test connection"
       },
       "stats": {
         "total": "Total",
@@ -1020,7 +1034,8 @@
         "database": "Database",
         "user": "Username",
         "credential": "Password",
-        "credentialHint": "Used only for this connection and never shown in the list"
+        "credentialHint": "Used only for this connection and never shown in the list",
+        "credentialKeep": "Leave blank to keep the current credential"
       },
       "testTables": "{count} tables found",
       "validation": {
@@ -1052,7 +1067,12 @@
       },
       "testHeading": "Connection test",
       "testHint": "Enter a password here only if the connection requires one. It is used for this test and is neither shown again nor saved.",
-      "validationRequired": "Enter a name and the complete connection parameters."
+      "validationRequired": "Enter a name and the complete connection parameters.",
+      "editTitle": "Edit data source",
+      "editHint": "Connection parameters and credentials are stored encrypted. Re-test the connection after renaming or changing the credential.",
+      "testOk": "Connected",
+      "testFailed": "Connection failed. Review the connection details.",
+      "updated": "Saved"
     },
     "catalog": {
       "description": "Browse schema snapshots, column changes, and mappings that reference them.",

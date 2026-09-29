@@ -16,9 +16,11 @@ import { useI18n } from 'vue-i18n'
 
 import { validationApi, type ValidationResultItem } from '@/api/validation'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 
 const { t } = useI18n()
+const { toMessage } = useApiError()
 const selectedGraphId = ref<number | null>(null)
 const reportId = ref<number | null>(null)
 const resultsError = ref<string>('')
@@ -49,7 +51,8 @@ async function loadResults() {
   try {
     results.value = await validationApi.getResults(reportId.value)
   } catch (err: unknown) {
-    resultsError.value = typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
+    // 按 code 走统一 i18n 码表，不把 KG.FORBIDDEN 之类的码直出到界面
+    resultsError.value = toMessage(err)
   } finally {
     loadingResults.value = false
   }
@@ -64,7 +67,8 @@ async function runValidation() {
     report.reload()
     await loadResults()
   } catch (err: unknown) {
-    resultsError.value = typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
+    // 按 code 走统一 i18n 码表，不把 KG.FORBIDDEN 之类的码直出到界面
+    resultsError.value = toMessage(err)
   }
 }
 
@@ -139,7 +143,11 @@ const stateTagType = (state: string) => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in results" :key="item.check_code">
+            <!-- 同一检查项会对多个 focus_node 各出一行，key 必须带上焦点节点 -->
+            <tr
+              v-for="(item, index) in results"
+              :key="`${item.check_code}-${item.focus_node ?? 'root'}-${index}`"
+            >
               <td>{{ t('report.checks.' + item.check_code, item.check_code) }}</td>
               <td>
                 <NTag :type="stateTagType(item.state)" size="small">

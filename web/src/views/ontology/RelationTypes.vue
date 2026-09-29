@@ -47,6 +47,7 @@ const editing = ref(false)
 const createError = ref('')
 const editError = ref('')
 const actionError = ref('')
+const loadError = ref('')
 const publishingId = ref<number | null>(null)
 const editingDetail = ref<RelationTypeDetail | null>(null)
 const statusFilter = ref<ResourceStatus | ''>('')
@@ -262,16 +263,25 @@ const createRules = computed<FormRules>(() => ({
 }))
 
 const editRules = computed<FormRules>(() => ({
+  name: {
+    required: true,
+    pattern: /^[A-Z][A-Za-z0-9]*$/,
+    message: t('relation.namePattern'),
+    trigger: ['blur', 'input'],
+  },
   labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
   ...endpointRules,
 }))
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     items.value = await relationsApi.list({ q: searchQuery.value })
-  } catch {
+  } catch (err) {
+    // 加载失败静默清空会让用户以为「没有数据」；至少给出可见的错误提示
     items.value = []
+    loadError.value = toMessage(err)
   } finally {
     loading.value = false
   }
@@ -383,7 +393,7 @@ async function handleEdit() {
   if (!detail) return
   editing.value = true
   try {
-    const updated = await relationsApi.update(detail.id, {
+    let updated = await relationsApi.update(detail.id, {
       label_i18n: { 'zh-CN': f.labelZh, 'en-US': f.labelEn || f.name },
       domain_spec: { ...detail.domain_spec, type_id: f.domainType as number },
       range_spec: { ...detail.range_spec, type_id: f.rangeType as number },
@@ -392,6 +402,11 @@ async function handleEdit() {
       if_match: detail.current_revision,
       edit_revision: detail.edit_revision,
     })
+    // 草稿态改机读名：重建 IRI 并同步规则引用面（与实体类型详情页对齐）
+    const nextName = f.name.trim()
+    if (detail.status === 'DRAFT' && nextName && nextName !== detail.name) {
+      updated = await relationsApi.rename(detail.id, nextName)
+    }
     details.value = { ...details.value, [updated.id]: updated }
     showEdit.value = false
     await load()
@@ -521,6 +536,7 @@ onMounted(async () => {
     </div>
 
     <NSpin :show="loading || detailsLoading">
+      <NAlert v-if="loadError" type="error" class="list-error">{{ loadError }}</NAlert>
       <div v-if="view === 'table'" class="card">
         <NDataTable
           :columns="columns"
@@ -700,9 +716,13 @@ onMounted(async () => {
           :disabled="editing"
           label-placement="top"
         >
-          <NFormItem :label="t('common.name')">
-            <NInput v-model:value="formData.name" disabled />
-            <template #feedback>{{ t('entityType.nameImmutable') }}</template>
+          <NFormItem :label="t('common.name')" path="name">
+            <NInput v-model:value="formData.name" :disabled="editingDetail?.status !== 'DRAFT'" />
+            <template #feedback>{{
+              editingDetail?.status === 'DRAFT'
+                ? t('relation.nameDraftHint')
+                : t('entityType.nameImmutable')
+            }}</template>
           </NFormItem>
           <NFormItem :label="t('common.labelZh')" path="labelZh">
             <NInput v-model:value="formData.labelZh" />
@@ -967,6 +987,10 @@ onMounted(async () => {
 }
 
 .create-error {
+  margin-bottom: var(--space-3);
+}
+
+.list-error {
   margin-bottom: var(--space-3);
 }
 

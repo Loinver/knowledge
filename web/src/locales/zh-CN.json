@@ -112,6 +112,10 @@
       "INVALID_REQUEST": "请求参数不合法，请检查后重试",
       "REVISION_NOT_FOUND": "指定的资源版本不存在",
       "VALIDATION_VIOLATION": "语义校验未通过，请检查校验明细",
+      "LLM_NOT_CONFIGURED": "AI 助手未配置，请先在服务端设置模型凭据",
+      "LLM_UNAVAILABLE": "AI 服务暂不可用，请稍后重试",
+      "LLM_RESPONSE_INVALID": "AI 返回内容无法解析，请重试或调整输入",
+      "SUGGESTION_NOT_APPLICABLE": "该建议已失效或已被处理，请刷新后查看",
       "SOURCE_UNREACHABLE": "数据源暂不可用",
       "REASONER_UNAVAILABLE": "推理或校验执行器暂不可用，请稍后重试",
       "DATABASE_ERROR": "元数据库不可用或结构落后于当前版本，请确认已执行数据库迁移（alembic upgrade head）",
@@ -262,7 +266,8 @@
     "revisionHistory": "版本历史",
     "noRevisions": "还没有发布版本。",
     "ontologyRef": "{name} · 版本 v{revision}",
-    "revisionValue": "v{revision}"
+    "revisionValue": "v{revision}",
+    "loadFailed": "实体类型加载失败"
   },
   "relation": {
     "list": "关系类型列表",
@@ -274,6 +279,7 @@
     "edit": "编辑关系类型",
     "editIncomplete": "请填写中文标签、定义域与值域",
     "namePattern": "机读名须以大写字母开头，仅含字母与数字",
+    "nameDraftHint": "机读名仅草稿态可改；改名会重建 IRI 并同步规则引用",
     "nameHint": "PascalCase，例如 WorksIn",
     "loadFailed": "关系类型加载失败",
     "publishFailed": "关系类型发布失败",
@@ -347,7 +353,8 @@
     "versionsAvailable": "版本可用",
     "dependenciesComplete": "依赖完整",
     "noCircularRef": "无循环引用",
-    "memberNo": "成员 #{n}"
+    "memberNo": "成员 #{n}",
+    "removeMemberConfirm": "确认将该成员移出业务域？"
   },
   "graph": {
     "notFound": "没有可用的结果集，或该实体/事实不属于所选结果集。请先运行抽取，或重新选择结果集。",
@@ -472,6 +479,8 @@
     "templateName": "输入模板名称",
     "templateSave": "保存当前视图",
     "templateStale": "本体已升级",
+    "templateDelete": "删除当前模板",
+    "templateDeleteConfirm": "确认删除模板「{name}」？",
     "edgeProps": "边属性",
     "chain": "证据链",
     "chainView": "查看链",
@@ -939,7 +948,10 @@
     "clauseNumber": "条款号",
     "clauseNumberPlaceholder": "7.2",
     "description": "自撰说明",
-    "nature": "附录性质",
+    "nature": {
+      "NORMATIVE": "规范性（必须遵守）",
+      "INFORMATIVE": "资料性（参考）"
+    },
     "normative": "规范性",
     "informative": "资料性",
     "productFallback": "产品落点",
@@ -984,7 +996,9 @@
         "create": "新建数据源",
         "delete": "删除",
         "save": "保存",
-        "test": "测试连接"
+        "test": "测试连接",
+        "edit": "编辑",
+        "testStored": "测试连接"
       },
       "stats": {
         "total": "全部",
@@ -1040,7 +1054,8 @@
         "database": "数据库",
         "user": "用户名",
         "credential": "密码",
-        "credentialHint": "仅用于本次连接，不会在列表中显示"
+        "credentialHint": "仅用于本次连接，不会在列表中显示",
+        "credentialKeep": "留空表示保持现有凭据不变"
       },
       "validation": {
         "name": "请填写数据源名称",
@@ -1052,7 +1067,12 @@
         "deleted": "数据源已删除",
         "noMatch": "没有匹配的数据源",
         "empty": "还没有数据源"
-      }
+      },
+      "editTitle": "编辑数据源",
+      "editHint": "连接参数与凭据加密存储；改名与换凭据后请重新测试连接。",
+      "testOk": "连接成功",
+      "testFailed": "连接失败，请检查连接信息",
+      "updated": "已保存"
     },
     "catalog": {
       "description": "浏览数据源的结构快照、字段变化和已引用的映射。",

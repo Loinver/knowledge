@@ -17,10 +17,12 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { EvidenceItem, EvidenceTrace, ReverseTrace } from '@/api/graph'
 import { graphApi } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
 
 const { t } = useI18n()
+const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
 const mode = ref<'entity' | 'fact' | 'reverse'>('entity')
@@ -80,7 +82,7 @@ async function runReverse() {
       new AbortController().signal,
     )
   } catch (cause) {
-    reverseError.value = String(cause)
+    reverseError.value = toMessage(cause)
   }
 }
 

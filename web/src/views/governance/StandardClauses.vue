@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FormInst, FormRules } from 'naive-ui'
 import {
   NButton,
   NCard,
@@ -6,6 +7,7 @@ import {
   NDrawer,
   NDrawerContent,
   NEmpty,
+  NForm,
   NFormItem,
   NInput,
   NPagination,
@@ -20,8 +22,10 @@ import { useI18n } from 'vue-i18n'
 import type { Clause, ClauseInput } from '@/api/clauses'
 import { clausesApi } from '@/api/clauses'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
+const { toMessage } = useApiError()
 const items = ref<Clause[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -36,10 +40,11 @@ const form = ref<ClauseInput>(emptyClause())
 let readController: AbortController | undefined
 let alive = true
 
-const NATURES = [
-  { label: 'NORMATIVE', value: 'NORMATIVE' },
-  { label: 'INFORMATIVE', value: 'INFORMATIVE' },
-]
+/** 附录性质是枚举码，标签走 i18n，不直出英文。 */
+const NATURES = computed(() => [
+  { label: t('clauses.nature.NORMATIVE'), value: 'NORMATIVE' },
+  { label: t('clauses.nature.INFORMATIVE'), value: 'INFORMATIVE' },
+])
 
 function emptyClause(): ClauseInput {
   return {
@@ -74,7 +79,8 @@ function failText(err: unknown): string {
   if (!e) return t('clauses.failed', { reason: '' })
   if (e.code === 'KG.ALREADY_EXISTS') return t('clauses.duplicate')
   if (e.code === 'KG.REVISION_CONFLICT') return t('clauses.conflict')
-  return t('clauses.failed', { reason: e.message ?? e.code ?? '' })
+  // 其余错误按 code 走统一 i18n 码表，不直出后端英文 message
+  return toMessage(err)
 }
 
 async function load() {
@@ -116,6 +122,13 @@ function openEdit(c: Clause) {
 }
 
 async function submit() {
+  // 必填约束在界面上先拦一层：standard/clause_number/标题(中) 为空直接提示，
+  // 不再空表单直发、靠后端 422 兜底
+  try {
+    await formRef.value?.validate()
+  } catch {
+    return
+  }
   busy.value = true
   error.value = ''
   notice.value = ''
@@ -139,6 +152,19 @@ async function submit() {
   } finally {
     busy.value = false
   }
+}
+
+const formRef = ref<FormInst | null>(null)
+// 必填约束在界面上先拦一层：standard/clause_number/标题(中) 为空直接提示，
+// 不再空表单直发、靠后端 422 兜底。键名与 NFormItem 的 path 对齐（lodash get 语法）。
+const rules: FormRules = {
+  standard: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  clause_number: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  "title_i18n['zh-CN']": {
+    required: true,
+    message: t('common.required'),
+    trigger: ['blur', 'input'],
+  },
 }
 
 async function remove(c: Clause) {
@@ -257,22 +283,22 @@ const columns = computed(() => [
 
     <n-drawer v-model:show="showEditor" :width="560">
       <n-drawer-content :title="saved ? t('clauses.edit') : t('clauses.create')" closable>
-        <n-form>
-          <n-form-item :label="t('clauses.standard')">
+        <n-form ref="formRef" :model="form" :rules="rules">
+          <n-form-item :label="t('clauses.standard')" path="standard">
             <n-input
               v-model:value="form.standard"
               :disabled="!!saved"
               :placeholder="t('clauses.standardPlaceholder')"
             />
           </n-form-item>
-          <n-form-item :label="t('clauses.clauseNumber')">
+          <n-form-item :label="t('clauses.clauseNumber')" path="clause_number">
             <n-input
               v-model:value="form.clause_number"
               :disabled="!!saved"
               :placeholder="t('clauses.clauseNumberPlaceholder')"
             />
           </n-form-item>
-          <n-form-item :label="t('clauses.title') + ' (zh-CN)'">
+          <n-form-item :label="t('clauses.title') + ' (zh-CN)'" path="title_i18n['zh-CN']">
             <n-input v-model:value="form.title_i18n['zh-CN']" />
           </n-form-item>
           <n-form-item :label="t('clauses.title') + ' (en-US)'">

@@ -3,13 +3,16 @@ import {
   NAlert,
   NButton,
   NCheckbox,
+  NDataTable,
   NDrawer,
   NDrawerContent,
   NEmpty,
   NInput,
   NInputNumber,
+  NPopconfirm,
   NPopselect,
   NSelect,
+  NSlider,
   NSpace,
   NTabPane,
   NTabs,
@@ -28,6 +31,7 @@ import {
   viewTemplateApi,
 } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
+import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 import GraphCanvas from '@/views/graph/components/GraphCanvas.vue'
 import { exportCsv, exportPng, exportSvg } from '@/views/graph/components/graphExport'
@@ -35,6 +39,7 @@ import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 import { LAYOUTS } from '@/views/graph/components/graphLayout'
 
 const { t } = useI18n()
+const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
 const center = computed(() => (typeof route.query.center === 'string' ? route.query.center : ''))
@@ -191,10 +196,11 @@ async function saveTemplate() {
     const page = await viewTemplateApi.list(data.value.ontology_id, new AbortController().signal)
     templates.value = page.items
   } catch (cause) {
-    templateError.value = String(cause)
+    templateError.value = toMessage(cause)
   }
 }
 function applyTemplate(id: number) {
+  selectedTemplateId.value = id
   const template = templates.value.find((item) => item.id === id)
   if (!template) return
   const config = template.config as {
@@ -210,6 +216,31 @@ function applyTemplate(id: number) {
   })
 }
 
+// 模板此前只能创建和应用，已保存的视图无法删除；应用后出现删除入口。
+const selectedTemplateId = ref<number | null>(null)
+const removingTemplate = ref(false)
+const selectedTemplateName = computed(
+  () =>
+    templates.value.find((item) => item.id === selectedTemplateId.value)?.name_i18n['zh-CN'] ?? '',
+)
+async function removeTemplate() {
+  if (selectedTemplateId.value === null || removingTemplate.value) return
+  removingTemplate.value = true
+  templateError.value = ''
+  try {
+    await viewTemplateApi.remove(selectedTemplateId.value)
+    if (data.value?.ontology_id) {
+      const page = await viewTemplateApi.list(data.value.ontology_id, new AbortController().signal)
+      templates.value = page.items
+    }
+    selectedTemplateId.value = null
+  } catch (cause) {
+    templateError.value = toMessage(cause)
+  } finally {
+    removingTemplate.value = false
+  }
+}
+
 // ===== 质量叠加（G-28）：隔离命中节点标记 =====
 const qualityOverlay = ref(false)
 const flaggedIris = ref<Set<string>>(new Set())
@@ -220,14 +251,20 @@ watch(
       flaggedIris.value = new Set()
       return
     }
-    void graphApi.runQuarantine(runId, new AbortController().signal).then((rows) => {
-      const rowKeys = new Set(rows.map((row) => row.row_key))
-      flaggedIris.value = new Set(
-        (data.value?.nodes ?? [])
-          .filter((node) => rowKeys.has(node.row_key))
-          .map((node) => node.iri),
-      )
-    })
+    // 拉取失败只影响叠加标记，静默清空即可，但不能留下未处理的 rejection
+    void graphApi
+      .runQuarantine(runId, new AbortController().signal)
+      .then((rows) => {
+        const rowKeys = new Set(rows.map((row) => row.row_key))
+        flaggedIris.value = new Set(
+          (data.value?.nodes ?? [])
+            .filter((node) => rowKeys.has(node.row_key))
+            .map((node) => node.iri),
+        )
+      })
+      .catch(() => {
+        flaggedIris.value = new Set()
+      })
   },
   { immediate: true },
 )
@@ -259,7 +296,7 @@ async function findPath() {
       new AbortController().signal,
     )
   } catch (cause) {
-    pathError.value = String(cause)
+    pathError.value = toMessage(cause)
   }
 }
 
@@ -294,7 +331,7 @@ async function runDiff() {
       new AbortController().signal,
     )
   } catch (cause) {
-    diffError.value = String(cause)
+    diffError.value = toMessage(cause)
   }
 }
 
@@ -322,7 +359,7 @@ async function doExport(kind: 'png' | 'svg' | 'csv') {
     if (kind === 'svg') await exportSvg(svg, `${stamp}.svg`)
     else await exportPng(svg, `${stamp}.png`)
   } catch (cause) {
-    exportError.value = String(cause)
+    exportError.value = toMessage(cause)
   }
 }
 const exportOptions = ['png', 'svg', 'csv'].map((kind) => ({
@@ -517,7 +554,7 @@ function onExport(kind: string) {
         <NSelect
           :value="layoutId ?? (center ? 'ring' : 'type_grid')"
           :options="layoutOptions"
-          :aria-label="t('graph.layout')"
+          :aria-label="t('graph.layoutLabel')"
           @update:value="selectLayout"
         />
       </label>
@@ -552,6 +589,14 @@ function onExport(kind: string) {
       >
         <NButton>{{ t('graph.templates') }}</NButton>
       </NPopselect>
+      <NPopconfirm v-if="selectedTemplateId !== null" @positive-click="removeTemplate">
+        <template #trigger>
+          <NButton size="small" tertiary type="error" :loading="removingTemplate">{{
+            t('graph.templateDelete')
+          }}</NButton>
+        </template>
+        {{ t('graph.templateDeleteConfirm', { name: selectedTemplateName }) }}
+      </NPopconfirm>
       <span v-if="data" class="inline-save">
         <NInput
           v-model:value="templateName"

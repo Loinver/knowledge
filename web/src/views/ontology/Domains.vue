@@ -10,6 +10,7 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NPopconfirm,
   NSelect,
   NSpace,
   NSpin,
@@ -621,15 +622,14 @@ onBeforeUnmount(() => {
                       </span>
                     </td>
                     <td>
-                      <NButton
-                        size="tiny"
-                        quaternary
-                        type="error"
-                        :disabled="!canEdit"
-                        @click="removeMember(m.id)"
-                      >
-                        {{ t('common.delete') }}
-                      </NButton>
+                      <NPopconfirm @positive-click="removeMember(m.id)">
+                        <template #trigger>
+                          <NButton size="tiny" quaternary type="error" :disabled="!canEdit">
+                            {{ t('common.delete') }}
+                          </NButton>
+                        </template>
+                        {{ t('domain.removeMemberConfirm') }}
+                      </NPopconfirm>
                     </td>
                   </tr>
                 </tbody>

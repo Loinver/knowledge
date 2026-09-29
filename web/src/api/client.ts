@@ -123,8 +123,13 @@ http.interceptors.response.use(
         const tokens = await refreshTokens()
         config.headers.set('Authorization', `Bearer ${tokens.access_token}`)
         return await http.request(config)
-      } catch {
-        handleUnauthorized()
+      } catch (refreshError) {
+        const refreshStatus = (refreshError as { status?: number } | undefined)?.status
+        // 只有后端明确拒绝续期（401/403）才认定会话失效；网络抖动、超时
+        // 不能清凭据踢登录——那会把在线用户误登出。
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          handleUnauthorized()
+        }
       }
     } else if (status === 401 && renewable) {
       handleUnauthorized()
