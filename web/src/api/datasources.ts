@@ -7,6 +7,7 @@ export type DatasourceOut = S['DatasourceOut']
 export type Datasource = DatasourceOut
 export type DatasourceCreate = S['DatasourceCreate']
 export type DatasourceInput = DatasourceCreate
+export type DatasourceUpdate = S['DatasourceUpdate']
 export type TestConnectionRequest = S['TestConnectionRequest']
 export type DatasourceTestInput = TestConnectionRequest
 export type TestConnectionResponse = S['TestConnectionResponse']
@@ -30,6 +31,14 @@ export const datasourcesApi = {
     http
       .post<DatasourceTestResult>('/datasources/test-connection', payload, { signal })
       .then((r) => r.data),
+  /** 用库里保存的参数与凭据测试连接，结果落库到 status。 */
+  testStored: (id: number, signal?: AbortSignal) =>
+    http
+      .post<DatasourceTestResult>(`/datasources/${id}/test-connection`, undefined, { signal })
+      .then((r) => r.data),
+  /** 更新连接信息（改名/换参数/换凭据）；参数与凭据留空即保持不变。 */
+  update: (id: number, payload: DatasourceUpdate) =>
+    http.put<Datasource>(`/datasources/${id}`, payload).then((r) => r.data),
   remove: (id: number) => http.delete(`/datasources/${id}`).then(() => undefined),
   preview: (payload: PreviewRequest, signal?: AbortSignal) =>
     http.post<PreviewResponse>('/datasources/preview', payload, { signal }).then((r) => r.data),

@@ -123,7 +123,11 @@ export interface paths {
     /** Update Onto Endpoint */
     put: operations['update_onto_endpoint_api_v1_ontologies__ontology_id__put']
     post?: never
-    delete?: never
+    /**
+     * Remove Onto Endpoint
+     * @description 删除本体；被映射引用一律拒绝，清理 refs/规则引用/修订/画布。
+     */
+    delete: operations['remove_onto_endpoint_api_v1_ontologies__ontology_id__delete']
     options?: never
     head?: never
     patch?: never
@@ -311,10 +315,34 @@ export interface paths {
     }
     /** Get Ds */
     get: operations['get_ds_api_v1_datasources__ds_id__get']
-    put?: never
+    /**
+     * Update Ds
+     * @description 更新连接信息（改名/换参数/换凭据），凭据脱敏后返回。
+     */
+    put: operations['update_ds_api_v1_datasources__ds_id__put']
     post?: never
     /** Remove Ds */
     delete: operations['remove_ds_api_v1_datasources__ds_id__delete']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/datasources/{ds_id}/test-connection': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Test Stored Conn
+     * @description 用库里保存的参数与凭据测试连接，并把结果落到 status。
+     */
+    post: operations['test_stored_conn_api_v1_datasources__ds_id__test_connection_post']
+    delete?: never
     options?: never
     head?: never
     patch?: never
@@ -367,7 +395,11 @@ export interface paths {
     /** Update Domain Endpoint */
     put: operations['update_domain_endpoint_api_v1_domains__domain_id__put']
     post?: never
-    delete?: never
+    /**
+     * Remove Domain Endpoint
+     * @description 删除业务域；有子域一律拒绝。成员归属随域删除，成员资源不动。
+     */
+    delete: operations['remove_domain_endpoint_api_v1_domains__domain_id__delete']
     options?: never
     head?: never
     patch?: never
@@ -861,7 +893,11 @@ export interface paths {
     /** Update Type */
     put: operations['update_type_api_v1_entity_types__type_id__put']
     post?: never
-    delete?: never
+    /**
+     * Remove Type
+     * @description 删除从未发布过的草稿类型；有外部引用或版本历史一律拒绝。
+     */
+    delete: operations['remove_type_api_v1_entity_types__type_id__delete']
     options?: never
     head?: never
     patch?: never
@@ -898,6 +934,26 @@ export interface paths {
     put?: never
     /** Publish Type */
     post: operations['publish_type_api_v1_entity_types__type_id__publish_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/entity-types/{type_id}/unpublish': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Unpublish Type
+     * @description 撤回发布：PUBLISHED → DRAFT，版本历史保持不可变。
+     */
+    post: operations['unpublish_type_api_v1_entity_types__type_id__unpublish_post']
     delete?: never
     options?: never
     head?: never
@@ -1076,7 +1132,11 @@ export interface paths {
     /** Update Relation */
     put: operations['update_relation_api_v1_relations__relation_id__put']
     post?: never
-    delete?: never
+    /**
+     * Remove Relation
+     * @description 删除从未发布过的草稿关系；有外部引用或版本历史一律拒绝。
+     */
+    delete: operations['remove_relation_api_v1_relations__relation_id__delete']
     options?: never
     head?: never
     patch?: never
@@ -1113,6 +1173,26 @@ export interface paths {
     put?: never
     /** Publish Relation */
     post: operations['publish_relation_api_v1_relations__relation_id__publish_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/relations/{relation_id}/unpublish': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Unpublish Relation
+     * @description 撤回发布：PUBLISHED → DRAFT，版本历史保持不可变。
+     */
+    post: operations['unpublish_relation_api_v1_relations__relation_id__unpublish_post']
     delete?: never
     options?: never
     head?: never
@@ -4334,6 +4414,21 @@ export interface components {
       status: string
     }
     /**
+     * DatasourceUpdate
+     * @description 连接信息更新。数据源没有版本列，连接参数按最后写入生效；
+     *     唯一性由服务层校验（重名 409 ALREADY_EXISTS）。
+     */
+    DatasourceUpdate: {
+      /** Name */
+      name?: string | null
+      /** Params */
+      params?: {
+        [key: string]: unknown
+      } | null
+      /** Credential */
+      credential?: string | null
+    }
+    /**
      * DerivedEdgeOut
      * @description 派生边：带产出规则与参与直接事实，可解释、可展开。
      */
@@ -7387,6 +7482,37 @@ export interface operations {
       }
     }
   }
+  remove_onto_endpoint_api_v1_ontologies__ontology_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   list_refs_endpoint_api_v1_ontologies__ontology_id__refs_get: {
     parameters: {
       query?: never
@@ -7851,6 +7977,41 @@ export interface operations {
       }
     }
   }
+  update_ds_api_v1_datasources__ds_id__put: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ds_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DatasourceUpdate']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_DatasourceOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   remove_ds_api_v1_datasources__ds_id__delete: {
     parameters: {
       query?: never
@@ -7869,6 +8030,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  test_stored_conn_api_v1_datasources__ds_id__test_connection_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ds_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_TestConnectionResponse_']
         }
       }
       /** @description Validation Error */
@@ -8034,6 +8226,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_DomainOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  remove_domain_endpoint_api_v1_domains__domain_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        domain_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
         }
       }
       /** @description Validation Error */
@@ -9345,6 +9568,37 @@ export interface operations {
       }
     }
   }
+  remove_type_api_v1_entity_types__type_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        type_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   rename_type_api_v1_entity_types__type_id__rename_patch: {
     parameters: {
       query?: never
@@ -9398,6 +9652,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_RevisionOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  unpublish_type_api_v1_entity_types__type_id__unpublish_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        type_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_EntityTypeOut_']
         }
       }
       /** @description Validation Error */
@@ -9917,6 +10202,37 @@ export interface operations {
       }
     }
   }
+  remove_relation_api_v1_relations__relation_id__delete: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        relation_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_NoneType_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
   rename_relation_api_v1_relations__relation_id__rename_patch: {
     parameters: {
       query?: never
@@ -9970,6 +10286,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_RevisionOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  unpublish_relation_api_v1_relations__relation_id__unpublish_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        relation_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_RelationTypeOut_']
         }
       }
       /** @description Validation Error */

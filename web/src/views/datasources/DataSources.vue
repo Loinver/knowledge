@@ -188,6 +188,61 @@ async function removeSource(item: DatasourceBrief) {
   }
 }
 
+// ===== 编辑连接信息与按存档测试连接（此前创建后不可改、状态是死值） =====
+const showEdit = ref(false)
+const savingEdit = ref(false)
+const editingId = ref<number | null>(null)
+const editForm = ref({ name: '', credential: '' })
+const editError = ref('')
+const testingId = ref<number | null>(null)
+
+function openEdit(item: DatasourceBrief) {
+  editingId.value = item.id
+  editForm.value = { name: item.name, credential: '' }
+  editError.value = ''
+  showEdit.value = true
+}
+
+/** 用库里保存的参数与凭据测试连接；后端会把结果写回 status。 */
+async function testStored(item: DatasourceBrief) {
+  testingId.value = item.id
+  error.value = ''
+  try {
+    const result = await datasourcesApi.testStored(item.id)
+    if (result.ok) message.success(t('dataAccess.sources.states.testOk'))
+    else message.warning(t('dataAccess.sources.states.testFailed'))
+    await load()
+  } catch (err) {
+    error.value = toMessage(err)
+  } finally {
+    testingId.value = null
+  }
+}
+
+async function saveEdit() {
+  if (editingId.value === null) return
+  if (!editForm.value.name.trim()) {
+    editError.value = t('dataAccess.sources.validation.name')
+    return
+  }
+  savingEdit.value = true
+  editError.value = ''
+  try {
+    await datasourcesApi.update(editingId.value, {
+      name: editForm.value.name.trim(),
+      // 凭据留空表示保持不变；masked 参数不回传，避免把掩码存成真值
+      ...(editForm.value.credential ? { credential: editForm.value.credential } : {}),
+    })
+    showEdit.value = false
+    message.success(t('dataAccess.sources.states.updated'))
+    await load()
+  } catch (err) {
+    editError.value = toMessage(err)
+  } finally {
+    savingEdit.value = false
+  }
+}
+
 onMounted(() => void load())
 onBeforeUnmount(() => {
   alive = false
@@ -282,10 +337,54 @@ onBeforeUnmount(() => {
               >
               {{ t('dataAccess.sources.deleteConfirm', { name: item.name }) }}
             </NPopconfirm>
+            <NButton
+              size="small"
+              :loading="testingId === item.id"
+              :disabled="testingId !== null && testingId !== item.id"
+              @click="testStored(item)"
+            >
+              {{ t('dataAccess.sources.actions.testStored') }}
+            </NButton>
+            <NButton size="small" @click="openEdit(item)">
+              {{ t('dataAccess.sources.actions.edit') }}
+            </NButton>
           </article>
         </div>
       </NSpin>
     </NCard>
+
+    <NModal
+      v-model:show="showEdit"
+      preset="card"
+      class="source-modal"
+      :title="t('dataAccess.sources.editTitle')"
+    >
+      <NForm label-placement="top">
+        <NFormItem :label="t('dataAccess.sources.fields.name')" required
+          ><NInput
+            v-model:value="editForm.name"
+            :input-props="{ 'aria-label': t('dataAccess.sources.fields.name') }"
+        /></NFormItem>
+        <NFormItem :label="t('dataAccess.sources.fields.credential')"
+          ><NInput
+            v-model:value="editForm.credential"
+            type="password"
+            show-password-on="click"
+            :placeholder="t('dataAccess.sources.fields.credentialKeep')"
+            :input-props="{ 'aria-label': t('dataAccess.sources.fields.credential') }"
+        /></NFormItem>
+      </NForm>
+      <NAlert :show-icon="false">{{ t('dataAccess.sources.editHint') }}</NAlert>
+      <NAlert v-if="editError" type="error">{{ editError }}</NAlert>
+      <template #footer>
+        <NSpace>
+          <NButton type="primary" :loading="savingEdit" @click="saveEdit">{{
+            t('common.save')
+          }}</NButton>
+          <NButton @click="showEdit = false">{{ t('common.cancel') }}</NButton>
+        </NSpace>
+      </template>
+    </NModal>
 
     <NModal
       v-model:show="showCreate"
