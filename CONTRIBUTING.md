@@ -27,8 +27,8 @@ AI Agent 协作者从根目录 [AGENTS.md](./AGENTS.md) 开始。
 
 ```bash
 make install      # 依赖 + git hooks
-make dev          # 前后端一体启动（后端 :8000，前端 :5173）
-make start        # 构建前端 + 单端口 :8000
+make dev          # 前后端一体启动（后端 :4000，前端 :4010）
+make start        # 构建前端 + 单端口 :4000
 ```
 
 后端工具在 `server/.venv/bin/`（ruff / mypy / pytest / uvicorn），不要依赖全局安装。

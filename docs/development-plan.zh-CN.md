@@ -106,7 +106,7 @@ semantic-forge/
 └── docker-compose.yml       # 一体启动（server + web(nginx) + postgres）
 ```
 
-**启动方式**：`make dev`（后端 uvicorn :8000 + 前端 vite :5173，前端代理 /api）；`make up`（docker compose 单机一体，:8080 单端口）；`make seed`（灌入样例源库 + 内置本体与映射，10 分钟跑通全流程）。
+**启动方式**：`make dev`（后端 uvicorn :4000 + 前端 vite :4010，前端代理 /api）；`make up`（docker compose 单机一体，:8080 单端口）；`make seed`（灌入样例源库 + 内置本体与映射，10 分钟跑通全流程）。
 
 ### 2.4 合规红线（写进 CONTRIBUTING，CI 检查）
 

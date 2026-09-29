@@ -27,8 +27,8 @@ English: see below / [README.en.md](./README.en.md)
 
 ```bash
 make install     # 安装依赖与 git hooks
-make dev         # 前后端一体启动（后端 :8000，前端 :5173 代理 /api）
-make start       # 构建前端 + 单端口启动（:8000 同时提供页面与 API）
+make dev         # 前后端一体启动（后端 :4000，前端 :4010 代理 /api）
+make start       # 构建前端 + 单端口启动（:4000 同时提供页面与 API）
 make lint        # 全量代码校验（ESLint + Prettier + vue-tsc + Ruff + Mypy + 架构边界测试）
 make test        # 前端 + 后端测试
 make test-e2e    # Playwright 8 步主流程与页面响应式验收

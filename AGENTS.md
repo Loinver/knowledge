@@ -27,8 +27,8 @@ AI Agent 协作者请先读这里。本文件会被 Agent 自动加载，所以�
 
 ```bash
 make install      # 装依赖 + git hooks
-make dev          # 前后端一体启动（后端 :8000，前端 :5173 代理 /api）
-make start        # 构建前端 + 单端口 :8000
+make dev          # 前后端一体启动（后端 :4000，前端 :4010 代理 /api）
+make start        # 构建前端 + 单端口 :4000
 make lint         # ESLint + vue-tsc + Prettier + Ruff + Mypy + 架构边界测试
 make fix          # 自动修复可修复项
 make test         # 前端 node --test + 后端 pytest

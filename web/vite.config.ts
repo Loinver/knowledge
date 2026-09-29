@@ -9,11 +9,11 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
-    port: 5173,
-    // E2E 用 KG_API_PROXY_TARGET 指向隔离 API 端口，默认本地开发 :8000
+    port: 4010,
+    // E2E 用 KG_API_PROXY_TARGET 指向隔离 API 端口，默认本地开发 :4000
     proxy: {
       '/api': {
-        target: process.env.KG_API_PROXY_TARGET ?? 'http://127.0.0.1:8000',
+        target: process.env.KG_API_PROXY_TARGET ?? 'http://127.0.0.1:4000',
         changeOrigin: true,
       },
     },

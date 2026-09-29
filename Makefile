@@ -4,10 +4,10 @@ install: ## 安装前后端依赖与 git hooks
 	pnpm install
 	cd server && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
-dev: ## 前后端一体启动（后端 :8000 + 前端 :5173，前端代理 /api）
+dev: ## 前后端一体启动（后端 :4000 + 前端 :4010，前端代理 /api）
 	pnpm run dev
 
-start: ## 构建前端并以单端口启动（后端托管 web/dist，:8000）
+start: ## 构建前端并以单端口启动（后端托管 web/dist，:4000）
 	pnpm run start
 
 lint: lint-web lint-server architecture-check ## 全量代码风格与语法校验
