@@ -60,8 +60,9 @@ class GraphRevision(Base):
     """
 
     __tablename__ = "graph_revision"
-    __table_args__ = (Index("ix_graph_current", "is_current"),)
+    # 第二个 __table_args__ 赋值会静默覆盖第一个，合并成一个元组
     __table_args__ = (
+        Index("ix_graph_current", "is_current"),
         # 部分唯一索引：同一时刻只有一个 is_current=True（数据库层兜底）
         Index(
             "uq_graph_current",
