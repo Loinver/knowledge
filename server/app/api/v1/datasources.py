@@ -13,11 +13,14 @@ from app.domain.source_service import (
     get_display_params,
     list_datasources,
     test_connection,
+    test_stored_connection,
+    update_datasource,
 )
 from app.schemas.datasource import (
     DatasourceBrief,
     DatasourceCreate,
     DatasourceOut,
+    DatasourceUpdate,
     TestConnectionRequest,
     TestConnectionResponse,
 )
@@ -66,6 +69,36 @@ def get_ds(ds_id: int, session: Session = Depends(get_session)) -> DatasourceOut
 def remove_ds(ds_id: int, session: Session = Depends(get_session)) -> None:
     delete_datasource(session, ds_id)
     session.commit()
+
+
+@router.put("/{ds_id}", response_model=ApiResponse[DatasourceOut])
+def update_ds(
+    ds_id: int, payload: DatasourceUpdate, session: Session = Depends(get_session)
+) -> DatasourceOut:
+    """更新连接信息（改名/换参数/换凭据），凭据脱敏后返回。"""
+    ds = update_datasource(session, ds_id, payload)
+    session.commit()
+    return DatasourceOut(
+        id=ds.id,
+        name=ds.name,
+        kind=ds.kind,
+        params=get_display_params(ds),
+        status=ds.status,
+    )
+
+
+@router.post(
+    "/{ds_id}/test-connection", response_model=ApiResponse[TestConnectionResponse]
+)
+def test_stored_conn(
+    ds_id: int, session: Session = Depends(get_session)
+) -> TestConnectionResponse:
+    """用库里保存的参数与凭据测试连接，并把结果落到 status。"""
+    result = test_stored_connection(session, ds_id)
+    session.commit()
+    return TestConnectionResponse(
+        ok=result["ok"], message=result["message"], table_count=result["table_count"]
+    )
 
 
 @router.post("/test-connection", response_model=ApiResponse[TestConnectionResponse])

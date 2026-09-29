@@ -10,6 +10,7 @@ from app.domain.domain_service import (
     add_member,
     check_publish,
     create_domain,
+    delete_domain,
     get_domain,
     list_domains,
     list_members,
@@ -69,6 +70,15 @@ def update_domain_endpoint(
     update_domain(session, domain, payload)
     session.commit()
     return DomainOut.model_validate(domain)
+
+
+@router.delete("/{domain_id}", response_model=ApiResponse[None])
+def remove_domain_endpoint(
+    domain_id: int, session: Session = Depends(get_session)
+) -> None:
+    """删除业务域；有子域一律拒绝。成员归属随域删除，成员资源不动。"""
+    delete_domain(session, domain_id)
+    session.commit()
 
 
 @router.get("/{domain_id}/members", response_model=ApiResponse[list[DomainMemberOut]])

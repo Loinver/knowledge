@@ -16,6 +16,7 @@ from app.domain.relation_service import (
     publish_relation_type,
     update_relation_type,
 )
+from app.domain.resource_lifecycle import delete_resource, unpublish_resource
 from app.domain.usages_service import resource_usages
 from app.models.resource import ModelResource
 from app.schemas.common import RenameRequest
@@ -176,3 +177,22 @@ def publish_relation(
     revision = publish_relation_type(session, resource)
     session.commit()
     return TypeRevisionOut(revision=revision, checksum="")
+
+
+@router.post("/{relation_id}/unpublish", response_model=ApiResponse[RelationTypeOut])
+def unpublish_relation(
+    relation_id: int, session: Session = Depends(get_session)
+) -> RelationTypeOut:
+    """撤回发布：PUBLISHED → DRAFT，版本历史保持不可变。"""
+    resource = get_relation_type(session, relation_id)
+    resource = unpublish_resource(session, resource)
+    session.commit()
+    return _to_out(session, resource)
+
+
+@router.delete("/{relation_id}", response_model=ApiResponse[None])
+def remove_relation(relation_id: int, session: Session = Depends(get_session)) -> None:
+    """删除从未发布过的草稿关系；有外部引用或版本历史一律拒绝。"""
+    resource = get_relation_type(session, relation_id)
+    delete_resource(session, resource)
+    session.commit()

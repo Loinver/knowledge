@@ -17,6 +17,7 @@ from app.domain.ontology_import_service import apply_import, preview_import
 from app.domain.ontology_service import (
     add_ref,
     create_ontology,
+    delete_ontology,
     detect_conflicts,
     get_canvas_layout,
     get_ontology,
@@ -102,6 +103,15 @@ def update_onto_endpoint(
     update_ontology(session, onto, payload)
     session.commit()
     return _out(session, onto)
+
+
+@router.delete("/{ontology_id}", response_model=ApiResponse[None])
+def remove_onto_endpoint(
+    ontology_id: int, session: Session = Depends(get_session)
+) -> None:
+    """删除本体；被映射引用一律拒绝，清理 refs/规则引用/修订/画布。"""
+    delete_ontology(session, ontology_id)
+    session.commit()
 
 
 @router.get("/{ontology_id}/refs", response_model=ApiResponse[list[OntologyRefOut]])

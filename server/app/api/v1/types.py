@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.governance_common import governance_session
 from app.domain.iri_service import rename_resource
+from app.domain.resource_lifecycle import delete_resource, unpublish_resource
 from app.domain.type_service import (
     create_entity_type,
     entity_type_metrics,
@@ -177,3 +178,22 @@ def publish_type(
     revision = publish_entity_type(session, resource)
     session.commit()
     return RevisionOut(revision=revision, checksum="")
+
+
+@router.post("/{type_id}/unpublish", response_model=ApiResponse[EntityTypeOut])
+def unpublish_type(
+    type_id: int, session: Session = Depends(governance_session)
+) -> EntityTypeOut:
+    """撤回发布：PUBLISHED → DRAFT，版本历史保持不可变。"""
+    resource = get_entity_type(session, type_id)
+    resource = unpublish_resource(session, resource)
+    session.commit()
+    return _out(session, resource)
+
+
+@router.delete("/{type_id}", response_model=ApiResponse[None])
+def remove_type(type_id: int, session: Session = Depends(governance_session)) -> None:
+    """删除从未发布过的草稿类型；有外部引用或版本历史一律拒绝。"""
+    resource = get_entity_type(session, type_id)
+    delete_resource(session, resource)
+    session.commit()
