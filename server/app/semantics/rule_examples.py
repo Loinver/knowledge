@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 MAX_TEXT_BYTES = 65536
 MAX_TRIPLES = 2000
-TIMEOUT_SECONDS = 6
+TIMEOUT_SECONDS = 45  # wall-clock; cold import ~7s, up to 3x under load
 _SLOTS = BoundedSemaphore(2)
 _SERVER_ROOT = Path(__file__).resolve().parents[2]
 _SHACL_CORE_TERMS = frozenset(
@@ -265,7 +265,7 @@ def _worker() -> None:
     if sys.platform != "win32":
         import resource
 
-        resource.setrlimit(resource.RLIMIT_CPU, (4, 5))
+        resource.setrlimit(resource.RLIMIT_CPU, (12, 15))  # ~4s CPU + GC headroom
         if sys.platform.startswith("linux"):
             resource.setrlimit(resource.RLIMIT_AS, (512 * 1024**2, 512 * 1024**2))
     try:
