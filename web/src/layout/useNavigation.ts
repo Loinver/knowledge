@@ -101,6 +101,7 @@ export function useNavigation() {
           { key: 'sample-preview', label: t('page.samplePreview') },
           { key: 'mapping-wizard', label: t('page.mappingWizard') },
           { key: 'extraction-runs', label: t('page.extractionRuns') },
+          { key: 'extraction-tasks', label: t('page.extractionTasks') },
           { key: 'ai-assist', label: t('page.aiAssist') },
         ],
       },

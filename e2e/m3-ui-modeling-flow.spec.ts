@@ -1,7 +1,6 @@
-import { execFileSync } from 'node:child_process'
-import { join, resolve } from 'node:path'
-
 import { expect, test, type Page } from '@playwright/test'
+
+import { ensureAdmin, loginAsAdmin } from './admin'
 
 /**
  * B-10 第一步：建模链全程走界面（零业务 API）。
@@ -17,58 +16,8 @@ import { expect, test, type Page } from '@playwright/test'
  * - 「本体装配」需要在设计器画布上把资源拖进画布，属另一段工作，不在本 spec 范围；
  *   业务域之后的主流程（映射、抽取、图谱、追溯）由 m3-browser-flow 覆盖。
  *
- * ⚠️ 状态：本 spec 尚未在本机跑通过。写完时主机负载 14～69，
- * vite 预转换与沙箱 broker 连续超时（`Broker request timed out`），
- * 浏览器根本渲染不出页面，选择器一次都没被真正验证。因此默认跳过，
- * 避免让 `make test-e2e` 带上一个未验证的哑雷。
- *
- * 取消跳过的步骤（机器空闲时，`uptime` 确认 load < 10）：
- *   1. 删掉下面的 test.skip(...) 这一行；
- *   2. KG_E2E_UI_ONLY=1 不必再传，直接跑：
- *      TMPDIR=$(mktemp -d) NO_PROXY=127.0.0.1,localhost \
- *        env -u CODEBUDDY_SAFE_DELETE_BULK_STATE_DIR -u CODEBUDDY_TOOL_CALL_ID \
- *        ./node_modules/.bin/playwright test e2e/m3-ui-modeling-flow.spec.ts
- *   3. 选择器按实际 DOM 校正后跑绿，再提交。
+ * 该链路已通过隔离 Playwright 环境验证；管理员准备由共享的 ensureAdmin 幂等处理。
  */
-
-const ADMIN = { account: 'e2e_admin', password: 'E2E-Admin-Password-2026!' }
-
-function seedAdmin(): void {
-  const tempDir = process.env.KG_E2E_TEMP_DIR
-  expect(tempDir, 'Playwright config provides an isolated temp directory').toBeTruthy()
-  execFileSync(
-    resolve('server/.venv/bin/python'),
-    [
-      resolve('scripts/seed_admin.py'),
-      '--username',
-      ADMIN.account,
-      '--email',
-      'e2e_admin@example.org',
-      '--password',
-      ADMIN.password,
-    ],
-    {
-      cwd: resolve('server'),
-      env: {
-        ...process.env,
-        KG_ENVIRONMENT: 'development',
-        KG_DATABASE_URL: 'sqlite:///' + join(tempDir!, 'metadata.sqlite'),
-        KG_PASSWORD_ITERATIONS: '1000',
-      },
-      stdio: 'pipe',
-      timeout: 30_000,
-    },
-  )
-}
-
-async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto('/login')
-  // 登录表单的 label 没有关联到 input（可访问名来自 placeholder），只能按 placeholder 定位。
-  await page.getByPlaceholder('用户名或邮箱', { exact: true }).fill(ADMIN.account)
-  await page.getByPlaceholder('请输入密码', { exact: true }).fill(ADMIN.password)
-  await page.getByRole('button', { name: '登录', exact: true }).click()
-  await expect(page).toHaveURL(/\/$/)
-}
 
 /**
  * naive-ui 的下拉选项浮层；按文本挑一项。
@@ -152,6 +101,15 @@ async function createEntityType(
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
 }
 
+async function deleteEntityTypeThroughUI(page: Page, name: string, label: string): Promise<void> {
+  await page.goto('/ontology/entity-types')
+  const row = page.locator('tr').filter({ hasText: name }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`实体类型 ${label} 已删除。`)).toBeVisible()
+  await expect(row).toHaveCount(0)
+}
+
 /** 数据属性在详情页的属性抽屉里加：机读名 + 中文标签，数据类型保持默认 string。 */
 async function addDataProperty(
   page: Page,
@@ -190,6 +148,15 @@ async function createRelationType(
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
 }
 
+async function deleteRelationTypeThroughUI(page: Page, name: string, label: string): Promise<void> {
+  await page.goto('/ontology/relation-types')
+  const row = page.locator('tr').filter({ hasText: name }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`关系类型 ${label} 已删除。`)).toBeVisible()
+  await expect(row).toHaveCount(0)
+}
+
 /** 发布实体类型：详情页点发布按钮，等已发布状态出现。 */
 async function publishEntityType(page: Page, name: string): Promise<void> {
   await page.goto('/ontology/entity-types')
@@ -221,9 +188,38 @@ async function createDomain(page: Page, name: string, iri: string, label: string
   await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
 }
 
-// 未验证的草稿：默认跳过，理由与解除步骤见文件头。跑绿之后再删掉本行。
+async function deleteDomainThroughUI(page: Page, label: string): Promise<void> {
+  await page.goto('/ontology/domains')
+  await page.locator('.n-tree-node-content').filter({ hasText: label }).first().click()
+  await page.locator('.detail-actions').getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`业务域 ${label} 已删除。`)).toBeVisible()
+}
+
+async function createAndDeleteOntologyThroughUI(
+  page: Page,
+  name: string,
+  iri: string,
+  label: string,
+): Promise<void> {
+  await page.goto('/ontology/ontologies')
+  await page.getByRole('button', { name: '新建本体' }).first().click()
+  await fillField(page, '机读名', name)
+  await fillField(page, 'IRI', iri)
+  await fillField(page, '中文标签', label)
+  await saveOverlay(page)
+  await expect(page).toHaveURL(/\/ontology\/designer\?ontology=\d+/)
+
+  await page.goto('/ontology/ontologies')
+  const row = page.locator('tr').filter({ hasText: name }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`本体 ${label} 已删除。`)).toBeVisible()
+  await expect(row).toHaveCount(0)
+}
+
 test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 → 业务域', async ({ page }) => {
-  seedAdmin()
+  await ensureAdmin(page)
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
 
@@ -237,6 +233,8 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
   // 两个实体类型：关系类型需要一对定义域/值域（命名空间按前缀选）
   await createEntityType(page, `UiEmployee${stamp}`, `界面员工${stamp}`, prefix)
   await createEntityType(page, `UiDepartment${stamp}`, `界面部门${stamp}`, prefix)
+  await createEntityType(page, `UiDeleteEntity${stamp}`, `界面删除实体${stamp}`, prefix)
+  await deleteEntityTypeThroughUI(page, `UiDeleteEntity${stamp}`, `界面删除实体${stamp}`)
 
   // 类型 id 从详情页 URL 拿：切到卡片视图后点卡片进详情，全程不碰 API。
   // （表格视图的名字单元格不可点，进入详情要走操作列按钮；卡片本身是 button，
@@ -264,6 +262,15 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
     `界面员工${stamp}`,
     `界面部门${stamp}`,
   )
+  await createRelationType(
+    page,
+    `UiDeleteWorksIn${stamp}`,
+    `界面删除关系${stamp}`,
+    prefix,
+    `界面员工${stamp}`,
+    `界面部门${stamp}`,
+  )
+  await deleteRelationTypeThroughUI(page, `UiDeleteWorksIn${stamp}`, `界面删除关系${stamp}`)
   await publishRelationType(page, `界面就职于${stamp}`)
 
   await createDomain(
@@ -281,6 +288,7 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
     .first()
     .click()
   for (const member of [`界面员工${stamp}`, `界面部门${stamp}`, `界面就职于${stamp}`]) {
+    await expect(page.getByRole('button', { name: '添加成员', exact: true }).first()).toBeEnabled()
     // NSelect 的 placeholder 在 loading 态不挂在 input 上，直接点触发器更稳。
     await page.locator('.member-select .n-base-selection').click()
     await pickOption(page, member)
@@ -289,6 +297,14 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
   }
   await page.getByRole('button', { name: '发布', exact: true }).first().click()
   await expect(page.getByText('已发布').first()).toBeVisible()
+  await deleteDomainThroughUI(page, `界面业务域${stamp}`)
+
+  await createAndDeleteOntologyThroughUI(
+    page,
+    `UiDeleteOntology${stamp}`,
+    `https://example.org/${prefix}/delete-ontology#`,
+    `界面删除本体${stamp}`,
+  )
 
   expect(pageErrors, '界面操作不应产生未捕获的前端错误').toEqual([])
 })

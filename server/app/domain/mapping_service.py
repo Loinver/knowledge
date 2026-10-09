@@ -147,6 +147,11 @@ def _save_draft_revision(
         )
     ).scalar_one_or_none()
     if old_draft is not None:
+        session.execute(
+            delete(MappingPreview).where(
+                MappingPreview.mapping_revision_id == old_draft.id
+            )
+        )
         session.delete(old_draft)
         session.flush()
     rev = MappingRevision(

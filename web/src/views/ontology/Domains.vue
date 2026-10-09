@@ -289,6 +289,26 @@ async function removeMember(memberId: number) {
   await updateDomain((id, revision) => domainsApi.removeMember(id, memberId, revision))
 }
 
+async function removeDomain() {
+  const context = selection
+  const domain = selected.value
+  if (!context || !domain || !isCurrentSelection(context) || !canEdit.value) return
+  working.value = true
+  actionError.value = ''
+  notice.value = ''
+  try {
+    await domainsApi.remove(domain.id)
+    if (!isCurrentSelection(context)) return
+    await select(null)
+    await load()
+    notice.value = t('domain.deleted', { name: pickLabel(domain.label_i18n, domain.name) })
+  } catch (err) {
+    if (isCurrentSelection(context)) actionError.value = toMessage(err)
+  } finally {
+    if (isCurrentSelection(context)) working.value = false
+  }
+}
+
 async function publishCheck() {
   const context = selection
   if (!context || !isCurrentSelection(context) || !canEdit.value) return
@@ -543,6 +563,16 @@ onBeforeUnmount(() => {
               <NButton size="small" type="primary" :disabled="!canEdit" @click="publish">
                 {{ t('common.publish') }}
               </NButton>
+              <NPopconfirm @positive-click="removeDomain">
+                <template #trigger>
+                  <NButton size="small" type="error" secondary :disabled="!canEdit">
+                    {{ t('common.delete') }}
+                  </NButton>
+                </template>
+                {{
+                  t('domain.deleteConfirm', { name: pickLabel(selected.label_i18n, selected.name) })
+                }}
+              </NPopconfirm>
             </div>
           </header>
 

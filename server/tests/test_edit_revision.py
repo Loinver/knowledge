@@ -34,7 +34,7 @@ from app.domain.ontology_service import (
 )
 from app.domain.status_service import publish_resource
 from app.domain.type_service import create_entity_type
-from app.models.data_access import Mapping, MappingRevision
+from app.models.data_access import Mapping, MappingPreview, MappingRevision
 from app.models.domain import DomainRevision, Ontology, OntologyRevision
 from app.schemas.domain import DomainUpdate
 from app.schemas.mapping import MappingRevisionCreate
@@ -274,6 +274,41 @@ def test_mapping_legacy_api_remains_compatible_but_advances_edit_token(
     published = client.post(f"{url}/publish", json={"if_match": 0})
     assert published.status_code == 200
     assert published.json()["edit_revision"] == 3
+
+
+def test_mapping_repeated_save_with_edit_token_overwrites_previous_draft(
+    client: TestClient,
+    sessions: sessionmaker[Session],
+) -> None:
+    mapping = _mapping(client)
+    url = f"/api/v1/mappings/{mapping['id']}/draft"
+    first = client.put(
+        url, json={"draft": _draft("first"), "if_match": 0, "if_edit_match": 0}
+    )
+    assert first.status_code == 200, first.text
+    with sessions.begin() as session:
+        draft = get_draft_revision(session, mapping["id"])
+        assert draft is not None
+        session.add(MappingPreview(mapping_revision_id=draft.id, results={}, errors=[]))
+    second = client.put(
+        url,
+        json={
+            "draft": _draft("second"),
+            "if_match": 0,
+            "if_edit_match": first.json()["edit_revision"],
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["edit_revision"] == first.json()["edit_revision"] + 1
+    with sessions() as session:
+        previews = list(
+            session.execute(
+                select(MappingPreview).where(
+                    MappingPreview.mapping_revision_id == first.json()["id"]
+                )
+            ).scalars()
+        )
+    assert previews == []
 
 
 def test_mapping_save_response_token_is_captured_before_commit(

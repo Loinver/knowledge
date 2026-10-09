@@ -13,7 +13,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed =
-  'mappings,selectedMappingId,selectedMapping,selectedOntologyId,selectedDatasourceId,mappingName,entityMaps,draftRevision,publishedRevision,catalog,preview,working,notice,actionError,canSaveDraft,canPublish,selectMapping,newMapping,handleSaveDraft,publishMapping,runCompile'
+  'mappings,selectedMappingId,selectedMapping,selectedOntologyId,selectedDatasourceId,mappingName,entityMaps,draftRevision,publishedRevision,catalog,preview,working,notice,actionError,canSaveDraft,canPublish,selectMapping,newMapping,handleSaveDraft,publishMapping,removeMapping,runCompile'
 const renderer = createRenderer({
   createElement: () => ({}),
   createText: () => ({}),
@@ -92,6 +92,9 @@ function state() {
       compile: async (id) => {
         writes.push(['compile', id])
         return { entities: [], relations: [] }
+      },
+      remove: async (mapping) => {
+        writes.push(['delete', mapping.id, mapping.edit_revision])
       },
     },
     ontology: {
@@ -223,6 +226,33 @@ test('saving and publishing use the saved mapping and advance only its edit toke
   assert.equal(vm.publishedRevision.mapping_id, 1)
   assert.equal(vm.selectedMapping.current_revision, 1)
   assert.equal(vm.selectedMapping.edit_revision, 3)
+})
+
+test('compile followed by publish uses the edit token returned by the first save', async (t) => {
+  const { vm, api } = await mount(t)
+  await vm.runCompile()
+  await vm.publishMapping()
+  assert.deepEqual(api.writes, [
+    ['save', 1, 0],
+    ['compile', 1],
+    ['save', 1, 1],
+    ['publish', 1, 2],
+  ])
+  assert.equal(vm.selectedMapping.current_revision, 1)
+  assert.equal(vm.selectedMapping.edit_revision, 3)
+})
+
+test('deleting a draft mapping sends its edit token and resets the wizard', async (t) => {
+  const { vm, api, text } = await mount(t)
+  await vm.removeMapping()
+  assert.deepEqual(api.writes, [['delete', 1, 0]])
+  assert.equal(vm.selectedMappingId, null)
+  assert.equal(
+    vm.mappings.some((item) => item.id === 1),
+    false,
+  )
+  assert.equal(vm.notice, text('dataAccess.mapping.deleted', { name: 'Mapping1' }))
+  assert.equal(vm.working, false)
 })
 
 for (const action of ['publishMapping', 'runCompile']) {

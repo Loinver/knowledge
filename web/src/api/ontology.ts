@@ -122,4 +122,5 @@ export const ontologyApi = {
         headers: { 'If-Edit-Match': editRevision },
       })
       .then((r) => r.data),
+  remove: (id: number) => http.delete(`${base}/${id}`).then(() => undefined),
 }

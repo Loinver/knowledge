@@ -4,6 +4,8 @@ import { join, resolve } from 'node:path'
 
 import { expect, test, type APIRequestContext, type APIResponse, type Page } from '@playwright/test'
 
+import { ensureAdmin } from './admin'
+
 type ApiEnvelope<T> = { code?: string; data?: T }
 type EntityOut = { id: number; iri: string; name: string }
 type RelationOut = { id: number; name: string }
@@ -262,6 +264,46 @@ async function captureCatalogThroughUI(page: Page, datasourceId: number): Promis
   }
 }
 
+async function deleteMappingThroughUI(page: Page, mappingName: string): Promise<void> {
+  await page.goto('/extraction')
+  await page.locator('.mapping-picker .n-base-selection').click()
+  await page.getByText(mappingName + ' · 草稿', { exact: true }).click()
+  await page.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`映射 ${mappingName} 已删除。`)).toBeVisible()
+}
+
+async function createTaskThroughUI(
+  page: Page,
+  mappingName: string,
+  datasourceLabel: string,
+): Promise<number> {
+  await page.goto('/extraction/tasks')
+  await expect(page.getByRole('heading', { name: '抽取任务', exact: true })).toBeVisible()
+  await page.locator('.task-form .n-base-selection').nth(0).click()
+  await page.getByText(mappingName, { exact: true }).click()
+  await page.locator('.task-form .n-base-selection').nth(1).click()
+  await page.getByText(datasourceLabel, { exact: true }).click()
+  await page
+    .locator('.task-form .n-form-item')
+    .filter({ hasText: '运行命名空间' })
+    .first()
+    .locator('input')
+    .fill('https://example.org/e2e/graph/')
+  await expect(page.getByRole('button', { name: '创建任务' })).toBeEnabled()
+  await page.getByRole('button', { name: '创建任务' }).click()
+  const notice = page.getByText(/任务 #\d+ 已创建。/)
+  await expect(notice).toBeVisible()
+  const taskId = Number(/#(\d+)/.exec(await notice.innerText())![1])
+  await expect(
+    page
+      .locator('tr')
+      .filter({ hasText: String(taskId) })
+      .getByText('成功'),
+  ).toBeVisible({ timeout: 20000 })
+  return taskId
+}
+
 async function chooseMappingAndRunThroughUI(page: Page, mappingName: string): Promise<void> {
   await page.goto('/extraction')
   await expect(page.getByRole('heading', { name: '映射向导' })).toBeVisible()
@@ -301,33 +343,12 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   page,
   request,
 }) => {
+  test.setTimeout(300_000)
   const tempDir = process.env.KG_E2E_TEMP_DIR
   expect(tempDir, 'Playwright config provides an isolated temp directory').toBeTruthy()
   const sourcePath = join(tempDir!, 'enterprise-demo-copy.sqlite')
   copyFileSync(resolve('samples/enterprise_demo.sqlite'), sourcePath)
-  execFileSync(
-    resolve('server/.venv/bin/python'),
-    [
-      resolve('scripts/seed_admin.py'),
-      '--username',
-      'e2e_admin',
-      '--email',
-      'e2e_admin@example.org',
-      '--password',
-      'E2E-Admin-Password-2026!',
-    ],
-    {
-      cwd: resolve('server'),
-      env: {
-        ...process.env,
-        KG_ENVIRONMENT: 'development',
-        KG_DATABASE_URL: 'sqlite:///' + join(tempDir!, 'metadata.sqlite'),
-        KG_PASSWORD_ITERATIONS: '1000',
-      },
-      stdio: 'pipe',
-      timeout: 30_000,
-    },
-  )
+  await ensureAdmin(page)
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
 
@@ -349,7 +370,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     data: { prefix: 'forbidden', iri: 'https://example.org/forbidden/' },
   })
   expect(denied.status()).toBe(403)
-  const administrator = await responseData<{ access_token: string }>(
+  const administrator = await responseData<{ access_token: string; refresh_token: string }>(
     await request.post('/api/v1/auth/login', {
       data: { account: 'e2e_admin', password: 'E2E-Admin-Password-2026!' },
     }),
@@ -410,6 +431,11 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   const datasourceId = await createSourceThroughUI(page, sourcePath)
   await captureCatalogThroughUI(page, datasourceId)
   const mapping = await seedMapping(request, ontology.ontologyId)
+  const disposableMapping = await postData<Brief>(request, '/mappings', {
+    name: 'E2EDeleteMapping',
+    ontology_id: ontology.ontologyId,
+  })
+  await deleteMappingThroughUI(page, disposableMapping.name)
   await chooseMappingAndRunThroughUI(page, mapping.name)
 
   const runs = await getData<RunOut[]>(request, '/extraction/runs?page=1&page_size=20')
@@ -417,6 +443,24 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   expect(firstRun?.status).toBe('SUCCESS')
   expect(firstRun?.counts.entity_count).toBeGreaterThan(0)
   expect(firstRun?.counts.triple_count).toBeGreaterThan(0)
+
+  const immediateTaskId = await createTaskThroughUI(page, mapping.name, 'E2E 样例源 · sqlite')
+  expect(immediateTaskId).toBeGreaterThan(0)
+  const publishedRevision = await getData<{ id: number }>(
+    request,
+    '/mappings/' + mapping.id + '/published',
+  )
+  const scheduledTask = await postData<{ id: number }>(request, '/extraction/tasks', {
+    mapping_revision_id: publishedRevision.id,
+    datasource_id: datasourceId,
+    namespace: 'https://example.org/kg/',
+    incremental: false,
+    run_after: new Date(Date.now() + 3_600_000).toISOString(),
+  })
+  await page.goto('/extraction/tasks')
+  const scheduledRow = page.locator('tr').filter({ hasText: String(scheduledTask.id) })
+  await scheduledRow.getByRole('button', { name: '取消任务' }).click()
+  await expect(page.getByText(`任务 #${scheduledTask.id} 已取消。`)).toBeVisible()
 
   const firstGraph = await getData<GraphRevision | null>(request, '/extraction/graph/current')
   expect(firstGraph).toBeTruthy()
@@ -623,9 +667,18 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await page.getByLabel('来源行键').fill('8001')
   await page.getByRole('button', { name: '追溯证据' }).click()
   await expect(page.getByText(/参与 \d+ 条事实、产出 \d+ 个实体/)).toBeVisible()
+  await page.evaluate(
+    (tokens) => {
+      localStorage.setItem('kg-access-token', tokens.access)
+      localStorage.setItem('kg-refresh-token', tokens.refresh)
+    },
+    { access: administrator.access_token, refresh: administrator.refresh_token },
+  )
+  await page.reload()
 
   const routes = [
     { path: '/', pageHeader: true },
+    { path: '/ontology/ontologies', pageHeader: true },
     { path: '/ontology/entity-types', pageHeader: true },
     { path: '/ontology/namespaces', pageHeader: true },
     { path: '/ontology/entity-types/' + ontology.entityTypes.E2EEmployee.id, pageHeader: true },
@@ -644,6 +697,8 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     },
     { path: '/extraction', pageHeader: true },
     { path: '/extraction/runs', pageHeader: true },
+    { path: '/extraction/tasks', pageHeader: true },
+    { path: '/extraction/ai-assist', pageHeader: true },
     { path: '/graph?graph=' + partial.graph_revision.id, pageHeader: true },
     { path: '/graph/entities?graph=' + partial.graph_revision.id, pageHeader: true },
     {
@@ -664,6 +719,12 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     { path: '/governance/export', pageHeader: true },
     { path: '/governance/clauses', pageHeader: true },
     { path: '/governance/enum-dictionaries', pageHeader: true },
+    { path: '/account/profile', pageHeader: true },
+    { path: '/account/security', pageHeader: true },
+    { path: '/system/users', pageHeader: true },
+    { path: '/system/roles', pageHeader: true },
+    { path: '/system/audit-logs', pageHeader: true },
+    { path: '/forbidden', pageHeader: false },
   ]
   for (const theme of ['dark', 'light']) {
     await page.evaluate((value) => localStorage.setItem('kg-theme-mode', value), theme)
@@ -707,6 +768,12 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
         await page.goto(route.path)
         await expect(page.locator('#app')).toBeVisible()
         await expect(page.locator('body')).not.toContainText('页面不存在')
+        const visibleText = await page.locator('body').innerText()
+        expect(visibleText, route.path).not.toContain('[object Object]')
+        expect(visibleText, route.path).not.toMatch(/\bKG\.[A-Z0-9_]+\b/)
+        expect(visibleText, route.path).not.toMatch(
+          /\b(?:errors|dataAccess|ontology|graph|system|account|runs|tasks)\.[A-Za-z0-9_.]+\b/,
+        )
         if (route.pageHeader) await expect(page.locator('.page-header')).toBeVisible()
         if (route.path === '/') {
           await expect(page.locator('.pipe-step')).toHaveCount(9)
@@ -743,6 +810,44 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
           route.path + ' at ' + viewport.width + 'px in ' + theme,
         ).toBeLessThanOrEqual(width.viewport + 1)
       }
+    }
+  }
+
+  await page.goto('/missing-page-for-audit')
+  await expect(page.getByText('页面不存在').first()).toBeVisible()
+
+  await page.goto('/')
+  await page.getByRole('button', { name: '用户菜单' }).click()
+  await page.getByText('退出登录').click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page).toHaveURL(/\/login$/)
+
+  const publicRoutes = [
+    { path: '/login', heading: '登录' },
+    { path: '/register', heading: '注册账号' },
+    { path: '/forgot-password', heading: '找回密码' },
+    { path: '/reset-password', heading: '重置密码' },
+  ]
+  for (const viewport of [
+    { width: 1440, height: 960 },
+    { width: 375, height: 812 },
+  ]) {
+    await page.setViewportSize(viewport)
+    for (const route of publicRoutes) {
+      await page.goto(route.path)
+      await expect(page.getByRole('heading', { name: route.heading })).toBeVisible()
+      const visibleText = await page.locator('body').innerText()
+      expect(visibleText, route.path).not.toContain('[object Object]')
+      expect(visibleText, route.path).not.toMatch(/\bKG\.[A-Z0-9_]+\b/)
+      const width = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        document: document.documentElement.scrollWidth,
+        body: document.body.scrollWidth,
+      }))
+      expect(
+        Math.max(width.document, width.body),
+        route.path + ' at ' + viewport.width + 'px',
+      ).toBeLessThanOrEqual(width.viewport + 1)
     }
   }
   expect(pageErrors).toEqual([])

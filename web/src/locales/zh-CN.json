@@ -33,6 +33,7 @@
     "samplePreview": "样例预览",
     "mappingWizard": "映射向导",
     "extractionRuns": "抽取运行",
+    "extractionTasks": "抽取任务",
     "graphBrowse": "图谱浏览",
     "graphEntities": "实体实例",
     "graphEntityDetail": "实体详情",
@@ -85,6 +86,8 @@
     "openDesigner": "设计器",
     "created": "本体已创建。",
     "published": "本体已发布。",
+    "deleteConfirm": "确认删除本体“{name}”？被映射引用时会拒绝删除。",
+    "deleted": "本体 {name} 已删除。",
     "empty": "还没有本体。新建一个，或先在「装配模板」里挑一个模板。"
   },
   "validation": {
@@ -267,7 +270,9 @@
     "noRevisions": "还没有发布版本。",
     "ontologyRef": "{name} · 版本 v{revision}",
     "revisionValue": "v{revision}",
-    "loadFailed": "实体类型加载失败"
+    "loadFailed": "实体类型加载失败",
+    "deleteConfirm": "确认删除实体类型“{name}”？仅未发布且未被引用的草稿可以删除。",
+    "deleted": "实体类型 {name} 已删除。"
   },
   "relation": {
     "list": "关系类型列表",
@@ -283,6 +288,8 @@
     "nameHint": "PascalCase，例如 WorksIn",
     "loadFailed": "关系类型加载失败",
     "publishFailed": "关系类型发布失败",
+    "deleteConfirm": "确认删除关系类型“{name}”？仅未发布且未被引用的草稿可以删除。",
+    "deleted": "关系类型 {name} 已删除。",
     "domain": "定义域",
     "range": "值域",
     "cardinality": "基数",
@@ -341,6 +348,8 @@
     "nameImmutable": "机读名与 IRI 是业务域的身份，创建后不可修改。",
     "basicIncomplete": "请填写中文标签",
     "basicSaved": "业务域已保存。",
+    "deleteConfirm": "确认删除业务域“{name}”？成员归属会一并移除，资源本身不会被删除。",
+    "deleted": "业务域 {name} 已删除。",
     "members": "成员",
     "addMember": "添加成员",
     "parent": "父域",
@@ -987,6 +996,53 @@
       "CANCELLED": "已取消"
     }
   },
+  "tasks": {
+    "description": "创建可取消的异步抽取任务，查看阶段进度与增量水位结果；调度时间留空则立即执行。",
+    "createTitle": "新建抽取任务",
+    "mapping": "已发布映射",
+    "chooseMapping": "选择已发布映射",
+    "mappingRequired": "请选择已发布映射",
+    "datasource": "数据源",
+    "chooseDatasource": "选择数据源",
+    "datasourceRequired": "请选择数据源",
+    "namespace": "运行命名空间",
+    "namespaceRequired": "请填写运行命名空间",
+    "runAfter": "调度时间",
+    "runNow": "留空立即执行",
+    "mode": "运行模式",
+    "incremental": "增量运行（使用上次成功任务水位）",
+    "create": "创建任务",
+    "createdNotice": "任务 #{id} 已创建。",
+    "id": "任务",
+    "mappingRevision": "映射版本 ID",
+    "progress": "进度",
+    "created": "创建时间",
+    "finished": "完成时间",
+    "viewRun": "查看运行",
+    "cancel": "取消任务",
+    "cancelled": "任务 #{id} 已取消。",
+    "empty": "暂无抽取任务",
+    "entityCount": "实体 {count}",
+    "tripleCount": "事实 {count}",
+    "quarantineCount": "隔离 {count}",
+    "phases": {
+      "prepare": "准备",
+      "read": "读取源数据",
+      "transform": "转换映射",
+      "write": "写入图谱",
+      "publish": "发布结果集",
+      "done": "完成",
+      "-": "未开始"
+    },
+    "statuses": {
+      "PENDING": "等待执行",
+      "RUNNING": "执行中",
+      "SUCCESS": "成功",
+      "PARTIAL": "部分成功",
+      "FAILED": "失败",
+      "CANCELLED": "已取消"
+    }
+  },
   "dataAccess": {
     "sources": {
       "breadcrumb": "数据接入",
@@ -1066,13 +1122,13 @@
         "created": "数据源已创建",
         "deleted": "数据源已删除",
         "noMatch": "没有匹配的数据源",
-        "empty": "还没有数据源"
+        "empty": "还没有数据源",
+        "testOk": "连接成功",
+        "testFailed": "连接失败，请检查连接信息",
+        "updated": "已保存"
       },
       "editTitle": "编辑数据源",
-      "editHint": "连接参数与凭据加密存储；改名与换凭据后请重新测试连接。",
-      "testOk": "连接成功",
-      "testFailed": "连接失败，请检查连接信息",
-      "updated": "已保存"
+      "editHint": "连接参数与凭据加密存储；改名与换凭据后请重新测试连接。"
     },
     "catalog": {
       "description": "浏览数据源的结构快照、字段变化和已引用的映射。",
@@ -1147,6 +1203,8 @@
       "selectMapping": "选择映射方案",
       "saveDraft": "保存草稿",
       "draftSaved": "映射草稿已保存。",
+      "deleteConfirm": "确认删除映射“{name}”？该操作不可撤销。",
+      "deleted": "映射 {name} 已删除。",
       "draft": "草稿",
       "unsaved": "未保存",
       "steps": {

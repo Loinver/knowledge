@@ -10,7 +10,9 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NPopconfirm,
   NSelect,
+  NSpace,
   NSpin,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
@@ -42,6 +44,8 @@ const domains = ref<DomainBrief[]>([])
 const creating = ref(false)
 const createError = ref('')
 const stats = ref<EntityTypeStats | null>(null)
+const removingId = ref<number | null>(null)
+const notice = ref('')
 
 /** 空串表示「全部」。统计条本身即筛选入口，不额外占一行控件。 */
 const statusFilter = ref<ResourceStatus | ''>('')
@@ -166,15 +170,42 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
     title: t('common.actions'),
     key: 'actions',
-    width: 100,
+    width: 150,
     render: (row) =>
-      h(
-        NButton,
-        { size: 'small', quaternary: true, onClick: () => goToDetail(row.id) },
-        { default: () => t('common.edit') },
-      ),
+      h(NSpace, { size: 4, wrap: false }, () => [
+        h(
+          NButton,
+          { size: 'small', quaternary: true, onClick: () => goToDetail(row.id) },
+          { default: () => t('common.edit') },
+        ),
+        canDelete(row)
+          ? h(
+              NPopconfirm,
+              { onPositiveClick: () => void remove(row) },
+              {
+                default: () => t('entityType.deleteConfirm', { name: displayLabel(row) }),
+                trigger: () =>
+                  h(
+                    NButton,
+                    {
+                      size: 'small',
+                      quaternary: true,
+                      type: 'error',
+                      loading: removingId.value === row.id,
+                      disabled: removingId.value !== null && removingId.value !== row.id,
+                    },
+                    { default: () => t('common.delete') },
+                  ),
+              },
+            )
+          : null,
+      ]),
   },
 ])
+
+function canDelete(row: EntityTypeBrief): boolean {
+  return row.status === 'DRAFT' && row.current_revision === 0
+}
 
 function renderStatus(status: ResourceStatus) {
   return h('span', { class: 'status-tag', style: { '--dot': STATUS_VAR[status] } }, [
@@ -249,6 +280,22 @@ async function loadStats() {
   }
 }
 
+async function remove(row: EntityTypeBrief) {
+  if (!canDelete(row) || removingId.value !== null) return
+  removingId.value = row.id
+  loadError.value = ''
+  notice.value = ''
+  try {
+    await entityTypesApi.remove(row.id)
+    notice.value = t('entityType.deleted', { name: displayLabel(row) })
+    await Promise.all([loadList(), loadStats()])
+  } catch (err) {
+    loadError.value = toMessage(err)
+  } finally {
+    removingId.value = null
+  }
+}
+
 async function loadDomains() {
   try {
     domains.value = await domainsApi.list()
@@ -316,6 +363,8 @@ watch(domainFilter, () => void loadList())
         <NButton type="primary" @click="showCreate = true">{{ t('common.create') }}</NButton>
       </template>
     </PageHeader>
+
+    <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
 
     <!-- 统计条：本身就是筛选入口，点击即过滤。数值取库级统计，不受分页影响 -->
     <div class="stats">

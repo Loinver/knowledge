@@ -11,6 +11,7 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NPopconfirm,
   NSelect,
   NSpace,
   NSpin,
@@ -49,6 +50,8 @@ const editError = ref('')
 const actionError = ref('')
 const loadError = ref('')
 const publishingId = ref<number | null>(null)
+const removingId = ref<number | null>(null)
+const notice = ref('')
 const editingDetail = ref<RelationTypeDetail | null>(null)
 const statusFilter = ref<ResourceStatus | ''>('')
 const view = ref<'table' | 'card'>('table')
@@ -153,7 +156,7 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
   {
     title: t('common.actions'),
     key: 'actions',
-    width: 232,
+    width: 300,
     render: (row) =>
       h(NSpace, { size: 4, wrap: false }, () => [
         h(
@@ -181,9 +184,35 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
               { default: () => t('common.publish') },
             )
           : null,
+        canDelete(row)
+          ? h(
+              NPopconfirm,
+              { onPositiveClick: () => void remove(row) },
+              {
+                default: () =>
+                  t('relation.deleteConfirm', { name: pickLabel(row.label_i18n, row.name) }),
+                trigger: () =>
+                  h(
+                    NButton,
+                    {
+                      size: 'small',
+                      quaternary: true,
+                      type: 'error',
+                      loading: removingId.value === row.id,
+                      disabled: removingId.value !== null && removingId.value !== row.id,
+                    },
+                    { default: () => t('common.delete') },
+                  ),
+              },
+            )
+          : null,
       ]),
   },
 ])
+
+function canDelete(row: RelationTypeBrief): boolean {
+  return row.status === 'DRAFT' && row.current_revision === 0
+}
 
 function owlTags(detail: RelationTypeDetail): string[] {
   const out: string[] = []
@@ -438,6 +467,23 @@ async function publish(row: RelationTypeBrief) {
   }
 }
 
+async function remove(row: RelationTypeBrief) {
+  if (!canDelete(row) || removingId.value !== null) return
+  removingId.value = row.id
+  actionError.value = ''
+  notice.value = ''
+  try {
+    await relationsApi.remove(row.id)
+    notice.value = t('relation.deleted', { name: pickLabel(row.label_i18n, row.name) })
+    await load()
+    await loadDetails()
+  } catch (err) {
+    actionError.value = toMessage(err)
+  } finally {
+    removingId.value = null
+  }
+}
+
 /** 打开抽屉即重置校验态，避免上一轮报错残留。 */
 watch(showCreate, (open) => {
   if (!open) return
@@ -481,6 +527,7 @@ onMounted(async () => {
     <NAlert v-if="actionError" type="error" role="alert" class="action-alert">{{
       actionError
     }}</NAlert>
+    <NAlert v-if="notice" type="success" role="status" class="action-alert">{{ notice }}</NAlert>
 
     <div class="stats">
       <button

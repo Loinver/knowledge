@@ -8,6 +8,7 @@ import {
   NEmpty,
   NInput,
   NInputNumber,
+  NPopconfirm,
   NSelect,
   NSpin,
   NTag,
@@ -654,6 +655,26 @@ function newMapping(): void {
   notice.value = ''
   actionError.value = ''
 }
+async function removeMapping(): Promise<void> {
+  const mapping = selectedMapping.value
+  if (!mapping || mapping.status === 'PUBLISHED' || working.value) return
+  const generation = selectionGeneration
+  working.value = true
+  actionError.value = ''
+  notice.value = ''
+  try {
+    await mappingsApi.remove(mapping)
+    if (generation !== selectionGeneration) return
+    mappings.value = mappings.value.filter((item) => item.id !== mapping.id)
+    newMapping()
+    notice.value = t('dataAccess.mapping.deleted', { name: mapping.name })
+  } catch (error: unknown) {
+    if (generation === selectionGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
+  } finally {
+    if (generation === selectionGeneration) working.value = false
+  }
+}
 async function selectMapping(value: number | null): Promise<void> {
   if (!value) {
     newMapping()
@@ -1132,6 +1153,22 @@ onBeforeUnmount(() => {
               :type="selectedMapping?.status === 'PUBLISHED' ? 'success' : 'warning'"
               >{{ savedRevisionLabel }}</n-tag
             >
+            <n-popconfirm
+              v-if="selectedMapping && selectedMapping.status !== 'PUBLISHED'"
+              @positive-click="removeMapping"
+            >
+              <template #trigger>
+                <n-button
+                  size="small"
+                  secondary
+                  type="error"
+                  :disabled="working"
+                  :loading="working"
+                  >{{ t('common.delete') }}</n-button
+                >
+              </template>
+              {{ t('dataAccess.mapping.deleteConfirm', { name: selectedMapping.name }) }}
+            </n-popconfirm>
           </div>
           <div class="wizard-steps" role="list">
             <button

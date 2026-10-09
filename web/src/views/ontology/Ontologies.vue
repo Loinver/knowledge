@@ -10,6 +10,7 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NPopconfirm,
   NSpace,
   NSpin,
 } from 'naive-ui'
@@ -40,6 +41,7 @@ const searchQuery = ref('')
 const error = ref('')
 const notice = ref('')
 const publishingId = ref<number | null>(null)
+const removingId = ref<number | null>(null)
 
 const showCreate = ref(false)
 const creating = ref(false)
@@ -136,7 +138,7 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
   {
     title: t('common.actions'),
     key: 'actions',
-    width: 250,
+    width: 320,
     render: (row) =>
       h(NSpace, { size: 4, wrap: false }, () => [
         h(
@@ -166,6 +168,25 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
               { default: () => t('common.publish') },
             )
           : null,
+        h(
+          NPopconfirm,
+          { onPositiveClick: () => void remove(row) },
+          {
+            default: () => t('ontology.deleteConfirm', { name: displayLabel(row) }),
+            trigger: () =>
+              h(
+                NButton,
+                {
+                  size: 'small',
+                  quaternary: true,
+                  type: 'error',
+                  loading: removingId.value === row.id,
+                  disabled: removingId.value !== null && removingId.value !== row.id,
+                },
+                { default: () => t('common.delete') },
+              ),
+          },
+        ),
       ]),
   },
 ])
@@ -196,6 +217,22 @@ async function publish(row: Ontology) {
     error.value = toMessage(err)
   } finally {
     publishingId.value = null
+  }
+}
+
+async function remove(row: Ontology) {
+  if (removingId.value !== null) return
+  removingId.value = row.id
+  error.value = ''
+  notice.value = ''
+  try {
+    await ontologyApi.remove(row.id)
+    notice.value = t('ontology.deleted', { name: displayLabel(row) })
+    await loadList()
+  } catch (err) {
+    error.value = toMessage(err)
+  } finally {
+    removingId.value = null
   }
 }
 

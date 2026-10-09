@@ -33,6 +33,7 @@
     "samplePreview": "Sample Preview",
     "mappingWizard": "Mapping Wizard",
     "extractionRuns": "Extraction Runs",
+    "extractionTasks": "Extraction Tasks",
     "graphBrowse": "Graph Browser",
     "graphEntities": "Entity Instances",
     "graphEntityDetail": "Entity Detail",
@@ -85,6 +86,8 @@
     "openDesigner": "Designer",
     "created": "Ontology created.",
     "published": "Ontology published.",
+    "deleteConfirm": "Delete ontology \"{name}\"? Deletion is rejected while mappings reference it.",
+    "deleted": "Ontology {name} deleted.",
     "empty": "No ontologies yet. Create one, or start from a template in Assembly Templates."
   },
   "validation": {
@@ -267,7 +270,9 @@
     "noRevisions": "Not published yet.",
     "ontologyRef": "{name} · revision v{revision}",
     "revisionValue": "v{revision}",
-    "loadFailed": "Failed to load entity types"
+    "loadFailed": "Failed to load entity types",
+    "deleteConfirm": "Delete entity type \"{name}\"? Only an unpublished, unreferenced draft can be deleted.",
+    "deleted": "Entity type {name} deleted."
   },
   "relation": {
     "list": "Relation Type List",
@@ -283,6 +288,8 @@
     "nameHint": "PascalCase, e.g. WorksIn",
     "loadFailed": "Failed to load relation type",
     "publishFailed": "Failed to publish the relation type",
+    "deleteConfirm": "Delete relation type \"{name}\"? Only an unpublished, unreferenced draft can be deleted.",
+    "deleted": "Relation type {name} deleted.",
     "domain": "Domain",
     "range": "Range",
     "cardinality": "Cardinality",
@@ -341,6 +348,8 @@
     "nameImmutable": "The machine name and IRI are the domain identity and cannot change after creation.",
     "basicIncomplete": "Chinese label is required",
     "basicSaved": "Business domain saved.",
+    "deleteConfirm": "Delete business domain \"{name}\"? Membership is removed, but member resources are kept.",
+    "deleted": "Business domain {name} deleted.",
     "members": "Members",
     "addMember": "Add Member",
     "parent": "Parent domain",
@@ -987,6 +996,53 @@
       "CANCELLED": "Cancelled"
     }
   },
+  "tasks": {
+    "description": "Create cancellable async extraction tasks, inspect stage progress and incremental watermark results. Leave the schedule empty to run immediately.",
+    "createTitle": "New extraction task",
+    "mapping": "Published mapping",
+    "chooseMapping": "Select a published mapping",
+    "mappingRequired": "Select a published mapping",
+    "datasource": "Data source",
+    "chooseDatasource": "Select a data source",
+    "datasourceRequired": "Select a data source",
+    "namespace": "Run namespace",
+    "namespaceRequired": "Enter the run namespace",
+    "runAfter": "Schedule",
+    "runNow": "Leave empty to run now",
+    "mode": "Run mode",
+    "incremental": "Incremental run (use the last successful watermark)",
+    "create": "Create task",
+    "createdNotice": "Task #{id} created.",
+    "id": "Task",
+    "mappingRevision": "Mapping revision ID",
+    "progress": "Progress",
+    "created": "Created at",
+    "finished": "Finished at",
+    "viewRun": "View run",
+    "cancel": "Cancel task",
+    "cancelled": "Task #{id} cancelled.",
+    "empty": "No extraction tasks yet",
+    "entityCount": "Entities {count}",
+    "tripleCount": "Facts {count}",
+    "quarantineCount": "Quarantined {count}",
+    "phases": {
+      "prepare": "Preparing",
+      "read": "Reading source",
+      "transform": "Transforming",
+      "write": "Writing graph",
+      "publish": "Publishing result set",
+      "done": "Done",
+      "-": "Not started"
+    },
+    "statuses": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "SUCCESS": "Success",
+      "PARTIAL": "Partial success",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    }
+  },
   "dataAccess": {
     "sources": {
       "breadcrumb": "Data access",
@@ -1047,7 +1103,10 @@
         "created": "Data source created",
         "deleted": "Data source deleted",
         "noMatch": "No matching data sources",
-        "empty": "No data sources yet"
+        "empty": "No data sources yet",
+        "testOk": "Connected",
+        "testFailed": "Connection failed. Review the connection details.",
+        "updated": "Saved"
       },
       "columns": {
         "name": "Name",
@@ -1069,10 +1128,7 @@
       "testHint": "Enter a password here only if the connection requires one. It is used for this test and is neither shown again nor saved.",
       "validationRequired": "Enter a name and the complete connection parameters.",
       "editTitle": "Edit data source",
-      "editHint": "Connection parameters and credentials are stored encrypted. Re-test the connection after renaming or changing the credential.",
-      "testOk": "Connected",
-      "testFailed": "Connection failed. Review the connection details.",
-      "updated": "Saved"
+      "editHint": "Connection parameters and credentials are stored encrypted. Re-test the connection after renaming or changing the credential."
     },
     "catalog": {
       "description": "Browse schema snapshots, column changes, and mappings that reference them.",
@@ -1147,6 +1203,8 @@
       "selectMapping": "Select a mapping",
       "saveDraft": "Save draft",
       "draftSaved": "Mapping draft saved.",
+      "deleteConfirm": "Delete mapping \"{name}\"? This cannot be undone.",
+      "deleted": "Mapping {name} deleted.",
       "draft": "Draft",
       "unsaved": "Unsaved",
       "steps": {

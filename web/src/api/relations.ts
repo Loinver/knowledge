@@ -34,4 +34,5 @@ export const relationsApi = {
     http
       .post<{ revision: number; checksum: string }>(`/relations/${id}/publish`)
       .then((r) => r.data),
+  remove: (id: number) => http.delete(`/relations/${id}`).then(() => undefined),
 }

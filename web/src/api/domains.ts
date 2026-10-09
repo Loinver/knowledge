@@ -20,6 +20,7 @@ export const domainsApi = {
   /** 更新业务域的标签与定义。发布修订号与编辑令牌分别校验，两者都要带。 */
   update: (id: number, payload: DomainUpdate) =>
     http.put<DomainDetail>(`/domains/${id}`, payload).then((r) => r.data),
+  remove: (id: number) => http.delete(`/domains/${id}`).then(() => undefined),
   members: (id: number, signal?: AbortSignal) =>
     http.get<DomainMember[]>(`/domains/${id}/members`, { signal }).then((r) => r.data),
   addMember: (id: number, resourceId: number, asRef = false, ifEditMatch?: number) =>

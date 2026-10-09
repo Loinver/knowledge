@@ -33,4 +33,10 @@ export const mappingsApi = {
     http.post<MappingPreview>(`/mappings/${id}/compile`, payload, { signal }).then((r) => r.data),
   publish: (id: number, payload: PublishRequest) =>
     http.post<MappingRevision>(`/mappings/${id}/publish`, payload).then((r) => r.data),
+  remove: (mapping: Mapping) =>
+    http
+      .delete(`/mappings/${mapping.id}`, {
+        headers: { 'If-Edit-Match': String(mapping.edit_revision) },
+      })
+      .then(() => undefined),
 }
