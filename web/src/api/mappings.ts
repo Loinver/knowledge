@@ -11,6 +11,7 @@ export type MappingRevisionCreate = S['MappingRevisionCreate']
 export type MappingPreview = S['MappingPreviewResult']
 export type SaveDraftRequest = S['SaveDraftRequest']
 export type PublishRequest = S['PublishRequest']
+export type FusionPolicy = S['FusionPolicy']
 
 export const mappingsApi = {
   list: (signal?: AbortSignal) =>

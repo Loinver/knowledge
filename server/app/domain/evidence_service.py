@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.extraction_service import resolve_graph
-from app.models.data_access import Datasource
+from app.domain.fusion_service import frozen_fusion_entity
+from app.models.data_access import Datasource, MappingRevision
 from app.models.extraction import (
     EntityIdentity,
+    ExtractionRun,
     FactEvidence,
     GraphTriple,
     Quarantine,
@@ -102,7 +104,8 @@ def trace_entity_evidence(
         .scalars()
         .first()
     )
-    if entity is None:
+    frozen = frozen_fusion_entity(session.get(ExtractionRun, gr.run_id), iri)
+    if entity is None and frozen is None:
         raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"iri": iri})
 
     raw_evidences = list(
@@ -117,9 +120,13 @@ def trace_entity_evidence(
     )
 
     evidences_out = _flatten_evidence(session, raw_evidences)
+    type_iri = entity.type_iri if entity is not None else (frozen or {})["type_iri"]
     return {
         "graph_revision_id": gr.id,
-        "entity": {"iri": iri, "type_iri": entity.type_iri},
+        "entity": {
+            "iri": iri,
+            "type_iri": type_iri,
+        },
         "evidences": evidences_out,
         "total_count": len(evidences_out),
         "quarantined_count": sum(e["quarantined"] for e in evidences_out),
@@ -235,12 +242,7 @@ def trace_source_rows(
 def trace_entity_fusion(
     session: Session, iri: str, graph_revision_id: int | None = None
 ) -> dict:
-    """实体融合解释（G-29）：该实体由哪些来源行融合，是否存在冲突值。
-
-    只读聚合 FactEvidence：按 (source_id, table_name, row_key) 分组来源行，
-    平铺每行贡献的谓词→值，并检出同一谓词在多来源间的不一致值。
-    不修改任何数据。
-    """
+    """Read frozen run decisions; old runs never infer attributes from current data."""
     gr = resolve_graph(session, graph_revision_id)
 
     entity = (
@@ -253,13 +255,19 @@ def trace_entity_fusion(
         .scalars()
         .first()
     )
-    if entity is None:
+    run = session.get(ExtractionRun, gr.run_id)
+    frozen = frozen_fusion_entity(run, iri)
+    if entity is None and frozen is None:
         raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"iri": iri})
+
+    if frozen is not None:
+        return _frozen_fusion_response(session, gr.id, run, iri, frozen)
 
     raw_evidences = list(
         session.execute(
             select(FactEvidence).where(
-                (FactEvidence.subject == iri) | (FactEvidence.object_ == iri),
+                FactEvidence.subject == iri,
+                FactEvidence.predicate == "_entity_attrs",
                 FactEvidence.graph_revision_id == gr.id,
             )
         )
@@ -291,8 +299,6 @@ def trace_entity_fusion(
         rows.setdefault(key, []).append(ev)
 
     source_rows: list[dict] = []
-    # 谓词→{(source_id,table,row_key): value} 用于冲突检出
-    predicate_values: dict[str, dict[tuple[int, str, str], str]] = {}
     for (src_id, tbl, rk), evs in rows.items():
         contributions = []
         for ev in evs:
@@ -305,10 +311,6 @@ def trace_entity_fusion(
                     "columns": list(ev.columns or []),
                 }
             )
-            if ev.predicate != "_entity_attrs":
-                predicate_values.setdefault(ev.predicate, {})[(src_id, tbl, rk)] = (
-                    ev.object_
-                )
         ds = sources.get(src_id)
         source_rows.append(
             {
@@ -323,30 +325,81 @@ def trace_entity_fusion(
             }
         )
 
-    conflicts: list[dict] = []
-    for predicate, value_map in predicate_values.items():
-        distinct = set(value_map.values())
-        if len(distinct) > 1:
-            conflicts.append(
-                {
-                    "predicate": predicate,
-                    "values": [
-                        {
-                            "source_id": sid,
-                            "table_name": tbl,
-                            "row_key": rk,
-                            "value": val,
-                        }
-                        for (sid, tbl, rk), val in value_map.items()
-                    ],
-                }
-            )
-
+    revision = session.get(MappingRevision, run.mapping_revision_id) if run else None
+    legacy = bool(revision and any(em.get("match_keys") for em in revision.entity_maps))
+    assert entity is not None
     return {
         "graph_revision_id": gr.id,
         "entity": {"iri": iri, "type_iri": entity.type_iri},
         "source_rows": source_rows,
-        "conflicts": conflicts,
+        "conflicts": [],
         "source_count": len(source_ids),
         "row_count": len(rows),
+        "evidence_state": "LEGACY" if legacy else "UNAVAILABLE",
+        "entity_state": "UNKNOWN",
+        "run_id": gr.run_id,
+        "mapping_revision_id": run.mapping_revision_id if run else None,
+        "attributes": [],
+    }
+
+
+def _frozen_fusion_response(
+    session: Session, graph_id: int, run: ExtractionRun | None, iri: str, frozen: dict
+) -> dict:
+    assert run is not None
+    attributes = frozen["attributes"]
+    rows: dict[tuple[int, str, str, str], dict] = {}
+    for decision in attributes:
+        for candidate in decision["candidates"]:
+            key = (
+                candidate["source_id"],
+                candidate["schema_name"],
+                candidate["table_name"],
+                candidate["row_key"],
+            )
+            row = rows.setdefault(
+                key,
+                {
+                    "source_id": key[0],
+                    "source_name": None,
+                    "schema_name": key[1],
+                    "table_name": key[2],
+                    "row_key": key[3],
+                    "contributions": [],
+                    "quarantined": frozen["state"] == "QUARANTINED",
+                },
+            )
+            row["contributions"].append(
+                {
+                    "predicate": decision["attribute"],
+                    "object": candidate["value"],
+                    "evidence_type": "FUSION",
+                    "columns": [candidate["column"]],
+                }
+            )
+    source_ids = {key[0] for key in rows}
+    names = {
+        ds.id: ds.name
+        for ds in session.scalars(
+            select(Datasource).where(Datasource.id.in_(source_ids))
+        )
+    }
+    for row in rows.values():
+        row["source_name"] = names.get(row["source_id"])
+    return {
+        "graph_revision_id": graph_id,
+        "run_id": run.id,
+        "mapping_revision_id": run.mapping_revision_id,
+        "entity": {"iri": iri, "type_iri": frozen["type_iri"]},
+        "source_rows": [rows[key] for key in sorted(rows)],
+        "source_count": len(source_ids),
+        "row_count": len(rows),
+        "evidence_state": "AVAILABLE",
+        "entity_state": frozen["state"],
+        "attributes": attributes,
+        "conflicts": [
+            {"predicate": d["attribute"], "values": d["candidates"]}
+            for d in attributes
+            if d["conflict"]
+        ],
     }

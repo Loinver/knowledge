@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.fusion_policy import validate_fusion_policies
 from app.models.data_access import Mapping, MappingPreview, MappingRevision
 from app.models.domain import Ontology, OntologyRevision
 from app.models.enums import ResourceStatus
@@ -137,6 +138,7 @@ def _save_draft_revision(
     # 校验映射结构
     for em in draft.entity_maps:
         _validate_entity_map(em)
+    validate_fusion_policies([_em_to_dict(em) for em in draft.entity_maps])
     for rm in draft.rel_maps:
         _validate_rel_map(rm)
     # 删除旧草稿
@@ -275,6 +277,7 @@ def _em_to_dict(em: EntityMapCreate) -> dict:
         "key_fields": em.key_fields,
         "match_keys": em.match_keys,
         "incremental_field": em.incremental_field,
+        "fusion": em.fusion.model_dump() if em.fusion else None,
     }
 
 
@@ -324,6 +327,7 @@ def publish_mapping(
             ErrorCode.VALIDATION_VIOLATION,
             {"mapping_id": m.id, "reason": "no_draft_to_publish"},
         )
+    validate_fusion_policies(draft.entity_maps)
     new_rev = m.current_revision + 1
     frozen = MappingRevision(
         mapping_id=m.id,

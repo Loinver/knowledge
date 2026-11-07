@@ -4904,6 +4904,12 @@ export interface components {
       errors: {
         [key: string]: unknown
       }[]
+      /**
+       * Fusion State
+       * @default NOT_APPLICABLE
+       * @enum {string}
+       */
+      fusion_state: 'CONFIGURED' | 'LEGACY' | 'NOT_APPLICABLE'
     }
     /** EntityDetailOut */
     EntityDetailOut: {
@@ -4919,7 +4925,7 @@ export interface components {
     }
     /**
      * EntityFusionOut
-     * @description 实体融合解释（G-29）：该实体由哪些来源行融合，是否存在冲突值。
+     * @description Run-frozen attribute choices; legacy contributions never fabricate values.
      */
     EntityFusionOut: {
       /** Graph Revision Id */
@@ -4933,6 +4939,27 @@ export interface components {
       source_count: number
       /** Row Count */
       row_count: number
+      /**
+       * Evidence State
+       * @default UNAVAILABLE
+       * @enum {string}
+       */
+      evidence_state: 'AVAILABLE' | 'LEGACY' | 'UNAVAILABLE'
+      /**
+       * Entity State
+       * @default UNKNOWN
+       * @enum {string}
+       */
+      entity_state: 'RESOLVED' | 'QUARANTINED' | 'UNKNOWN'
+      /** Run Id */
+      run_id?: number | null
+      /** Mapping Revision Id */
+      mapping_revision_id?: number | null
+      /**
+       * Attributes
+       * @default []
+       */
+      attributes: components['schemas']['FusionAttributeDecision'][]
     }
     /** EntityIdentityOut */
     EntityIdentityOut: {
@@ -4981,6 +5008,7 @@ export interface components {
        * @default []
        */
       match_keys: string[]
+      fusion?: components['schemas']['FusionPolicy'] | null
       /** Incremental Field */
       incremental_field?: string | null
     }
@@ -5526,6 +5554,48 @@ export interface components {
        */
       expires_in: number
     }
+    /** FusionAttributeDecision */
+    FusionAttributeDecision: {
+      /** Attribute */
+      attribute: string
+      /**
+       * State
+       * @enum {string}
+       */
+      state: 'RESOLVED' | 'QUARANTINED'
+      /**
+       * Reason
+       * @enum {string}
+       */
+      reason:
+        | 'NO_VALUE'
+        | 'ALL_NULL'
+        | 'SINGLE_VALUE'
+        | 'AGREEMENT'
+        | 'SOURCE_PRIORITY'
+        | 'CONFLICT_QUARANTINED'
+        | 'PRIORITY_TIE'
+        | 'DUPLICATE_SOURCE_CONFLICT'
+        | 'INVALID_SOURCE'
+        | 'ENTITY_QUARANTINED'
+      /** Conflict */
+      conflict: boolean
+      /** Final Value Present */
+      final_value_present: boolean
+      final_value: components['schemas']['JsonValue']
+      /**
+       * Null Policy
+       * @enum {string}
+       */
+      null_policy: 'IGNORE' | 'KEEP'
+      /**
+       * Conflict Policy
+       * @enum {string}
+       */
+      conflict_policy: 'PRIORITY' | 'QUARANTINE'
+      /** Candidates */
+      candidates: components['schemas']['FusionValueCandidate'][]
+    }
     /**
      * FusionConflict
      * @description 同一谓词在多个来源间出现不一致值。
@@ -5537,6 +5607,24 @@ export interface components {
       values: {
         [key: string]: unknown
       }[]
+    }
+    /**
+     * FusionPolicy
+     * @description Explicit per-source rank; ties never use source iteration order.
+     */
+    FusionPolicy: {
+      /** Priority */
+      priority: number
+      /**
+       * Null Policy
+       * @enum {string}
+       */
+      null_policy: 'IGNORE' | 'KEEP'
+      /**
+       * Conflict Policy
+       * @enum {string}
+       */
+      conflict_policy: 'PRIORITY' | 'QUARANTINE'
     }
     /**
      * FusionSourceRow
@@ -5557,6 +5645,32 @@ export interface components {
       }[]
       /** Quarantined */
       quarantined: boolean
+    }
+    /** FusionValueCandidate */
+    FusionValueCandidate: {
+      /** Source Id */
+      source_id: number
+      /** Schema Name */
+      schema_name: string
+      /** Table Name */
+      table_name: string
+      /** Row Key */
+      row_key: string
+      /** Column */
+      column: string
+      /** Priority */
+      priority: number
+      input_value: components['schemas']['JsonValue']
+      value: components['schemas']['JsonValue']
+      /**
+       * State
+       * @enum {string}
+       */
+      state: 'VALUE' | 'NULL' | 'SKIPPED' | 'INVALID'
+      /** Occurrences */
+      occurrences: number
+      /** Selected */
+      selected: boolean
     }
     /** GraphDiffOut */
     GraphDiffOut: {
@@ -5868,6 +5982,7 @@ export interface components {
       /** Namespace */
       namespace: boolean
     }
+    JsonValue: unknown
     /** LayoutRecommendation */
     LayoutRecommendation: {
       /** Layout Id */

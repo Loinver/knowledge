@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     bindparam,
+    delete,
     func,
     inspect,
     literal_column,
@@ -34,6 +35,8 @@ from app.domain.extraction_incremental import (
     validate_incremental_mapping,
 )
 from app.domain.extraction_rule_stage import run_rule_stage
+from app.domain.fusion_policy import validate_fusion_policies
+from app.domain.fusion_service import collect_fusion_row, freeze_fusion
 from app.domain.mapping_compiler import _apply_transform
 from app.domain.metadata_service import get_latest_snapshot
 from app.domain.source_service import datasource_engine, get_datasource
@@ -162,6 +165,8 @@ def start_run(
             "relation_scan_mode": "FULL",
         }
     staged_watermarks = deepcopy(watermarks or {})
+    # Legacy frozen revisions remain readable, but cannot silently keep first-row wins.
+    validate_fusion_policies(rev.entity_maps)
     run = ExtractionRun(
         mapping_revision_id=mapping_revision_id,
         status=RunResult.PARTIAL,
@@ -303,6 +308,8 @@ def _execute_four_phases(
 
     quarantine_count = 0
     evidence_count = 0
+    fusion_groups: dict[str, dict] = {}
+    rejected_keys: set[tuple[str, str]] = set()
 
     triple_count = 0
     rel_evidence = 0
@@ -322,9 +329,15 @@ def _execute_four_phases(
                 key_index,
                 watermarks=watermarks,
                 watermark_out=watermark_out,
+                fusion_groups=fusion_groups,
+                rejected_keys=rejected_keys,
             )
             quarantine_count += q
             evidence_count += n
+        blocked, fusion_quarantine = freeze_fusion(
+            session, run, gr, fusion_groups, entity_iri_index
+        )
+        quarantine_count += fusion_quarantine
         _report("entities", {"evidence_count": evidence_count})
 
         _check_cancel()
@@ -351,11 +364,25 @@ def _execute_four_phases(
                 namespace,
                 entity_iri_index,
                 key_index,
+                rejected_keys=rejected_keys,
+                fusion_tables={
+                    em["table"] for em in rev.entity_maps or [] if em.get("match_keys")
+                },
             )
             triple_count += t
             quarantine_count += q
             rel_evidence += e
         _report("relations", {"evidence_count": evidence_count + rel_evidence})
+
+    if blocked:
+        session.execute(
+            delete(EntityIdentity).where(
+                EntityIdentity.graph_revision_id == gr.id,
+                EntityIdentity.iri.in_(blocked),
+            )
+        )
+        for iri in blocked:
+            entity_iri_index.pop(iri, None)
 
     entity_count = len(entity_iri_index)
 
@@ -433,6 +460,8 @@ def _phase1_entity(
     *,
     watermarks: dict | None = None,
     watermark_out: dict | None = None,
+    fusion_groups: dict[str, dict] | None = None,
+    rejected_keys: set[tuple[str, str]] | None = None,
 ) -> tuple[int, int]:
     """阶段1：实体映射。返回 (evidence_count, quarantine_count)。
 
@@ -525,9 +554,11 @@ def _phase1_entity(
 
         # 业务键（跨表融合）检查与 IRI 选择
         match_value = ""
+        invalid_match_key = False
         for mk in match_keys:
             value = raw.get(mk)
             if value is None or value == "":
+                invalid_match_key = True
                 session.add(
                     _make_quarantine(
                         run,
@@ -542,6 +573,12 @@ def _phase1_entity(
                 quarantine_n += 1
             else:
                 match_value = f"{match_value}|{value}" if match_value else str(value)
+        if match_keys and (empty_keys or invalid_match_key):
+            if rejected_keys is not None:
+                rejected_keys.add((table, row_key))
+                if match_value and not invalid_match_key:
+                    rejected_keys.add((f"type:{entity_type}", match_value))
+            continue
         identity_key = match_value if match_value else row_key
         iri = _stable_iri(namespace, entity_type, identity_key)
         if run.cfg_snapshot.get("incremental") and (table, row_key) in key_index:
@@ -553,6 +590,7 @@ def _phase1_entity(
             key_index[(f"type:{entity_type}", match_value)] = iri
         # 转换字段
         attrs: dict = {}
+        invalid_fields: set[str] = set()
         for fm in field_maps:
             target = fm.get("target_attr", "")
             source = fm.get("source_field", "")
@@ -564,6 +602,7 @@ def _phase1_entity(
             is_empty = raw_value is None or raw_value == ""
             if is_empty:
                 if null_policy == "REQUIRED":
+                    invalid_fields.add(target)
                     session.add(
                         _make_quarantine(
                             run,
@@ -588,6 +627,7 @@ def _phase1_entity(
                     transform, params, raw_value, target, idx, entity_type
                 )
                 if conv_err:
+                    invalid_fields.add(target)
                     session.add(
                         _make_quarantine(
                             run,
@@ -603,6 +643,18 @@ def _phase1_entity(
                 else:
                     attrs[target] = converted
 
+        if match_keys and fusion_groups is not None:
+            collect_fusion_row(
+                fusion_groups,
+                iri,
+                em,
+                run.cfg_snapshot["datasource_id"],
+                row_key,
+                raw,
+                attrs,
+                invalid_fields,
+            )
+
         # 存 EntityIdentity（幂等：同 IRI 更新）
         if iri not in entity_iri_index:
             ei = EntityIdentity(
@@ -610,7 +662,7 @@ def _phase1_entity(
                 iri=iri,
                 type_iri=f"{namespace}{entity_type}",
                 row_key=row_key,
-                attrs=attrs,
+                attrs={} if match_keys else attrs,
             )
             session.add(ei)
             entity_iri_index[iri] = {
@@ -662,6 +714,9 @@ def _phase2_relation(
     namespace: str,
     entity_iri_index: dict,
     key_index: dict[tuple[str, str], str],
+    *,
+    rejected_keys: set[tuple[str, str]] | None = None,
+    fusion_tables: set[str] | None = None,
 ) -> tuple[int, int, int]:
     """阶段2：关系映射。返回 (triple_count, quarantine_count, evidence_count)。
 
@@ -676,6 +731,35 @@ def _phase2_relation(
     triple_n = 0
     quarantine_n = 0
     evidence_n = 0
+    rejected = rejected_keys or set()
+
+    def endpoint_blocked(
+        table_name: str, key: object, entity_type: str | None = None
+    ) -> bool:
+        keys = [(table_name, str(key))]
+        if entity_type:
+            keys.append((f"type:{entity_type}", str(key)))
+        return (
+            table_name in (fusion_tables or set())
+            and not any(item in key_index for item in keys)
+        ) or any(
+            item in rejected
+            or entity_iri_index.get(key_index.get(item), {}).get("fusion_quarantined")
+            for item in keys
+        )
+
+    def quarantine_endpoint(row: str) -> None:
+        session.add(
+            _make_quarantine(
+                run,
+                table,
+                row,
+                "_endpoint",
+                None,
+                ["fusion"],
+                "fusion_endpoint_quarantined",
+            )
+        )
 
     if not _table_in_catalog(table, schema, table_set):
         session.add(
@@ -703,7 +787,7 @@ def _phase2_relation(
                 inspect(conn).get_foreign_keys(
                     table, schema=None if schema == "main" else schema
                 )
-                if run.cfg_snapshot.get("incremental") and mode == "FK"
+                if mode == "FK"
                 else []
             )
             result = conn.execute(sql)
@@ -772,24 +856,69 @@ def _phase2_relation(
                 if run.cfg_snapshot.get("incremental")
                 else str(raw.get("id", f"fk-{idx}"))
             )
+            targets = [
+                fk for fk in foreign_keys if fk.get("constrained_columns") == [fk_field]
+            ]
+            target_table = targets[0]["referred_table"] if len(targets) == 1 else None
+            known_targets = [
+                iri
+                for iri, info in entity_iri_index.items()
+                if info.get("row_key") == str(src_val)
+                and not info.get("fusion_quarantined")
+            ]
+            # A rejection from an unrelated table with the same key must never
+            # poison a known FK target. Prefer the source's actual FK metadata.
+            target_blocked = (
+                endpoint_blocked(target_table, src_val)
+                if target_table is not None
+                else len(known_targets) > 1
+                or (
+                    not known_targets
+                    and (
+                        any(key == str(src_val) for _, key in rejected)
+                        or any(
+                            info.get("row_key") == str(src_val)
+                            and info.get("fusion_quarantined")
+                            for info in entity_iri_index.values()
+                        )
+                    )
+                )
+            )
+            # Reject both endpoints before either lookup can create a stub.
+            if endpoint_blocked(table, subject_key) or target_blocked:
+                quarantine_endpoint(row_key)
+                quarantine_n += 1
+                continue
             subject_iri = _lookup_or_stub(
                 entity_iri_index, namespace, table, subject_key, session, gr, key_index
             )
             if run.cfg_snapshot.get("incremental"):
-                targets = [
-                    fk
-                    for fk in foreign_keys
-                    if fk.get("constrained_columns") == [fk_field]
-                ]
                 if len(targets) != 1:
                     raise invalid_incremental("incremental_fk_target_unknown")
                 object_iri = key_index.get((targets[0]["referred_table"], str(src_val)))
                 if object_iri is None:
                     raise invalid_incremental("incremental_fk_endpoint_missing")
+            elif target_table is not None:
+                object_iri = _lookup_or_stub(
+                    entity_iri_index,
+                    namespace,
+                    target_table,
+                    str(src_val),
+                    session,
+                    gr,
+                    key_index,
+                )
+            elif len(known_targets) == 1:
+                object_iri = known_targets[0]
             else:
                 object_iri = _resolve_ref_iri(
                     entity_iri_index, namespace, src_val, session, gr
                 )
+            if _quarantine_fusion_endpoint(
+                session, run, entity_iri_index, table, row_key, subject_iri, object_iri
+            ):
+                quarantine_n += 1
+                continue
             triple = GraphTriple(
                 graph_revision_id=gr.id,
                 subject=subject_iri,
@@ -849,6 +978,14 @@ def _phase2_relation(
                 continue
             src_val = src_eval.get(src_cand["field"]) if src_eval else None
             tgt_val = tgt_eval.get(tgt_cand["field"]) if tgt_eval else None
+            if endpoint_blocked(
+                src_cand["ref_table"], src_val, src_cand.get("ref_entity_type")
+            ) or endpoint_blocked(
+                tgt_cand["ref_table"], tgt_val, tgt_cand.get("ref_entity_type")
+            ):
+                quarantine_endpoint(row_key)
+                quarantine_n += 1
+                continue
             src_iri = _lookup_or_stub(
                 entity_iri_index,
                 namespace,
@@ -869,6 +1006,11 @@ def _phase2_relation(
                 key_index,
                 tgt_cand.get("ref_entity_type"),
             )
+            if _quarantine_fusion_endpoint(
+                session, run, entity_iri_index, table, row_key, src_iri, tgt_iri
+            ):
+                quarantine_n += 1
+                continue
             props: dict = {}
             if mode == "ASSOCIATIVE":
                 for a in rm.get("attributes", []):
@@ -916,6 +1058,34 @@ def _phase2_relation(
             evidence_n += 1
     session.flush()
     return triple_n, quarantine_n, evidence_n
+
+
+def _quarantine_fusion_endpoint(
+    session: Session,
+    run: ExtractionRun,
+    entity_index: dict,
+    table: str,
+    row_key: str,
+    subject: str,
+    object_: str,
+) -> bool:
+    if not any(
+        entity_index.get(iri, {}).get("fusion_quarantined")
+        for iri in (subject, object_)
+    ):
+        return False
+    session.add(
+        _make_quarantine(
+            run,
+            table,
+            row_key,
+            "_endpoint",
+            None,
+            ["fusion"],
+            "fusion_endpoint_quarantined",
+        )
+    )
+    return True
 
 
 def _endpoint_candidates(spec: dict) -> list[dict]:

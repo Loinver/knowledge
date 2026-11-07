@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -51,6 +52,15 @@ class FieldMap(BaseModel):
     default_value: str | None = None
 
 
+class FusionPolicy(BaseModel):
+    """Explicit per-source rank; ties never use source iteration order."""
+
+    model_config = ConfigDict(extra="forbid")
+    priority: int = Field(ge=1, le=1000000)
+    null_policy: Literal["IGNORE", "KEEP"]
+    conflict_policy: Literal["PRIORITY", "QUARANTINE"]
+
+
 class EntityMapCreate(BaseModel):
     """实体映射。一表可生成多类型，一类型可来自多表。
 
@@ -65,6 +75,8 @@ class EntityMapCreate(BaseModel):
     field_maps: list[FieldMap]
     key_fields: list[str] = []
     match_keys: list[str] = []
+    # Nullable only to read legacy mappings. New business-key mappings require it.
+    fusion: FusionPolicy | None = None
     # 增量水位字段（如 updated_at / 自增 id）：配合异步任务的增量运行过滤
     incremental_field: str | None = None
 

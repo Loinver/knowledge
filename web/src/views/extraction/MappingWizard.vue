@@ -23,7 +23,7 @@ import type { EntityType, EntityTypeBrief } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
 import type { RunStartResponse } from '@/api/extraction'
 import { extractionApi } from '@/api/extraction'
-import type { Mapping, MappingPreview, MappingRevision } from '@/api/mappings'
+import type { FusionPolicy, Mapping, MappingPreview, MappingRevision } from '@/api/mappings'
 import { mappingsApi } from '@/api/mappings'
 import type { Ontology } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
@@ -32,6 +32,7 @@ import { relationsApi } from '@/api/relations'
 import type { components } from '@/api/schema'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import FusionPolicyEditor from '@/views/extraction/components/FusionPolicyEditor.vue'
 import AiSuggestions from '@/views/ontology/components/AiSuggestions.vue'
 
 type S = components['schemas']
@@ -76,6 +77,7 @@ interface EntityDraft {
   incremental_field: string | null
   /** 跨表业务键：多表映射同一类型时按业务键值融合为同一稳定 IRI */
   match_keys: string[]
+  fusion: FusionPolicy | null
 }
 interface RelationAttributeMap {
   attr: string
@@ -212,6 +214,7 @@ const canSaveDraft = computed(() => {
       entityTypes.value.find((item) => item.name === map.entity_type)?.data_props ?? []
     return (
       Boolean(getTable(map.schema, map.table)) &&
+      (!map.match_keys.length || Boolean(map.fusion && map.key_fields.length)) &&
       map.field_maps.length > 0 &&
       map.field_maps.every((field) => Boolean(field.source_field)) &&
       properties.every((property) =>
@@ -421,12 +424,14 @@ function newEntityMap(typeName: string): EntityDraft {
     key_fields: [],
     incremental_field: null,
     match_keys: [],
+    fusion: null,
   }
 }
 function addEntityMap(): void {
-  const next = entityTypes.value.find(
-    (item) => !entityMaps.value.some((map) => map.entity_type === item.name),
-  )
+  const next =
+    entityTypes.value.find(
+      (item) => !entityMaps.value.some((map) => map.entity_type === item.name),
+    ) ?? entityTypes.value[0]
   if (next) entityMaps.value.push(newEntityMap(next.name))
   invalidatePreview()
 }
@@ -530,6 +535,24 @@ function normalizeEntityMap(value: unknown): EntityDraft {
     match_keys: Array.isArray(row.match_keys)
       ? row.match_keys.filter((item): item is string => typeof item === 'string')
       : [],
+    fusion: normalizeFusionPolicy(row.fusion),
+  }
+}
+function normalizeFusionPolicy(value: unknown): FusionPolicy | null {
+  const policy = recordOf(value)
+  if (
+    typeof policy.priority !== 'number' ||
+    !Number.isInteger(policy.priority) ||
+    policy.priority < 1 ||
+    policy.priority > 1000000 ||
+    (policy.null_policy !== 'IGNORE' && policy.null_policy !== 'KEEP') ||
+    (policy.conflict_policy !== 'PRIORITY' && policy.conflict_policy !== 'QUARANTINE')
+  )
+    return null
+  return {
+    priority: policy.priority,
+    null_policy: policy.null_policy,
+    conflict_policy: policy.conflict_policy,
   }
 }
 function normalizeRelationMap(value: unknown): RelationDraft {
@@ -776,6 +799,7 @@ function serializeDraft(): S['MappingRevisionCreate'] {
       key_fields: [...item.key_fields],
       incremental_field: item.incremental_field,
       match_keys: [...item.match_keys],
+      fusion: item.match_keys.length && item.fusion ? { ...item.fusion } : null,
     })),
     rel_maps: relationMaps.value.map((item) => ({
       relation_type: item.relation_type,
@@ -1657,12 +1681,17 @@ onBeforeUnmount(() => {
                     t('dataAccess.mapping.matchKeysHint')
                   }}</span>
                 </div>
+                <FusionPolicyEditor
+                  v-if="map.match_keys.length"
+                  v-model="map.fusion"
+                  :disabled="selectedMapping?.status === 'PUBLISHED'"
+                />
               </section>
             </div>
             <n-button
               v-if="entityTypes.length && selectedMapping?.status !== 'PUBLISHED'"
               secondary
-              :disabled="entityMaps.length >= entityTypes.length"
+              :disabled="!entityTypes.length"
               data-testid="add-entity-mapping"
               @click="addEntityMap"
               >{{ t('dataAccess.mapping.addEntityMapping') }}</n-button

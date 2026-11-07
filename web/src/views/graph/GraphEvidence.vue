@@ -20,6 +20,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
+import FusionEvidence from '@/views/graph/components/FusionEvidence.vue'
 
 const { t } = useI18n()
 const { toMessage } = useApiError()
@@ -63,6 +64,15 @@ const { data, error, loading, reload } = useAsyncData<EvidenceTrace>((signal) =>
     )
   }
   return Promise.resolve(null)
+})
+
+const fusion = useAsyncData((signal) => {
+  const query = route.query
+  // Pin to the evidence result so a current-graph switch cannot mix two runs.
+  const graphId = data.value?.graph_revision_id
+  return query.iri && graphId
+    ? graphApi.entityFusion(String(query.iri), graphId, signal)
+    : Promise.resolve(null)
 })
 
 // ===== 反向追溯（源行 → 产出实体/事实，V-TR-05） =====
@@ -299,6 +309,12 @@ const canSubmit = computed(() =>
       }}</NAlert>
       <EvidenceTable v-if="data.total_count" :items="data.evidences" @chain="showChain" />
       <NEmpty v-else :description="t('graph.noEvidence')" />
+      <template v-if="mode === 'entity'">
+        <p v-if="fusion.loading.value" role="status">{{ t('common.loading') }}</p>
+        <NAlert v-if="fusion.error.value" type="error">{{ fusion.error.value }}</NAlert>
+        <NButton v-if="fusion.error.value" @click="fusion.reload">{{ t('graph.refresh') }}</NButton>
+        <FusionEvidence v-if="fusion.data.value" :data="fusion.data.value" />
+      </template>
       <!-- G-26 证据溯源链：事实 → 来源行 → 运行 → 冻结版本 -->
       <NCard v-if="chainItem" :title="t('graph.chainTitle')" class="chain-card">
         <ol class="chain-list">
@@ -319,7 +335,11 @@ const canSubmit = computed(() =>
 <style scoped>
 .graph-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+}
+.graph-page > * {
+  min-width: 0;
 }
 h2,
 p {

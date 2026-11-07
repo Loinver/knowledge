@@ -12,6 +12,7 @@ export type GraphPath = Schemas['PathOut']
 export type GraphRecommendations = Schemas['GraphRecommendationOut']
 export type ReverseTrace = Schemas['ReverseTraceOut']
 export type EntityFusion = Schemas['EntityFusionOut']
+export type FusionAttributeDecision = Schemas['FusionAttributeDecision']
 export type ViewTemplate = Schemas['ViewTemplateOut']
 export type ViewTemplatePage = Schemas['ViewTemplatePage']
 

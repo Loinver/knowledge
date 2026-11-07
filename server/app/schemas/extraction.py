@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue
 
 from app.models.enums import RunResult
 
@@ -274,8 +274,45 @@ class FusionConflict(BaseModel):
     values: list[dict[str, object]]
 
 
+class FusionValueCandidate(BaseModel):
+    source_id: int
+    schema_name: str
+    table_name: str
+    row_key: str
+    column: str
+    priority: int
+    input_value: JsonValue
+    value: JsonValue
+    state: Literal["VALUE", "NULL", "SKIPPED", "INVALID"]
+    occurrences: int
+    selected: bool
+
+
+class FusionAttributeDecision(BaseModel):
+    attribute: str
+    state: Literal["RESOLVED", "QUARANTINED"]
+    reason: Literal[
+        "NO_VALUE",
+        "ALL_NULL",
+        "SINGLE_VALUE",
+        "AGREEMENT",
+        "SOURCE_PRIORITY",
+        "CONFLICT_QUARANTINED",
+        "PRIORITY_TIE",
+        "DUPLICATE_SOURCE_CONFLICT",
+        "INVALID_SOURCE",
+        "ENTITY_QUARANTINED",
+    ]
+    conflict: bool
+    final_value_present: bool
+    final_value: JsonValue
+    null_policy: Literal["IGNORE", "KEEP"]
+    conflict_policy: Literal["PRIORITY", "QUARANTINE"]
+    candidates: list[FusionValueCandidate]
+
+
 class EntityFusionOut(BaseModel):
-    """实体融合解释（G-29）：该实体由哪些来源行融合，是否存在冲突值。"""
+    """Run-frozen attribute choices; legacy contributions never fabricate values."""
 
     graph_revision_id: int
     entity: EntityTraceIdentity
@@ -283,3 +320,8 @@ class EntityFusionOut(BaseModel):
     conflicts: list[FusionConflict]
     source_count: int
     row_count: int
+    evidence_state: Literal["AVAILABLE", "LEGACY", "UNAVAILABLE"] = "UNAVAILABLE"
+    entity_state: Literal["RESOLVED", "QUARANTINED", "UNKNOWN"] = "UNKNOWN"
+    run_id: int | None = None
+    mapping_revision_id: int | None = None
+    attributes: list[FusionAttributeDecision] = []

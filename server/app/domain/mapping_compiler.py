@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.connectors.sql import select_source_rows
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.fusion_policy import validate_fusion_policies
 from app.domain.mapping_service import (
     get_draft_revision,
     get_mapping,
@@ -63,10 +64,21 @@ def compile_mapping(
     entities_result: list[dict] = []
     relations_result: list[dict] = []
     errors_all: list[dict] = []
+    try:
+        validate_fusion_policies(rev.entity_maps)
+    except KGError as exc:
+        errors_all.append(
+            {"code": exc.params["reason"], "level": "fusion", **exc.params}
+        )
 
     with datasource_engine(ds) as engine:
         for em in rev.entity_maps:
             compiled, errs = _compile_entity(em, engine, ds.kind, table_set, limit)
+            compiled["fusion_state"] = (
+                ("CONFIGURED" if em.get("fusion") else "LEGACY")
+                if em.get("match_keys")
+                else "NOT_APPLICABLE"
+            )
             entities_result.append(compiled)
             errors_all.extend(errs)
 

@@ -1568,5 +1568,57 @@
     "apply": "导入为本地新本体",
     "applyFailed": "导入未确认成功（{code}），请重新预览以检查当前状态。",
     "restored": "已创建本体 #{id}，本地版本 r{revision}；文件来源版本 r{source}。可在上方查看与再次导出。"
+  },
+  "fusion": {
+    "policyTitle": "属性融合策略",
+    "policyHint": "优先级数值越小越优先。同一类型的各来源需选择相同的空值和冲突策略；来源行键必须稳定。",
+    "policyRequired": "业务键映射必须显式填写三项融合策略后才能保存。",
+    "legacyPolicy": "旧映射未记录融合策略。复制为草稿并配置后才能重新运行。",
+    "priority": "来源优先级",
+    "nullPolicy": "融合空值处理",
+    "conflictPolicy": "融合冲突处理",
+    "null": {
+      "IGNORE": "忽略空值",
+      "KEEP": "空值参与比较"
+    },
+    "conflict": {
+      "PRIORITY": "按来源优先级选值",
+      "QUARANTINE": "不同值隔离整个实体"
+    },
+    "tieHint": "同优先级不同值、同一来源行出现矛盾值时，整个实体及关联关系隔离；从不按读取顺序选值。业务键融合不支持增量追加。",
+    "evidenceTitle": "属性融合与选值解释",
+    "legacyEvidence": "旧运行未保存属性候选值与选值理由（LEGACY）。不从当前数据补造历史证据。",
+    "unavailableEvidence": "该运行没有可用的属性融合证据（UNAVAILABLE）。",
+    "runVersion": "运行 #{run} · 映射版本记录 #{mapping} · 图谱结果集 #{graph}",
+    "entityQuarantined": "整个实体已隔离，候选值未进入图谱；以下保留来源与隔离理由。",
+    "finalValue": "最终值：",
+    "noValue": "未产出值",
+    "nullValue": "空值",
+    "reasonLabel": "选值理由：",
+    "candidates": "{attribute} 的来源候选值",
+    "source": "来源连接 / 表 / 行键 / 字段",
+    "inputValue": "映射源字段值",
+    "mappedValue": "转换后候选值",
+    "candidateState": "候选结果",
+    "selected": "已选用",
+    "occurrences": "相同来源记录出现 {n} 次，不重复投票",
+    "candidate": {
+      "VALUE": "未选用",
+      "NULL": "空值",
+      "SKIPPED": "字段空值策略跳过",
+      "INVALID": "转换或必填校验失败"
+    },
+    "reason": {
+      "NO_VALUE": "没有可用候选值",
+      "ALL_NULL": "所有候选值为空，按策略忽略",
+      "SINGLE_VALUE": "唯一可用候选值",
+      "AGREEMENT": "各来源可用值一致",
+      "SOURCE_PRIORITY": "来源优先级决定最终值",
+      "CONFLICT_QUARANTINED": "不同值触发冲突隔离",
+      "PRIORITY_TIE": "最高优先级出现不同值，无法选定",
+      "DUPLICATE_SOURCE_CONFLICT": "同一来源行出现矛盾值或业务身份",
+      "INVALID_SOURCE": "来源字段转换或必填校验失败",
+      "ENTITY_QUARANTINED": "同一实体的其他属性触发隔离"
+    }
   }
 }

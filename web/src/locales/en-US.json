@@ -1568,5 +1568,57 @@
     "apply": "Import as a new local ontology",
     "applyFailed": "Import was not confirmed ({code}). Preview again to check the current state.",
     "restored": "Created ontology #{id}, local revision r{revision}; source revision r{source}. Inspect and export it above."
+  },
+  "fusion": {
+    "policyTitle": "Attribute fusion policy",
+    "policyHint": "Lower numbers have higher priority. Sources of one type must use the same null and conflict policies. Stable source row keys are required.",
+    "policyRequired": "Business-key mappings require all three explicit fusion settings before saving.",
+    "legacyPolicy": "This legacy mapping has no recorded fusion policy. Copy it to a draft and configure it before rerunning.",
+    "priority": "Source priority",
+    "nullPolicy": "Fusion null handling",
+    "conflictPolicy": "Fusion conflict handling",
+    "null": {
+      "IGNORE": "Ignore nulls",
+      "KEEP": "Include nulls in comparison"
+    },
+    "conflict": {
+      "PRIORITY": "Choose by source priority",
+      "QUARANTINE": "Quarantine entity on different values"
+    },
+    "tieHint": "Different values at equal priority or contradictory repeated source rows quarantine the whole entity and its relations. Read order never selects a value. Business-key fusion does not support incremental append.",
+    "evidenceTitle": "Attribute fusion and value decisions",
+    "legacyEvidence": "This older run did not retain attribute candidates or selection reasons (LEGACY). Historical evidence is not inferred from current data.",
+    "unavailableEvidence": "This run has no available attribute fusion evidence (UNAVAILABLE).",
+    "runVersion": "Run #{run} · Mapping revision record #{mapping} · Graph result #{graph}",
+    "entityQuarantined": "The whole entity was quarantined. Candidates did not enter the graph; sources and reasons are retained below.",
+    "finalValue": "Final value:",
+    "noValue": "No value produced",
+    "nullValue": "Null",
+    "reasonLabel": "Decision reason:",
+    "candidates": "Source candidates for {attribute}",
+    "source": "Source / table / row key / column",
+    "inputValue": "Mapped source value",
+    "mappedValue": "Transformed candidate",
+    "candidateState": "Candidate outcome",
+    "selected": "Selected",
+    "occurrences": "Identical source row occurred {n} times; no duplicate voting",
+    "candidate": {
+      "VALUE": "Not selected",
+      "NULL": "Null",
+      "SKIPPED": "Skipped by field null policy",
+      "INVALID": "Transform or required-field validation failed"
+    },
+    "reason": {
+      "NO_VALUE": "No eligible candidate",
+      "ALL_NULL": "All candidates are null and ignored by policy",
+      "SINGLE_VALUE": "Only eligible candidate",
+      "AGREEMENT": "Eligible source values agree",
+      "SOURCE_PRIORITY": "Source priority determines the final value",
+      "CONFLICT_QUARANTINED": "Different values trigger quarantine",
+      "PRIORITY_TIE": "Different values tie at highest priority",
+      "DUPLICATE_SOURCE_CONFLICT": "A repeated source row has contradictory values or business identity",
+      "INVALID_SOURCE": "Source transform or required-field validation failed",
+      "ENTITY_QUARANTINED": "Another attribute quarantined this entity"
+    }
   }
 }

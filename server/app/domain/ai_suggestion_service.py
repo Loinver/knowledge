@@ -31,10 +31,7 @@ from app.schemas.mapping import (
     EntityMapCreate,
     FieldMap,
     MappingRevisionCreate,
-    RelEndpointCandidate,
-    RelEndpointSpec,
     RelMapCreate,
-    RelMode,
 )
 
 SUGGESTION_KINDS = ("ONTOLOGY_COMPLETION", "MAPPING_SUGGEST", "DOCUMENT_FACTS")
@@ -439,7 +436,7 @@ def _apply_mapping_suggestion(session: Session, item: AiSuggestion) -> None:
             ErrorCode.VALIDATION_VIOLATION,
             {"mapping_id": mapping.id, "reason": "no_draft"},
         )
-    entity_maps = [_entity_from_dict(entry) for entry in draft.entity_maps]
+    entity_maps = [EntityMapCreate.model_validate(entry) for entry in draft.entity_maps]
     if any(
         entry.entity_type == entity_type and entry.table == table
         for entry in entity_maps
@@ -453,62 +450,11 @@ def _apply_mapping_suggestion(session: Session, item: AiSuggestion) -> None:
             },
         )
     entity_maps.append(new_entity)
-    rel_maps = [_rel_from_dict(entry) for entry in draft.rel_maps]
+    rel_maps = [RelMapCreate.model_validate(entry) for entry in draft.rel_maps]
     save_draft(
         session,
         mapping.id,
         MappingRevisionCreate(entity_maps=entity_maps, rel_maps=rel_maps),
         if_match=mapping.current_revision,
         if_edit_match=mapping.edit_revision,
-    )
-
-
-def _entity_from_dict(entry: dict) -> EntityMapCreate:
-    return EntityMapCreate(
-        entity_type=str(entry.get("entity_type", "")),
-        table=str(entry.get("table", "")),
-        schema=str(entry.get("schema", "main")),
-        field_maps=[
-            FieldMap(
-                target_attr=str(field.get("target_attr", "")),
-                source_field=str(field.get("source_field", "")),
-            )
-            for field in entry.get("field_maps", [])
-        ],
-        key_fields=[str(k) for k in entry.get("key_fields", [])],
-        match_keys=[str(k) for k in entry.get("match_keys", [])],
-        incremental_field=entry.get("incremental_field"),
-    )
-
-
-def _rel_from_dict(entry: dict) -> RelMapCreate:
-    def endpoint(value: dict | None) -> RelEndpointSpec | None:
-        if not value:
-            return None
-        return RelEndpointSpec(
-            field=str(value.get("field", "")),
-            ref_table=str(value.get("ref_table", "")),
-            ref_field=str(value.get("ref_field", "")),
-            candidates=[
-                RelEndpointCandidate(
-                    field=str(cand.get("field", "")),
-                    ref_table=str(cand.get("ref_table", "")),
-                    when=cand.get("when"),
-                    ref_entity_type=cand.get("ref_entity_type"),
-                )
-                for cand in value.get("candidates", [])
-            ],
-            type_field=value.get("type_field"),
-            via=value.get("via"),
-        )
-
-    return RelMapCreate(
-        relation_type=str(entry.get("relation_type", "")),
-        mode=RelMode(entry.get("mode", "JUNCTION")),
-        table=str(entry.get("table", "")),
-        schema=str(entry.get("schema", "main")),
-        fk_field=entry.get("fk_field"),
-        source=endpoint(entry.get("source")),
-        target=endpoint(entry.get("target")),
-        attributes=list(entry.get("attributes", [])),
     )

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -30,6 +32,7 @@ class EntityCompiled(BaseModel):
     table: str
     rows: list[CompiledRow]
     errors: list[dict]  # 字段级错误
+    fusion_state: Literal["CONFIGURED", "LEGACY", "NOT_APPLICABLE"] = "NOT_APPLICABLE"
 
 
 class RelationCompiled(BaseModel):

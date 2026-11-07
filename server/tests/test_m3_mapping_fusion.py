@@ -31,6 +31,7 @@ from app.schemas.datasource import DatasourceCreate
 from app.schemas.mapping import (
     EntityMapCreate,
     FieldMap,
+    FusionPolicy,
     MappingCreate,
     MappingRevisionCreate,
     RelEndpointCandidate,
@@ -186,6 +187,9 @@ def _fusion_mapping(session, onto):
                     ],
                     key_fields=["id"],
                     match_keys=["credit_code"],
+                    fusion=FusionPolicy(
+                        priority=1, null_policy="IGNORE", conflict_policy="PRIORITY"
+                    ),
                 ),
                 EntityMapCreate(
                     entity_type="Partner",
@@ -196,6 +200,9 @@ def _fusion_mapping(session, onto):
                     ],
                     key_fields=["id"],
                     match_keys=["credit_code"],
+                    fusion=FusionPolicy(
+                        priority=2, null_policy="IGNORE", conflict_policy="PRIORITY"
+                    ),
                 ),
             ],
             rel_maps=[
