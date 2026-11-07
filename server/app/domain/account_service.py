@@ -23,7 +23,7 @@ from base64 import urlsafe_b64decode, urlsafe_b64encode
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -480,7 +480,22 @@ def refresh_session(session: Session, raw_refresh_token: str) -> TokenPair:
         raise KGError(ErrorCode.TOKEN_EXPIRED, {"reason": "user_missing"})
     if user.status != UserStatus.ACTIVE:
         raise KGError(ErrorCode.USER_DISABLED, {"username": user.username})
-    record.revoked_at = _now()
+    now = _now()
+    consumed_id = session.scalar(
+        update(AuthToken)
+        .where(
+            AuthToken.id == record.id,
+            AuthToken.revoked_at.is_(None),
+            AuthToken.expires_at > now,
+        )
+        .values(revoked_at=now)
+        .returning(AuthToken.id)
+        .execution_options(synchronize_session="fetch")
+    )
+    # 有效性读取之后仍可能被并发消费；只有条件更新的胜者才能签发后继。
+    # 消费与签发共用调用方事务，失败回滚时旧令牌仍可重试。
+    if consumed_id is None:
+        raise KGError(ErrorCode.TOKEN_EXPIRED, {"reason": "token_invalid"})
     return issue_session(session, user)
 
 

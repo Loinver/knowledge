@@ -12,10 +12,11 @@ import {
   NTag,
   useMessage,
 } from 'naive-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { authApi } from '@/api/auth'
+import { getSessionGeneration } from '@/api/tokens'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAuthStore } from '@/stores/auth'
@@ -29,6 +30,19 @@ const formRef = ref<FormInst | null>(null)
 const model = ref({ display_name: '', avatar_url: '' })
 const error = ref('')
 const saving = ref(false)
+let formGeneration: string | null = null
+watch(
+  () => auth.user?.id,
+  () => {
+    formGeneration = auth.user ? getSessionGeneration() : null
+    model.value = {
+      display_name: auth.user?.display_name ?? '',
+      avatar_url: auth.user?.avatar_url ?? '',
+    }
+    error.value = ''
+  },
+  { immediate: true, flush: 'sync' },
+)
 
 const rules = computed<FormRules>(() => ({
   display_name: {
@@ -45,30 +59,31 @@ const lastLogin = computed(() => {
   return new Date(raw).toLocaleString()
 })
 
-onMounted(async () => {
-  await auth.loadMe()
-  model.value.display_name = auth.user?.display_name ?? ''
-  model.value.avatar_url = auth.user?.avatar_url ?? ''
+onMounted(() => {
+  void auth.loadMe()
 })
 
 async function submit() {
+  const generation = formGeneration
+  if (!generation || generation !== getSessionGeneration() || saving.value || !auth.user) return
+  const payload = {
+    display_name: model.value.display_name.trim() || null,
+    avatar_url: model.value.avatar_url.trim() || null,
+  }
   error.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (generation !== getSessionGeneration()) return
   saving.value = true
   try {
     // 传 null 才是「清空」：后端按 exclude_unset 处理，省略字段表示不改。
-    const updated = await authApi.updateProfile({
-      display_name: model.value.display_name.trim() || null,
-      avatar_url: model.value.avatar_url.trim() || null,
-    })
-    auth.setUser(updated)
-    message.success(t('account.saved'))
+    const updated = await authApi.updateProfile(payload, generation)
+    if (auth.setUser(updated, generation)) message.success(t('account.saved'))
   } catch (err) {
-    error.value = toMessage(err)
+    if (generation === getSessionGeneration()) error.value = toMessage(err)
   } finally {
     saving.value = false
   }
@@ -106,7 +121,9 @@ async function submit() {
         <NFormItem :label="t('account.avatarUrl')" path="avatar_url">
           <NInput v-model:value="model.avatar_url" placeholder="https://" />
         </NFormItem>
-        <NButton type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</NButton>
+        <NButton type="primary" :disabled="!auth.user" :loading="saving" @click="submit">{{
+          t('common.save')
+        }}</NButton>
       </NForm>
     </NCard>
   </section>

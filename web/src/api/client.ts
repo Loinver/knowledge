@@ -2,7 +2,21 @@ import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axio
 import axios from 'axios'
 
 import type { TokenPair } from '@/api/tokens'
-import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from '@/api/tokens'
+import {
+  getAccessToken,
+  getRefreshToken,
+  getSessionGeneration,
+  getTokenPair,
+  hasSession,
+  invalidateTokens,
+  storeTokens,
+} from '@/api/tokens'
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    _sessionGeneration?: string
+  }
+}
 
 export const http: AxiosInstance = axios.create({
   baseURL: '/api/v1',
@@ -42,6 +56,7 @@ function isEnvelope(body: unknown): body is ApiEnvelope {
 /** 单次重放标记：避免 refresh 失败后无限重试 */
 interface RetriableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean
+  _accessToken?: string | null
 }
 
 /**
@@ -58,13 +73,27 @@ function isRenewable(config?: RetriableConfig): boolean {
   return !NO_RENEW_PATHS.some((path) => url.startsWith(path))
 }
 
-http.interceptors.request.use((config) => {
-  const token = getAccessToken()
-  if (token) config.headers.set('Authorization', `Bearer ${token}`)
-  return config
-})
+http.interceptors.request.use(
+  (config: RetriableConfig) => {
+    config._sessionGeneration ??= getSessionGeneration()
+    if (config._sessionGeneration !== getSessionGeneration()) throw sessionChanged()
+    const token = getAccessToken(config._sessionGeneration)
+    config._accessToken = token
+    if (token) config.headers.set('Authorization', `Bearer ${token}`)
+    return config
+  },
+  (error: unknown) => {
+    throw error
+  },
+  // logout 发出时捕获凭据，然后可以立即清除本地身份。
+  { synchronous: true },
+)
 
-let refreshing: Promise<TokenPair> | null = null
+let refreshing: { generation: string; promise: Promise<TokenPair> } | null = null
+
+function sessionChanged() {
+  return { code: '', message: 'Session changed', params: {}, data: null }
+}
 
 /**
  * 认证失效回调：由应用启动处（`main.ts`）注册，避免 client 直接依赖路由/页面。
@@ -76,9 +105,9 @@ export function registerUnauthorizedHandler(handler: () => void): void {
   unauthorizedHandler = handler
 }
 
-function handleUnauthorized(): void {
-  clearTokens()
-  unauthorizedHandler?.()
+function handleUnauthorized(generation: string, accessToken: string | null | undefined): void {
+  invalidateTokens(generation, accessToken)
+  if (generation === getSessionGeneration() && !hasSession()) unauthorizedHandler?.()
 }
 
 /**
@@ -89,18 +118,41 @@ function handleUnauthorized(): void {
  * 走原生 axios 会把整个外壳当成 `TokenPair` 存进 localStorage，
  * 结果是 `Bearer undefined` —— 续期变成掉登录态。
  */
-async function refreshTokens(): Promise<TokenPair> {
-  refreshing ??= http
-    .post<TokenPair>('/auth/refresh', { refresh_token: getRefreshToken() })
-    .then((response) => {
-      const tokens = response.data
-      storeTokens(tokens)
-      return tokens
-    })
-    .finally(() => {
-      refreshing = null
-    })
-  return refreshing
+async function refreshTokens(failedAccess: string | null | undefined): Promise<TokenPair> {
+  const generation = getSessionGeneration()
+  if (refreshing?.generation === generation) return refreshing.promise
+  const renew = async (): Promise<TokenPair> => {
+    const previous = getTokenPair(generation)
+    if (!previous) throw sessionChanged()
+    if (previous.access_token !== failedAccess) return previous
+    try {
+      const response = await http.post<TokenPair>(
+        '/auth/refresh',
+        {
+          refresh_token: previous.refresh_token,
+        },
+        { _sessionGeneration: generation },
+      )
+      if (!storeTokens(response.data, generation)) throw sessionChanged()
+      return response.data
+    } catch (error) {
+      const status = (error as { status?: number })?.status
+      if (status === 401 || status === 403) {
+        const current = getTokenPair(generation)
+        if (current && current.refresh_token !== previous.refresh_token) return current
+        handleUnauthorized(generation, previous.access_token)
+      }
+      throw error
+    }
+  }
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks
+  const promise = (locks ? locks.request(`kg-refresh:${generation}`, renew) : renew()).finally(
+    () => {
+      if (refreshing?.promise === promise) refreshing = null
+    },
+  )
+  refreshing = { generation, promise }
+  return promise
 }
 
 http.interceptors.response.use(
@@ -116,23 +168,30 @@ http.interceptors.response.use(
     const config = err.config as RetriableConfig | undefined
     const status = err.response?.status
     const renewable = isRenewable(config)
+    const generation = config?._sessionGeneration
 
-    if (status === 401 && config && !config._retried && renewable && getRefreshToken()) {
+    if (
+      status === 401 &&
+      config &&
+      generation === getSessionGeneration() &&
+      !config._retried &&
+      renewable &&
+      getRefreshToken()
+    ) {
       config._retried = true
+      let tokens: TokenPair
       try {
-        const tokens = await refreshTokens()
-        config.headers.set('Authorization', `Bearer ${tokens.access_token}`)
-        return await http.request(config)
+        tokens = await refreshTokens(config._accessToken)
       } catch (refreshError) {
-        const refreshStatus = (refreshError as { status?: number } | undefined)?.status
-        // 只有后端明确拒绝续期（401/403）才认定会话失效；网络抖动、超时
-        // 不能清凭据踢登录——那会把在线用户误登出。
-        if (refreshStatus === 401 || refreshStatus === 403) {
-          handleUnauthorized()
-        }
+        return Promise.reject(refreshError)
       }
-    } else if (status === 401 && renewable) {
-      handleUnauthorized()
+      if (generation !== getSessionGeneration()) {
+        return Promise.reject({ code: '', message: 'Session changed', params: {}, data: null })
+      }
+      config.headers.set('Authorization', `Bearer ${tokens.access_token}`)
+      return http.request(config)
+    } else if (status === 401 && renewable && generation !== undefined) {
+      handleUnauthorized(generation, config?._accessToken)
     }
 
     const data = err.response?.data as ApiError | undefined

@@ -13,7 +13,9 @@ import os
 import subprocess
 import sys
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from typing import Any
 
 import pytest
@@ -22,9 +24,18 @@ from app.api.v1.accounts import router as accounts_router
 from app.api.v1.auth import router as auth_router
 from app.core.config import get_settings
 from app.core.db import Base, get_session
+from app.core.error_codes import ErrorCode
+from app.core.errors import KGError
 from app.domain import account_service
 from app.models.account import AuditLog, AuthToken, PasswordResetToken, User
-from app.models.enums import AuditAction, AuditResult, UserRole, UserStatus
+from app.models.enums import (
+    AuditAction,
+    AuditResult,
+    AuthTokenKind,
+    UserRole,
+    UserStatus,
+)
+from app.schemas.account import TokenPair
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, inspect, select, text
@@ -346,6 +357,90 @@ def test_refresh_rotates_and_replay_is_rejected(
     )
     assert replayed.status_code == 401
     assert replayed.json()["code"] == "AUTH.TOKEN_EXPIRED"
+
+
+def test_refresh_is_consumed_once_across_independent_connections(
+    sessions: sessionmaker[Session], admin: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with sessions() as session:
+        first = account_service.issue_session(session, admin)
+        session.commit()
+
+    # 两个真实连接先都读到有效旧令牌，再竞争消费；不共享 StaticPool 连接。
+    checked = Barrier(2)
+    connections: list[object] = []
+    load_token = account_service._load_token
+
+    def load_then_wait(session: Session, raw: str, kind: AuthTokenKind) -> AuthToken:
+        record = load_token(session, raw, kind)
+        connections.append(session.connection().connection.driver_connection)
+        checked.wait(timeout=5)
+        return record
+
+    def rotate() -> TokenPair | KGError:
+        with sessions() as session:
+            try:
+                tokens = account_service.refresh_session(session, first.refresh_token)
+                session.commit()
+                return tokens
+            except KGError as error:
+                session.rollback()
+                return error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(account_service, "_load_token", load_then_wait)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            attempts = [pool.submit(rotate) for _ in range(2)]
+            results = [attempt.result(timeout=10) for attempt in attempts]
+
+    assert len(connections) == 2
+    assert connections[0] is not connections[1]
+    winners = [result for result in results if isinstance(result, TokenPair)]
+    failures = [result for result in results if isinstance(result, KGError)]
+    assert len(winners) == len(failures) == 1
+    assert failures[0].code == ErrorCode.TOKEN_EXPIRED
+    with sessions() as session:
+        assert (
+            account_service.resolve_session(session, winners[0].access_token).id
+            == admin.id
+        )
+        records = session.scalars(select(AuthToken)).all()
+        assert len(records) == 4  # 原始一对 + 唯一成功的后继一对
+        assert sum(row.revoked_at is not None for row in records) == 1
+        assert (
+            sum(
+                row.kind == AuthTokenKind.REFRESH and row.revoked_at is None
+                for row in records
+            )
+            == 1
+        )
+        with pytest.raises(KGError) as caught:
+            account_service.refresh_session(session, first.refresh_token)
+        assert caught.value.code == ErrorCode.TOKEN_EXPIRED
+
+
+def test_refresh_consumption_and_successors_rollback_together(
+    sessions: sessionmaker[Session], admin: User
+) -> None:
+    with sessions() as session:
+        first = account_service.issue_session(session, admin)
+        session.commit()
+
+    with sessions() as session:
+        discarded = account_service.refresh_session(session, first.refresh_token)
+        session.flush()
+        session.rollback()
+
+    with sessions() as session:
+        with pytest.raises(KGError):
+            account_service.resolve_session(session, discarded.access_token)
+        assert session.scalar(select(func.count()).select_from(AuthToken)) == 2
+        successor = account_service.refresh_session(session, first.refresh_token)
+        session.commit()
+        assert (
+            account_service.resolve_session(session, successor.access_token).id
+            == admin.id
+        )
 
 
 def test_logout_revokes_both_tokens(client: TestClient, admin: User) -> None:

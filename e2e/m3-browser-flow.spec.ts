@@ -360,7 +360,10 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await page.getByRole('button', { name: '注册', exact: true }).click()
   await expect(page).toHaveURL(/\/$/)
 
-  const accessToken = await page.evaluate(() => localStorage.getItem('kg-access-token'))
+  const accessToken = await page.evaluate(async () => {
+    const { getAccessToken } = await import('/src/api/tokens.ts')
+    return getAccessToken()
+  })
   expect(accessToken, 'registration created an authenticated API session').toBeTruthy()
   apiHeaders = { Authorization: 'Bearer ' + accessToken }
   const registeredUser = await getData<{ id: string; role: string }>(request, '/auth/me')
@@ -370,7 +373,11 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     data: { prefix: 'forbidden', iri: 'https://example.org/forbidden/' },
   })
   expect(denied.status()).toBe(403)
-  const administrator = await responseData<{ access_token: string; refresh_token: string }>(
+  const administrator = await responseData<{
+    access_token: string
+    refresh_token: string
+    expires_in: number
+  }>(
     await request.post('/api/v1/auth/login', {
       data: { account: 'e2e_admin', password: 'E2E-Admin-Password-2026!' },
     }),
@@ -667,13 +674,11 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await page.getByLabel('来源行键').fill('8001')
   await page.getByRole('button', { name: '追溯证据' }).click()
   await expect(page.getByText(/参与 \d+ 条事实、产出 \d+ 个实体/)).toBeVisible()
-  await page.evaluate(
-    (tokens) => {
-      localStorage.setItem('kg-access-token', tokens.access)
-      localStorage.setItem('kg-refresh-token', tokens.refresh)
-    },
-    { access: administrator.access_token, refresh: administrator.refresh_token },
-  )
+  await page.evaluate(async (tokens) => {
+    const { clearTokens, storeTokens } = await import('/src/api/tokens.ts')
+    clearTokens()
+    if (!storeTokens(tokens)) throw new Error('Administrator session was not stored')
+  }, administrator)
   await page.reload()
 
   const routes = [

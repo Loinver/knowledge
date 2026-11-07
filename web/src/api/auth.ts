@@ -58,8 +58,10 @@ export const authApi = {
   resetPassword: (token: string, password: string) =>
     http.post('/auth/reset-password', { token, password }),
 
-  updateProfile: (payload: ProfileUpdate) =>
-    http.patch<AuthUser>('/users/me/profile', payload).then((r) => r.data),
+  updateProfile: (payload: ProfileUpdate, generation?: string) =>
+    http
+      .patch<AuthUser>('/users/me/profile', payload, { _sessionGeneration: generation })
+      .then((r) => r.data),
 
   changePassword: (payload: PasswordChange) => http.put('/users/me/password', payload),
 
