@@ -6,6 +6,10 @@
   },
   "menu": {
     "dashboard": "Dashboard",
+    "resources": "Semantic Resources",
+    "ontologyManagement": "Ontology Management",
+    "dataIntegration": "Data Integration",
+    "standardsGovernance": "Standards Governance",
     "entityTypes": "Entity Types",
     "relationTypes": "Relation Types",
     "domains": "Business Domains",
@@ -181,6 +185,9 @@
     "startRevisionHint": "Return this resource to draft and publish again after editing. Published snapshots and pinned downstream versions remain unchanged."
   },
   "designer": {
+    "addDomainMembers": "Add domain members",
+    "addDomainMembersHint": "Add members from the latest published domain and pin their resource revisions. Republish older domains that did not record member revisions.",
+    "domainMembersHint": "This group displays business domain members. Select a type or relation to change its ontology reference; domain membership remains unchanged.",
     "selectOntology": "Select ontology",
     "saving": "Saving…",
     "autoLayout": "Auto layout",
@@ -227,10 +234,7 @@
     "positionValue": "{x}, {y}",
     "aiAssist": "AI suggestions",
     "configureRules": "Attach rules",
-    "rulesHint": "Select the rules used by this ontology, then validate and publish. Rules without an execution engine are marked Not run.",
-    "addDomainMembers": "Add domain members",
-    "addDomainMembersHint": "Add members from the latest published domain and pin their resource revisions. Republish older domains that did not record member revisions.",
-    "domainMembersHint": "This group displays business domain members. Select a type or relation to change its ontology reference; domain membership remains unchanged."
+    "rulesHint": "Select the rules used by this ontology, then validate and publish. Rules without an execution engine are marked Not run."
   },
   "entityType": {
     "list": "Entity Type List",
@@ -1457,6 +1461,24 @@
       "ENTERPRISE_EXTENSION": "Enterprise extension"
     }
   },
+  "ontologyRestore": {
+    "title": "Import ontology",
+    "intro": "Restore a supported Turtle / JSON-LD file into a new local ontology. Preview dependencies and conflicts before the atomic import. Resource IRIs are preserved; local revisions are assigned anew. Existing names or IRIs and unsupported semantics block import without overwriting content.",
+    "file": "Choose an RDF file (up to 64 KiB)",
+    "content": "RDF content",
+    "preview": "Preview import",
+    "ready": "Preflight passed",
+    "blocked": "Conflicts or unsupported content found. Correct the file and preview again.",
+    "tooLarge": "The file must not exceed 64 KiB.",
+    "readFailed": "Could not read the file. Select it again.",
+    "summary": "{name} · {resources} resources · {dictionaries} dictionaries · source revision {revision}",
+    "unsupported": "Unsupported triples ({count})",
+    "resources": "Resources and dependencies",
+    "dependencies": "Dependencies",
+    "apply": "Import as a new local ontology",
+    "applyFailed": "Import was not confirmed ({code}). Preview again to check the current state.",
+    "restored": "Created ontology #{id}, local revision r{revision}; source revision r{source}. Inspect and export it above."
+  },
   "ontologyHistory": {
     "title": "Frozen contents of ontology r{revision}",
     "hint": "These immutable snapshots were recorded at publication. Current edits do not change this history.",
@@ -1509,6 +1531,34 @@
     "empty": "No entries in this revision",
     "missingPins": "Some dependency revisions were not pinned in this old ontology and cannot be opened independently. Current revisions are never substituted.",
     "missingProperty": "This old property revision did not record its datatype, default or constraints. Its owner may contain frozen property details."
+  },
+  "semanticView": {
+    "title": "View semantics",
+    "pin": "Fields come from frozen ontology v{revision}. Saving a template pins this version.",
+    "hierarchy_relation_iri": "Hierarchy relation",
+    "measure_property_iri": "Numeric measure property",
+    "time_property_iri": "Time property",
+    "latitude_property_iri": "Latitude property",
+    "longitude_property_iri": "Longitude property",
+    "select": "Select a frozen ontology field",
+    "noFields": "This frozen version has no supported fields for this binding.",
+    "utc": "Dates mean midnight UTC. Timestamps must use ISO 8601 with Z or an explicit offset and are displayed in UTC.",
+    "wgs84": "Use numeric WGS84 decimal degrees: latitude −90 to 90 and longitude −180 to 180. Text and place names are not converted.",
+    "positiveMeasure": "Areas and radii use the selected positive numeric measure. Missing, nonnumeric, zero and negative values are excluded.",
+    "hierarchyDirection": "Only the selected relation is used. Organization, indent and impact trees follow child→parent; equity, control and clan trees follow upstream→downstream.",
+    "missing": "Semantic fields are not configured for this view. Expand View semantics to select them.",
+    "invalidConfig": "A selected field is unavailable in the frozen ontology or has an unsupported type. Select a valid field.",
+    "unsupported": "This layout does not consume these bindings. Choose the corresponding hierarchy, measure, time or map layout.",
+    "legacy": "This older template has no semantic bindings and retains its previous display. Configure fields and save a new template to make their meaning explicit.",
+    "stale": "The ontology version has changed. This template cannot be applied. Switch to a graph using the current ontology version and configure it again.",
+    "noRelation": "The visible graph has no edges for the selected relation, so a hierarchy cannot be drawn.",
+    "invalidHierarchy": "The selected relation contains cycles or multiple parents for a tree node. Choose another relation or a general graph layout.",
+    "noData": "No data meets the configuration requirements for this view.",
+    "invalidMeasure": "Excluded {count} entities whose selected measure is missing or not a valid positive number.",
+    "invalidTime": "Excluded {count} entities with missing or invalid dates, or timestamps without a time zone.",
+    "invalidCoordinates": "Excluded {count} entities with missing, nonnumeric or out-of-range WGS84 coordinates.",
+    "instantOnly": "Only one time property is configured. Gantt marks represent instants; end dates and durations are not inferred.",
+    "loading": "Loading semantic fields from the frozen ontology…"
   },
   "assetAudit": {
     "title": "Business asset audit",
@@ -1563,24 +1613,6 @@
       "current_graph_revision_id": "Current graph ID"
     }
   },
-  "ontologyRestore": {
-    "title": "Import ontology",
-    "intro": "Restore a supported Turtle / JSON-LD file into a new local ontology. Preview dependencies and conflicts before the atomic import. Resource IRIs are preserved; local revisions are assigned anew. Existing names or IRIs and unsupported semantics block import without overwriting content.",
-    "file": "Choose an RDF file (up to 64 KiB)",
-    "content": "RDF content",
-    "preview": "Preview import",
-    "ready": "Preflight passed",
-    "blocked": "Conflicts or unsupported content found. Correct the file and preview again.",
-    "tooLarge": "The file must not exceed 64 KiB.",
-    "readFailed": "Could not read the file. Select it again.",
-    "summary": "{name} · {resources} resources · {dictionaries} dictionaries · source revision {revision}",
-    "unsupported": "Unsupported triples ({count})",
-    "resources": "Resources and dependencies",
-    "dependencies": "Dependencies",
-    "apply": "Import as a new local ontology",
-    "applyFailed": "Import was not confirmed ({code}). Preview again to check the current state.",
-    "restored": "Created ontology #{id}, local revision r{revision}; source revision r{source}. Inspect and export it above."
-  },
   "fusion": {
     "policyTitle": "Attribute fusion policy",
     "policyHint": "Lower numbers have higher priority. Sources of one type must use the same null and conflict policies. Stable source row keys are required.",
@@ -1632,33 +1664,5 @@
       "INVALID_SOURCE": "Source transform or required-field validation failed",
       "ENTITY_QUARANTINED": "Another attribute quarantined this entity"
     }
-  },
-  "semanticView": {
-    "title": "View semantics",
-    "pin": "Fields come from frozen ontology v{revision}. Saving a template pins this version.",
-    "hierarchy_relation_iri": "Hierarchy relation",
-    "measure_property_iri": "Numeric measure property",
-    "time_property_iri": "Time property",
-    "latitude_property_iri": "Latitude property",
-    "longitude_property_iri": "Longitude property",
-    "select": "Select a frozen ontology field",
-    "noFields": "This frozen version has no supported fields for this binding.",
-    "utc": "Dates mean midnight UTC. Timestamps must use ISO 8601 with Z or an explicit offset and are displayed in UTC.",
-    "wgs84": "Use numeric WGS84 decimal degrees: latitude −90 to 90 and longitude −180 to 180. Text and place names are not converted.",
-    "positiveMeasure": "Areas and radii use the selected positive numeric measure. Missing, nonnumeric, zero and negative values are excluded.",
-    "hierarchyDirection": "Only the selected relation is used. Organization, indent and impact trees follow child→parent; equity, control and clan trees follow upstream→downstream.",
-    "missing": "Semantic fields are not configured for this view. Expand View semantics to select them.",
-    "invalidConfig": "A selected field is unavailable in the frozen ontology or has an unsupported type. Select a valid field.",
-    "unsupported": "This layout does not consume these bindings. Choose the corresponding hierarchy, measure, time or map layout.",
-    "legacy": "This older template has no semantic bindings and retains its previous display. Configure fields and save a new template to make their meaning explicit.",
-    "stale": "The ontology version has changed. This template cannot be applied. Switch to a graph using the current ontology version and configure it again.",
-    "noRelation": "The visible graph has no edges for the selected relation, so a hierarchy cannot be drawn.",
-    "invalidHierarchy": "The selected relation contains cycles or multiple parents for a tree node. Choose another relation or a general graph layout.",
-    "noData": "No data meets the configuration requirements for this view.",
-    "invalidMeasure": "Excluded {count} entities whose selected measure is missing or not a valid positive number.",
-    "invalidTime": "Excluded {count} entities with missing or invalid dates, or timestamps without a time zone.",
-    "invalidCoordinates": "Excluded {count} entities with missing, nonnumeric or out-of-range WGS84 coordinates.",
-    "instantOnly": "Only one time property is configured. Gantt marks represent instants; end dates and durations are not inferred.",
-    "loading": "Loading semantic fields from the frozen ontology…"
   }
 }

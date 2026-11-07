@@ -45,50 +45,36 @@ export function useNavigation() {
   const groups = computed<NavGroup[]>(() => {
     const tree: NavGroup[] = [
       {
-        group: 'entity-types',
+        group: 'resources',
         icon: 'ontology',
-        label: t('menu.entityTypes'),
+        label: t('menu.resources'),
         items: [
           { key: 'entity-types', label: t('page.entityTypes') },
+          { key: 'relation-types', label: t('page.relationTypes') },
+          { key: 'domains', label: t('page.domains') },
           { key: 'namespaces', label: t('page.namespaces') },
           { key: 'enum-dictionaries', label: t('enumDictionaries.title') },
         ],
       },
       {
-        group: 'relation-types',
-        icon: 'ontology',
-        label: t('menu.relationTypes'),
-        items: [{ key: 'relation-types', label: t('page.relationTypes') }],
-      },
-      {
-        group: 'domains',
-        icon: 'ontology',
-        label: t('menu.domains'),
-        items: [{ key: 'domains', label: t('page.domains') }],
-      },
-      {
         group: 'ontology',
         icon: 'ontology',
-        label: t('menu.ontology'),
+        label: t('menu.ontologyManagement'),
         items: [
           { key: 'ontologies', label: t('page.ontologies') },
+          { key: 'designer', label: t('page.designer') },
           { key: 'assembly-templates', label: t('templates.title') },
           { key: 'ontology-export', label: t('export.title') },
         ],
       },
       {
-        group: 'designer',
-        icon: 'ontology',
-        label: t('menu.designer'),
-        items: [{ key: 'designer', label: t('page.designer') }],
-      },
-      {
-        group: 'rules',
-        icon: 'governance',
-        label: t('menu.rules'),
+        group: 'datasources',
+        icon: 'datasource',
+        label: t('menu.dataIntegration'),
         items: [
-          { key: 'governance-rules', label: t('page.governanceRules') },
-          { key: 'governance-clauses', label: t('page.governanceClauses') },
+          { key: 'datasources', label: t('page.dataSources') },
+          { key: 'data-catalog', label: t('page.dataCatalog') },
+          { key: 'sample-preview', label: t('page.samplePreview') },
         ],
       },
       {
@@ -96,13 +82,10 @@ export function useNavigation() {
         icon: 'extraction',
         label: t('menu.extraction'),
         items: [
-          { key: 'datasources', label: t('page.dataSources') },
-          { key: 'data-catalog', label: t('page.dataCatalog') },
-          { key: 'sample-preview', label: t('page.samplePreview') },
           { key: 'mapping-wizard', label: t('page.mappingWizard') },
-          { key: 'extraction-runs', label: t('page.extractionRuns') },
-          { key: 'extraction-tasks', label: t('page.extractionTasks') },
           { key: 'ai-assist', label: t('page.aiAssist') },
+          { key: 'extraction-tasks', label: t('page.extractionTasks') },
+          { key: 'extraction-runs', label: t('page.extractionRuns') },
         ],
       },
       {
@@ -112,14 +95,18 @@ export function useNavigation() {
         items: [
           { key: 'graph-browse', label: t('page.graphBrowse') },
           { key: 'graph-entities', label: t('page.graphEntities') },
+          { key: 'graph-evidence', label: t('page.graphEvidence') },
           { key: 'graph-reports', label: t('page.graphReports') },
         ],
       },
       {
-        group: 'evidence',
+        group: 'governance',
         icon: 'governance',
-        label: t('menu.evidence'),
-        items: [{ key: 'graph-evidence', label: t('page.graphEvidence') }],
+        label: t('menu.standardsGovernance'),
+        items: [
+          { key: 'governance-rules', label: t('page.governanceRules') },
+          { key: 'governance-clauses', label: t('page.governanceClauses') },
+        ],
       },
     ]
     // 系统管理仅管理员可见（前端改版计划 5.3）

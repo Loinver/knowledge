@@ -405,19 +405,30 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await expect(page.locator('.pipe-action')).toHaveCount(3)
   const sider = page.locator('.app-sider')
   const menuLabels = await sider.locator('.n-menu-item-content-header').allTextContents()
-  expect(menuLabels.filter((label) => workflowLabels.includes(label))).toEqual(workflowLabels)
+  expect(menuLabels).toEqual([
+    '工作台',
+    '语义资源',
+    '本体管理',
+    '数据接入',
+    '知识抽取',
+    '知识图谱',
+    '标准治理',
+  ])
   await expect(sider.getByText('系统管理', { exact: true })).toHaveCount(0)
 
-  await sider.getByText('知识抽取', { exact: true }).click()
+  await sider.getByText('数据接入', { exact: true }).click()
   await sider.getByText('数据源', { exact: true }).click()
   await expect(page).toHaveURL(/\/datasources$/)
-  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['知识抽取', '数据源'])
+  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['数据接入', '数据源'])
+  await sider.getByText('知识图谱', { exact: true }).click()
   await sider.getByText('知识追溯', { exact: true }).click()
   await expect(page).toHaveURL(/\/graph\/evidence$/)
-  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['知识追溯'])
+  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['知识图谱', '知识追溯'])
   await page.goBack()
   await expect(page).toHaveURL(/\/datasources$/)
-  await expect(sider.locator('.n-menu-item-content--selected')).toHaveText('数据源')
+  const selectedMenu = sider.locator('.n-menu-item-content--selected:visible')
+  await expect(selectedMenu).toHaveCount(1)
+  await expect(selectedMenu).toHaveText('数据源')
   await page.locator('.brand').click()
   await page.getByRole('button', { name: '切换语言', exact: true }).click()
   await expect(page.locator('.pipe-name')).toHaveText([
