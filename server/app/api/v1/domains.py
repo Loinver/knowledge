@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.core.db import get_session
 from app.domain.domain_service import (
     add_member,
@@ -18,6 +19,7 @@ from app.domain.domain_service import (
     remove_member,
     update_domain,
 )
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.domain import (
     DomainBrief,
     DomainCreate,
@@ -44,10 +46,12 @@ def list_domain(
 
 
 @router.post("", response_model=ApiResponse[DomainOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.BUSINESS_DOMAIN)
 def create_domain_endpoint(
     payload: DomainCreate, session: Session = Depends(get_session)
 ) -> DomainOut:
     domain = create_domain(session, payload)
+    audit_created(session, domain.id)
     session.commit()
     return DomainOut.model_validate(domain)
 
@@ -61,6 +65,7 @@ def get_domain_endpoint(
 
 
 @router.put("/{domain_id}", response_model=ApiResponse[DomainOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.BUSINESS_DOMAIN, "domain_id")
 def update_domain_endpoint(
     domain_id: int,
     payload: DomainUpdate,
@@ -73,6 +78,7 @@ def update_domain_endpoint(
 
 
 @router.delete("/{domain_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.BUSINESS_DOMAIN, "domain_id")
 def remove_domain_endpoint(
     domain_id: int, session: Session = Depends(get_session)
 ) -> None:
@@ -92,6 +98,7 @@ def list_members_endpoint(
 @router.post(
     "/{domain_id}/members", response_model=ApiResponse[DomainMemberOut], status_code=201
 )
+@audit_asset(AssetAuditAction.ASSEMBLE, AssetType.BUSINESS_DOMAIN, "domain_id")
 def add_member_endpoint(
     domain_id: int,
     payload: DomainMemberAdd,
@@ -103,6 +110,7 @@ def add_member_endpoint(
 
 
 @router.delete("/{domain_id}/members/{member_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.ASSEMBLE, AssetType.BUSINESS_DOMAIN, "domain_id")
 def remove_member_endpoint(
     domain_id: int,
     member_id: int,
@@ -124,6 +132,7 @@ def publish_check_endpoint(
 
 
 @router.post("/{domain_id}/publish")
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.BUSINESS_DOMAIN, "domain_id")
 def publish_domain_endpoint(
     domain_id: int,
     if_edit_match: int | None = Header(None, ge=0),

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from app.api.v1.ontologies import add_domain_members_endpoint
 from app.core.db import Base, get_session
 from app.domain.account_service import issue_session
 from app.domain.domain_service import (
@@ -24,6 +25,7 @@ from app.domain.status_service import publish_resource
 from app.domain.type_service import create_entity_type
 from app.main import app
 from app.models.account import User
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.models.domain import (
     BusinessDomain,
     DomainRevision,
@@ -187,6 +189,9 @@ def test_published_pins_and_domain_id_collision(case: AssemblyCase) -> None:
     edit, saved = case.state()
     assert edit == 1 and len(saved) == 2
     assert case.ids["unrelated"] not in saved
+    spec = add_domain_members_endpoint.asset_audit_spec
+    assert spec.action == AssetAuditAction.ASSEMBLE
+    assert spec.object_type == AssetType.ONTOLOGY
 
 
 def test_old_revision_and_idempotent_assembly(case: AssemblyCase) -> None:

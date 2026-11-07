@@ -1493,5 +1493,58 @@
     "empty": "No entries in this revision",
     "missingPins": "Some dependency revisions were not pinned in this old ontology and cannot be opened independently. Current revisions are never substituted.",
     "missingProperty": "This old property revision did not record its datatype, default or constraints. Its owner may contain frozen property details."
+  },
+  "assetAudit": {
+    "title": "Business asset audit",
+    "accountTitle": "Account and security audit",
+    "hint": "Administrators only. Records actor, action, object, versions and correlation ID without credentials or business payloads. History is retained indefinitely with no delete action.",
+    "searchHint": "Actor ID, object ID or correlation ID",
+    "actorId": "Actor ID",
+    "object": "Business object",
+    "objectType": "Object type",
+    "before": "Version before",
+    "after": "Version after",
+    "errorCode": "Error code",
+    "correlationId": "Correlation ID",
+    "timeRange": "Time range",
+    "reset": "Reset filters",
+    "loadFailed": "Could not load audit history",
+    "empty": "No audit records match these filters",
+    "total": "{count} records",
+    "unavailable": "No persisted version",
+    "unversioned": "Object has no version number",
+    "unassigned": "ID not assigned",
+    "actions": {
+      "CREATE": "Create",
+      "EDIT": "Edit",
+      "RENAME": "Rename",
+      "ASSEMBLE": "Assemble",
+      "PUBLISH": "Publish",
+      "UNPUBLISH": "Unpublish",
+      "DELETE": "Delete",
+      "SWITCH_CURRENT": "Switch current graph",
+      "IMPORT": "Import"
+    },
+    "objects": {
+      "NAMESPACE": "Namespace",
+      "ENTITY_TYPE": "Entity type",
+      "RELATION_TYPE": "Relation type",
+      "BUSINESS_DOMAIN": "Business domain",
+      "ONTOLOGY": "Ontology",
+      "MAPPING": "Mapping",
+      "DATASOURCE": "Datasource",
+      "RULE": "Rule",
+      "ASSEMBLY_TEMPLATE": "Assembly template",
+      "ENUM_DICTIONARY": "Enum dictionary",
+      "STANDARD_CLAUSE": "Standard clause",
+      "GRAPH_REVISION": "Graph revision"
+    },
+    "versions": {
+      "revision": "Revision",
+      "current_revision": "Published revision",
+      "edit_revision": "Edit revision",
+      "run_id": "Run ID",
+      "current_graph_revision_id": "Current graph ID"
+    }
   }
 }

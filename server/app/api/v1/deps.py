@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, Request
+from collections.abc import Iterator
+
+from fastapi import Depends, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import business_asset_audit
 from app.core.config import get_settings
 from app.core.db import get_session
 from app.core.error_codes import ErrorCode
@@ -93,20 +96,24 @@ def _is_read_only_operation(method: str, path: str) -> bool:
 
 def authorize_business_request(
     request: Request,
+    response: Response,
     token: str = Depends(access_token),
     session: Session = Depends(get_session),
-) -> None:
+) -> Iterator[None]:
     """Authenticate without starting the business route's transaction."""
     # SELECT 会触发 autobegin；鉴权使用独立短会话，让业务路由自行管理事务。
     with Session(bind=session.get_bind()) as auth_session:
         user = resolve_session(auth_session, token)
+        actor_id, role = user.id, user.role
+    with business_asset_audit(request, response, session, actor_id):
         if (
             request.method not in {"GET", "HEAD", "OPTIONS"}
-            and user.role
+            and role
             not in {
                 UserRole.EDITOR,
                 UserRole.ADMIN,
             }
             and not _is_read_only_operation(request.method, request.url.path)
         ):
-            raise KGError(ErrorCode.FORBIDDEN, {"role": str(user.role)})
+            raise KGError(ErrorCode.FORBIDDEN, {"role": str(role)})
+        yield

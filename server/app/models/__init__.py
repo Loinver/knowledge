@@ -12,6 +12,7 @@ from app.models.account import (
     PasswordResetToken,
     User,
 )
+from app.models.asset_audit import AssetAuditLog
 from app.models.data_access import (
     Datasource,
     Mapping,
@@ -64,6 +65,7 @@ from app.models.validation import ValidationReport, ValidationResult
 
 __all__ = [
     "AssemblyTemplate",
+    "AssetAuditLog",
     "AuditAction",
     "AuditLog",
     "AuditResult",

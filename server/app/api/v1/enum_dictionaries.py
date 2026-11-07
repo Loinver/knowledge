@@ -5,12 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import (
     GovernanceRoute,
     governance_session,
     required_revision,
 )
 from app.domain import enum_dictionary_service as service
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.enum_dictionary import (
     EnumDictionaryInput,
     EnumDictionaryOut,
@@ -50,6 +52,7 @@ def list_dictionaries(
 
 
 @router.post("", response_model=ApiResponse[EnumDictionaryOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.ENUM_DICTIONARY)
 def create_dictionary(
     payload: EnumDictionaryInput,
     response: Response,
@@ -59,6 +62,7 @@ def create_dictionary(
         result = EnumDictionaryOut.model_validate(
             service.create_dictionary(session, payload)
         )
+        audit_created(session, result.id)
     response.headers["ETag"] = f'"{result.revision}"'
     return result
 
@@ -77,6 +81,7 @@ def get_dictionary(
 
 
 @router.put("/{dictionary_id}", response_model=ApiResponse[EnumDictionaryOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.ENUM_DICTIONARY, "dictionary_id")
 def update_dictionary(
     dictionary_id: int,
     payload: EnumDictionaryInput,
@@ -93,6 +98,7 @@ def update_dictionary(
 
 
 @router.delete("/{dictionary_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.ENUM_DICTIONARY, "dictionary_id")
 def delete_dictionary(
     dictionary_id: int,
     revision: int = Depends(required_revision),

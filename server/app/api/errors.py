@@ -34,19 +34,25 @@ def _error_payload(
     ).model_dump()
 
 
+def _audit_headers(request: Request) -> dict[str, str]:
+    correlation = getattr(request.state, "asset_audit_correlation_id", None)
+    return {"X-Correlation-ID": correlation} if isinstance(correlation, str) else {}
+
+
 def install_error_handler(app: FastAPI) -> None:
     """注册统一错误 handler。在 app 创建后调用一次。"""
 
     @app.exception_handler(KGError)
-    async def _handle_kg_error(_: Request, exc: KGError) -> JSONResponse:
+    async def _handle_kg_error(request: Request, exc: KGError) -> JSONResponse:
         return JSONResponse(
             status_code=HTTP_STATUS.get(exc.code, 400),
             content=_error_payload(exc.code, exc.params, exc.message),
+            headers=_audit_headers(request),
         )
 
     @app.exception_handler(RequestValidationError)
     async def _handle_validation_error(
-        _: Request, exc: RequestValidationError
+        request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         issues = [
             {
@@ -58,21 +64,25 @@ def install_error_handler(app: FastAPI) -> None:
         payload = _error_payload(
             ErrorCode.INVALID_REQUEST, {"reason": "invalid_request", "issues": issues}
         )
-        return JSONResponse(status_code=422, content=payload)
+        return JSONResponse(
+            status_code=422, content=payload, headers=_audit_headers(request)
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_error(
-        _: Request, exc: StarletteHTTPException
+        request: Request, exc: StarletteHTTPException
     ) -> JSONResponse:
         code = STATUS_FALLBACK_CODE.get(exc.status_code, ErrorCode.INVALID_REQUEST)
         return JSONResponse(
             status_code=exc.status_code,
             content=_error_payload(code, {"reason": "http_error"}, str(exc.detail)),
-            headers=exc.headers,
+            headers={**(exc.headers or {}), **_audit_headers(request)},
         )
 
     @app.exception_handler(SQLAlchemyError)
-    async def _handle_database_error(_: Request, exc: SQLAlchemyError) -> JSONResponse:
+    async def _handle_database_error(
+        request: Request, exc: SQLAlchemyError
+    ) -> JSONResponse:
         """元数据库异常单独成码。
 
         最常见的是本地库结构落后于代码（未执行 Alembic 迁移），查询直接报
@@ -86,10 +96,11 @@ def install_error_handler(app: FastAPI) -> None:
                 ErrorCode.DATABASE_ERROR,
                 {"reason": type(exc).__name__},
             ),
+            headers=_audit_headers(request),
         )
 
     @app.exception_handler(Exception)
-    async def _handle_unexpected(_: Request, exc: Exception) -> JSONResponse:
+    async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         """兜底：未预期异常也要返回统一外壳。
 
         没有这一层时，FastAPI 会由 Starlette 的 ServerErrorMiddleware 直接吐
@@ -102,4 +113,5 @@ def install_error_handler(app: FastAPI) -> None:
             content=_error_payload(
                 ErrorCode.INTERNAL_ERROR, {"reason": "internal_error"}
             ),
+            headers=_audit_headers(request),
         )

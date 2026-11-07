@@ -2290,6 +2290,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/asset-audit-logs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Asset Audit Logs */
+    get: operations['list_asset_audit_logs_api_v1_asset_audit_logs_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/users/me/profile': {
     parameters: {
       query?: never
@@ -2498,6 +2515,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['AiSuggestionOut'] | null
+    }
+    /** ApiResponse[AssetAuditPage] */
+    ApiResponse_AssetAuditPage_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['AssetAuditPage'] | null
     }
     /** ApiResponse[AuditLogPage] */
     ApiResponse_AuditLogPage_: {
@@ -4156,6 +4190,83 @@ export interface components {
       data?: components['schemas']['ValidationResultOut'][] | null
     }
     /**
+     * AssetAuditAction
+     * @enum {string}
+     */
+    AssetAuditAction:
+      | 'CREATE'
+      | 'EDIT'
+      | 'RENAME'
+      | 'ASSEMBLE'
+      | 'PUBLISH'
+      | 'UNPUBLISH'
+      | 'DELETE'
+      | 'SWITCH_CURRENT'
+      | 'IMPORT'
+    /** AssetAuditOut */
+    AssetAuditOut: {
+      /** Id */
+      id: number
+      /** Actor Id */
+      actor_id: string
+      action: components['schemas']['AssetAuditAction']
+      object_type: components['schemas']['AssetType']
+      /** Object Id */
+      object_id: number | null
+      version_before: components['schemas']['AssetAuditVersion'] | null
+      version_after: components['schemas']['AssetAuditVersion'] | null
+      result: components['schemas']['AuditResult']
+      error_code: components['schemas']['ErrorCode'] | null
+      /** Correlation Id */
+      correlation_id: string
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string
+    }
+    /** AssetAuditPage */
+    AssetAuditPage: {
+      /** Items */
+      items: components['schemas']['AssetAuditOut'][]
+      /** Total */
+      total: number
+      /** Page */
+      page: number
+      /** Page Size */
+      page_size: number
+    }
+    /** AssetAuditVersion */
+    AssetAuditVersion: {
+      /** Revision */
+      revision?: number | null
+      /** Current Revision */
+      current_revision?: number | null
+      /** Edit Revision */
+      edit_revision?: number | null
+      /** Run Id */
+      run_id?: number | null
+      /** Current Graph Revision Id */
+      current_graph_revision_id?: number | null
+    }
+    /**
+     * AssetType
+     * @enum {string}
+     */
+    AssetType:
+      | 'NAMESPACE'
+      | 'ENTITY_TYPE'
+      | 'RELATION_TYPE'
+      | 'BUSINESS_DOMAIN'
+      | 'ONTOLOGY'
+      | 'MAPPING'
+      | 'DATASOURCE'
+      | 'RULE'
+      | 'ASSEMBLY_TEMPLATE'
+      | 'ENUM_DICTIONARY'
+      | 'STANDARD_CLAUSE'
+      | 'GRAPH_REVISION'
+    /**
      * AttributeDefOut
      * @description 关联实体上的属性定义（M-07 起 datatype/nullable/枚举与默认值真实落库）。
      */
@@ -5071,6 +5182,44 @@ export interface components {
       /** Latest Revision */
       latest_revision: number
     }
+    /**
+     * ErrorCode
+     * @description 错误码枚举。值即对外传输的字符串。
+     * @enum {string}
+     */
+    ErrorCode:
+      | 'KG.INVALID_IRI'
+      | 'KG.INVALID_NAME'
+      | 'KG.INVALID_NAMESPACE'
+      | 'KG.INVALID_REQUEST'
+      | 'KG.RESOURCE_NOT_FOUND'
+      | 'KG.REVISION_NOT_FOUND'
+      | 'KG.REVISION_CONFLICT'
+      | 'KG.ALREADY_PUBLISHED'
+      | 'KG.PROTECTED_NAMESPACE'
+      | 'KG.ALREADY_EXISTS'
+      | 'KG.RESOURCE_IN_USE'
+      | 'KG.LLM_NOT_CONFIGURED'
+      | 'KG.LLM_UNAVAILABLE'
+      | 'KG.LLM_RESPONSE_INVALID'
+      | 'KG.SUGGESTION_NOT_APPLICABLE'
+      | 'KG.VALIDATION_VIOLATION'
+      | 'KG.SOURCE_UNREACHABLE'
+      | 'KG.REASONER_UNAVAILABLE'
+      | 'KG.DATABASE_ERROR'
+      | 'KG.INTERNAL_ERROR'
+      | 'AUTH.INVALID_CREDENTIALS'
+      | 'AUTH.TOKEN_EXPIRED'
+      | 'AUTH.FORBIDDEN'
+      | 'AUTH.USER_DISABLED'
+      | 'AUTH.REGISTRATION_CLOSED'
+      | 'AUTH.WEAK_PASSWORD'
+      | 'AUTH.OLD_PASSWORD_INVALID'
+      | 'AUTH.RESET_TOKEN_INVALID'
+      | 'AUTH.RESET_UNAVAILABLE'
+      | 'AUTH.TOO_MANY_ATTEMPTS'
+      | 'AUTH.EMAIL_TAKEN'
+      | 'AUTH.USERNAME_TAKEN'
     /** EvidenceTraceItem */
     EvidenceTraceItem: {
       /** Subject */
@@ -12842,6 +12991,48 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_UserOut_']
+        }
+      }
+    }
+  }
+  list_asset_audit_logs_api_v1_asset_audit_logs_get: {
+    parameters: {
+      query?: {
+        page?: number
+        page_size?: number
+        q?: string
+        actor_id?: string | null
+        action?: components['schemas']['AssetAuditAction'] | null
+        object_type?: components['schemas']['AssetType'] | null
+        object_id?: number | null
+        result?: components['schemas']['AuditResult'] | null
+        correlation_id?: string | null
+        since?: string | null
+        until?: string | null
+        sort?: '-created_at' | 'created_at'
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_AssetAuditPage_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
         }
       }
     }

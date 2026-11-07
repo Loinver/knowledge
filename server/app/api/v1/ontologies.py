@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import (
     governance_session,
     required_draft_revision,
@@ -31,6 +32,7 @@ from app.domain.ontology_service import (
     update_ontology,
 )
 from app.domain.template_service import get_template
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.models.domain import Ontology
 from app.schemas.ontology import (
     CanvasLayoutOut,
@@ -79,11 +81,13 @@ def list_onto(
 
 
 @router.post("", response_model=ApiResponse[OntologyOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.ONTOLOGY)
 def create_onto_endpoint(
     payload: OntologyCreate, session: Session = Depends(governance_session)
 ) -> OntologyOut:
     with session.begin():
         onto = create_ontology(session, payload)
+        audit_created(session, onto.id)
         return _out(session, onto)
 
 
@@ -96,6 +100,7 @@ def get_onto_endpoint(
 
 
 @router.put("/{ontology_id}", response_model=ApiResponse[OntologyOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.ONTOLOGY, "ontology_id")
 def update_onto_endpoint(
     ontology_id: int,
     payload: OntologyUpdate,
@@ -108,6 +113,7 @@ def update_onto_endpoint(
 
 
 @router.delete("/{ontology_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.ONTOLOGY, "ontology_id")
 def remove_onto_endpoint(
     ontology_id: int, session: Session = Depends(get_session)
 ) -> None:
@@ -143,6 +149,7 @@ def list_rules_endpoint(
 @router.post(
     "/{ontology_id}/refs", response_model=ApiResponse[OntologyRefOut], status_code=201
 )
+@audit_asset(AssetAuditAction.ASSEMBLE, AssetType.ONTOLOGY, "ontology_id")
 def add_ref_endpoint(
     ontology_id: int,
     payload: OntologyRefAdd,
@@ -156,6 +163,7 @@ def add_ref_endpoint(
 @router.post(
     "/{ontology_id}/domain-members", response_model=ApiResponse[list[OntologyRefOut]]
 )
+@audit_asset(AssetAuditAction.ASSEMBLE, AssetType.ONTOLOGY, "ontology_id")
 def add_domain_members_endpoint(
     ontology_id: int,
     payload: OntologyDomainAdd,
@@ -168,6 +176,7 @@ def add_domain_members_endpoint(
 
 
 @router.delete("/{ontology_id}/refs/{ref_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.ASSEMBLE, AssetType.ONTOLOGY, "ontology_id")
 def remove_ref_endpoint(
     ontology_id: int,
     ref_id: int,
@@ -195,6 +204,7 @@ def get_canvas_endpoint(
 
 
 @router.put("/{ontology_id}/canvas", response_model=ApiResponse[CanvasLayoutOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.ONTOLOGY, "ontology_id")
 def update_canvas_endpoint(
     ontology_id: int,
     payload: CanvasLayoutUpdate,
@@ -208,6 +218,7 @@ def update_canvas_endpoint(
 
 
 @router.post("/{ontology_id}/publish")
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.ONTOLOGY, "ontology_id")
 def publish_onto_endpoint(
     ontology_id: int,
     if_edit_match: int | None = Header(None, ge=0),
@@ -257,6 +268,7 @@ def preview_import_endpoint(
 
 
 @router.post("/{ontology_id}/import", response_model=ApiResponse[OntologyImportResult])
+@audit_asset(AssetAuditAction.IMPORT, AssetType.ONTOLOGY, "ontology_id")
 def apply_import_endpoint(
     ontology_id: int,
     payload: OntologyImportApplyRequest,

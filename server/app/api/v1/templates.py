@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import (
     GovernanceRoute,
     governance_session,
@@ -13,6 +14,7 @@ from app.api.v1.governance_common import (
 from app.domain import template_service as service
 from app.domain.core_check_service import check_template_core
 from app.domain.ontology_service import create_ontology
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.core_check import CoreCheckOut, CoreCheckRequest
 from app.schemas.ontology import OntologyCreate, OntologyOut
 from app.schemas.response import ApiResponse
@@ -60,6 +62,7 @@ def list_resources(
 
 
 @router.post("", response_model=ApiResponse[TemplateOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.ASSEMBLY_TEMPLATE)
 def create_template(
     payload: TemplateCreate,
     response: Response,
@@ -69,16 +72,20 @@ def create_template(
         result = service.template_out(
             session, service.create_template(session, payload)
         )
+        audit_created(session, result.id)
     response.headers["ETag"] = f'"{result.revision}"'
     return result
 
 
 @router.post("/from-ontology", response_model=ApiResponse[TemplateOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.ASSEMBLY_TEMPLATE)
 def from_ontology(
     payload: TemplateFromOntology, session: Session = Depends(governance_session)
 ) -> TemplateOut:
     with session.begin():
-        return service.template_out(session, service.from_ontology(session, payload))
+        result = service.template_out(session, service.from_ontology(session, payload))
+        audit_created(session, result.id)
+        return result
 
 
 @router.get("/{template_id}", response_model=ApiResponse[TemplateOut])
@@ -91,6 +98,7 @@ def get_template(
 
 
 @router.put("/{template_id}", response_model=ApiResponse[TemplateOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.ASSEMBLY_TEMPLATE, "template_id")
 def update_template(
     template_id: int,
     payload: TemplateCreate,
@@ -107,6 +115,7 @@ def update_template(
 
 
 @router.delete("/{template_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.ASSEMBLY_TEMPLATE, "template_id")
 def delete_template(
     template_id: int,
     revision: int = Depends(required_revision),
@@ -119,6 +128,7 @@ def delete_template(
 @router.post(
     "/{template_id}/copy", response_model=ApiResponse[TemplateOut], status_code=201
 )
+@audit_asset(AssetAuditAction.CREATE, AssetType.ASSEMBLY_TEMPLATE)
 def copy_template(
     template_id: int,
     payload: TemplateMetadata,
@@ -126,9 +136,11 @@ def copy_template(
     session: Session = Depends(governance_session),
 ) -> TemplateOut:
     with session.begin():
-        return service.template_out(
+        result = service.template_out(
             session, service.copy_template(session, template_id, revision, payload)
         )
+        audit_created(session, result.id)
+        return result
 
 
 @router.post(
@@ -136,6 +148,7 @@ def copy_template(
     response_model=ApiResponse[OntologyOut],
     status_code=201,
 )
+@audit_asset(AssetAuditAction.ASSEMBLE, AssetType.ONTOLOGY)
 def instantiate(
     template_id: int,
     payload: TemplateInstantiate,
@@ -147,6 +160,7 @@ def instantiate(
         onto = create_ontology(
             session, OntologyCreate(**payload.model_dump(), template_id=template_id)
         )
+        audit_created(session, onto.id)
         result = OntologyOut.model_validate(onto)
         result.template = TemplateLink.model_validate(template)
         return result

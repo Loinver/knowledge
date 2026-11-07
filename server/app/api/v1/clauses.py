@@ -5,12 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import (
     GovernanceRoute,
     governance_session,
     required_revision,
 )
 from app.domain import clause_service
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.governance import (
     ClauseSort,
     StandardClauseBrief,
@@ -46,6 +48,7 @@ def list_clauses_endpoint(
 
 
 @router.post("", response_model=ApiResponse[StandardClauseOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.STANDARD_CLAUSE)
 def create_clause_endpoint(
     payload: StandardClauseCreate,
     response: Response,
@@ -53,6 +56,7 @@ def create_clause_endpoint(
 ) -> StandardClauseOut:
     with session.begin():
         clause = clause_service.create_clause(session, payload)
+        audit_created(session, clause.id)
         result = StandardClauseOut.model_validate(clause)
     response.headers["ETag"] = f'"{result.revision}"'
     return result
@@ -71,6 +75,7 @@ def get_clause_endpoint(
 
 
 @router.put("/{clause_id}", response_model=ApiResponse[StandardClauseOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.STANDARD_CLAUSE, "clause_id")
 def update_clause_endpoint(
     clause_id: int,
     payload: StandardClauseUpdate,
@@ -86,6 +91,7 @@ def update_clause_endpoint(
 
 
 @router.delete("/{clause_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.STANDARD_CLAUSE, "clause_id")
 def delete_clause_endpoint(
     clause_id: int,
     revision: int = Depends(required_revision),

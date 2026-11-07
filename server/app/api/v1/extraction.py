@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset
 from app.core.db import get_session
 from app.domain.evidence_service import (
     trace_entity_evidence,
@@ -40,6 +41,7 @@ from app.domain.graph_analysis_service import diff_graph_revisions, shortest_pat
 from app.domain.graph_recommendation_service import recommend_layouts
 from app.domain.graph_view_service import graph_view
 from app.domain.run_export_service import export_run
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.extraction import (
     EntityDetailOut,
     EntityFusionOut,
@@ -228,6 +230,9 @@ def list_revisions(
 
 @router.post(
     "/graph/{graph_revision_id}/switch", response_model=ApiResponse[GraphRevisionOut]
+)
+@audit_asset(
+    AssetAuditAction.SWITCH_CURRENT, AssetType.GRAPH_REVISION, "graph_revision_id"
 )
 def switch_graph(
     graph_revision_id: int,

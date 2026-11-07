@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import governance_session
 from app.domain.iri_service import rename_resource
 from app.domain.resource_lifecycle import delete_resource, unpublish_resource
@@ -22,6 +23,7 @@ from app.domain.type_service import (
     publish_entity_type,
     update_entity_type,
 )
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.models.resource import ModelResource
 from app.schemas.common import RenameRequest
 from app.schemas.response import ApiResponse
@@ -121,10 +123,12 @@ def type_stats(
 
 
 @router.post("", response_model=ApiResponse[EntityTypeOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.ENTITY_TYPE)
 def create_type(
     payload: EntityTypeCreate, session: Session = Depends(governance_session)
 ) -> EntityTypeOut:
     resource = create_entity_type(session, payload)
+    audit_created(session, resource.id)
     session.commit()
     return _out(session, resource)
 
@@ -146,6 +150,7 @@ def get_type(
 
 
 @router.put("/{type_id}", response_model=ApiResponse[EntityTypeOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.ENTITY_TYPE, "type_id")
 def update_type(
     type_id: int,
     payload: EntityTypeUpdate,
@@ -158,6 +163,7 @@ def update_type(
 
 
 @router.patch("/{type_id}/rename", response_model=ApiResponse[EntityTypeOut])
+@audit_asset(AssetAuditAction.RENAME, AssetType.ENTITY_TYPE, "type_id")
 def rename_type(
     type_id: int,
     payload: RenameRequest,
@@ -171,6 +177,7 @@ def rename_type(
 
 
 @router.post("/{type_id}/publish", response_model=ApiResponse[RevisionOut])
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.ENTITY_TYPE, "type_id")
 def publish_type(
     type_id: int, session: Session = Depends(governance_session)
 ) -> RevisionOut:
@@ -181,6 +188,7 @@ def publish_type(
 
 
 @router.post("/{type_id}/unpublish", response_model=ApiResponse[EntityTypeOut])
+@audit_asset(AssetAuditAction.UNPUBLISH, AssetType.ENTITY_TYPE, "type_id")
 def unpublish_type(
     type_id: int, session: Session = Depends(governance_session)
 ) -> EntityTypeOut:
@@ -192,6 +200,7 @@ def unpublish_type(
 
 
 @router.delete("/{type_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.ENTITY_TYPE, "type_id")
 def remove_type(type_id: int, session: Session = Depends(governance_session)) -> None:
     """删除从未发布过的草稿类型；有外部引用或版本历史一律拒绝。"""
     resource = get_entity_type(session, type_id)

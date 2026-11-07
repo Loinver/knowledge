@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit import router as asset_audit_router
 from app.api.v1.deps import access_token, client_ip, current_user, require_admin
 from app.core.config import get_settings
 from app.core.db import get_session
@@ -30,6 +31,7 @@ from app.schemas.account import (
 from app.schemas.response import ApiResponse
 
 router = APIRouter(tags=["accounts"])
+router.include_router(asset_audit_router)
 
 PAGE_SIZE = Query(20, ge=1, le=200)
 

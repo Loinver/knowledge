@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.core.db import get_session
 from app.domain.iri_service import (
     delete_namespace,
@@ -16,6 +17,7 @@ from app.domain.iri_service import (
     list_namespaces as list_registered_namespaces,
 )
 from app.iri import build_iri, is_valid_name, is_valid_namespace
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.models.resource import Namespace
 from app.schemas.common import (
     ImpactResponse,
@@ -42,17 +44,20 @@ def list_namespaces(session: Session = Depends(get_session)) -> list[NamespaceOu
 
 
 @router.post("", response_model=ApiResponse[NamespaceOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.NAMESPACE)
 def create_namespace(
     payload: NamespaceCreate, session: Session = Depends(get_session)
 ) -> Namespace:
     ns = register_namespace(
         session, payload.prefix, payload.iri, payload.protected, payload.label_i18n
     )
+    audit_created(session, ns.id)
     session.commit()
     return ns
 
 
 @router.delete("/{namespace_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.NAMESPACE, "namespace_id")
 def remove_namespace(
     namespace_id: int, session: Session = Depends(get_session)
 ) -> None:

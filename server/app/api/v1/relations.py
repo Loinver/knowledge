@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import governance_session as get_session
 from app.domain.iri_service import rename_resource
 from app.domain.relation_service import (
@@ -18,6 +19,7 @@ from app.domain.relation_service import (
 )
 from app.domain.resource_lifecycle import delete_resource, unpublish_resource
 from app.domain.usages_service import resource_usages
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.models.resource import ModelResource
 from app.schemas.common import RenameRequest
 from app.schemas.relation import (
@@ -119,10 +121,12 @@ def list_relations(
 
 
 @router.post("", response_model=ApiResponse[RelationTypeOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.RELATION_TYPE)
 def create_relation(
     payload: RelationTypeCreate, session: Session = Depends(get_session)
 ) -> RelationTypeOut:
     resource = create_relation_type(session, payload)
+    audit_created(session, resource.id)
     session.commit()
     return _to_out(session, resource)
 
@@ -145,6 +149,7 @@ def get_relation(
 
 
 @router.put("/{relation_id}", response_model=ApiResponse[RelationTypeOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.RELATION_TYPE, "relation_id")
 def update_relation(
     relation_id: int,
     payload: RelationTypeUpdate,
@@ -157,6 +162,7 @@ def update_relation(
 
 
 @router.patch("/{relation_id}/rename", response_model=ApiResponse[RelationTypeOut])
+@audit_asset(AssetAuditAction.RENAME, AssetType.RELATION_TYPE, "relation_id")
 def rename_relation(
     relation_id: int,
     payload: RenameRequest,
@@ -170,6 +176,7 @@ def rename_relation(
 
 
 @router.post("/{relation_id}/publish", response_model=ApiResponse[TypeRevisionOut])
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.RELATION_TYPE, "relation_id")
 def publish_relation(
     relation_id: int, session: Session = Depends(get_session)
 ) -> TypeRevisionOut:
@@ -180,6 +187,7 @@ def publish_relation(
 
 
 @router.post("/{relation_id}/unpublish", response_model=ApiResponse[RelationTypeOut])
+@audit_asset(AssetAuditAction.UNPUBLISH, AssetType.RELATION_TYPE, "relation_id")
 def unpublish_relation(
     relation_id: int, session: Session = Depends(get_session)
 ) -> RelationTypeOut:
@@ -191,6 +199,7 @@ def unpublish_relation(
 
 
 @router.delete("/{relation_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.RELATION_TYPE, "relation_id")
 def remove_relation(relation_id: int, session: Session = Depends(get_session)) -> None:
     """删除从未发布过的草稿关系；有外部引用或版本历史一律拒绝。"""
     resource = get_relation_type(session, relation_id)

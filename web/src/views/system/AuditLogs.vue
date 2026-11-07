@@ -19,6 +19,7 @@ import type { AuditAction, AuditLog } from '@/api/auth'
 import { authApi } from '@/api/auth'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import AssetAuditLogs from '@/views/system/components/AssetAuditLogs.vue'
 
 const { t } = useI18n()
 const { toMessage } = useApiError()
@@ -111,7 +112,8 @@ onMounted(load)
 <template>
   <section>
     <PageHeader :title="t('page.systemAuditLogs')" :description="t('system.auditHint')" />
-    <NCard size="small">
+    <AssetAuditLogs />
+    <NCard size="small" :title="t('assetAudit.accountTitle')">
       <NSpace class="filters" align="center">
         <NFormItem
           :label="t('common.search')"

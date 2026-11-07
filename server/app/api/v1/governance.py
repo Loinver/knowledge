@@ -5,12 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.api.v1.governance_common import (
     GovernanceRoute,
     governance_session,
     required_revision,
 )
 from app.domain import rule_service
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.governance import (
     RuleCreate,
     RuleOut,
@@ -47,6 +49,7 @@ def list_rules_endpoint(
 
 
 @router.post("", response_model=ApiResponse[RuleOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.RULE)
 def create_rule_endpoint(
     payload: RuleCreate,
     response: Response,
@@ -54,6 +57,7 @@ def create_rule_endpoint(
 ) -> RuleOut:
     with session.begin():
         rule = rule_service.create_rule(session, payload)
+        audit_created(session, rule.id)
         result = RuleOut.model_validate(rule)
     response.headers["ETag"] = f'"{result.revision}"'
     return result
@@ -69,6 +73,7 @@ def get_rule_endpoint(
 
 
 @router.put("/{rule_id}", response_model=ApiResponse[RuleOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.RULE, "rule_id")
 def update_rule_endpoint(
     rule_id: int,
     payload: RuleCreate,
@@ -84,6 +89,7 @@ def update_rule_endpoint(
 
 
 @router.delete("/{rule_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.RULE, "rule_id")
 def delete_rule_endpoint(
     rule_id: int,
     revision: int = Depends(required_revision),

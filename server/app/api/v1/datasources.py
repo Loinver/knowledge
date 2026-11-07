@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.core.db import get_session
 from app.domain.source_service import (
     create_datasource,
@@ -16,6 +17,7 @@ from app.domain.source_service import (
     test_stored_connection,
     update_datasource,
 )
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.datasource import (
     DatasourceBrief,
     DatasourceCreate,
@@ -41,10 +43,12 @@ def list_ds(
 
 
 @router.post("", response_model=ApiResponse[DatasourceOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.DATASOURCE)
 def create_ds(
     payload: DatasourceCreate, session: Session = Depends(get_session)
 ) -> DatasourceOut:
     ds = create_datasource(session, payload)
+    audit_created(session, ds.id)
     session.commit()
     return DatasourceOut(
         id=ds.id,
@@ -68,12 +72,14 @@ def get_ds(ds_id: int, session: Session = Depends(get_session)) -> DatasourceOut
 
 
 @router.delete("/{ds_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.DATASOURCE, "ds_id")
 def remove_ds(ds_id: int, session: Session = Depends(get_session)) -> None:
     delete_datasource(session, ds_id)
     session.commit()
 
 
 @router.put("/{ds_id}", response_model=ApiResponse[DatasourceOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.DATASOURCE, "ds_id")
 def update_ds(
     ds_id: int, payload: DatasourceUpdate, session: Session = Depends(get_session)
 ) -> DatasourceOut:

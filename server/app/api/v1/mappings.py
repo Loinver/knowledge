@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
+from app.api.v1.asset_audit_context import audit_asset, audit_created
 from app.core.db import get_session
 from app.domain.mapping_service import (
     create_mapping,
@@ -16,6 +17,7 @@ from app.domain.mapping_service import (
     publish_mapping,
     save_draft,
 )
+from app.models.asset_audit import AssetAuditAction, AssetType
 from app.schemas.mapping import (
     MappingBrief,
     MappingCreate,
@@ -41,10 +43,12 @@ def list_m(
 
 
 @router.post("", response_model=ApiResponse[MappingOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.MAPPING)
 def create_m(
     payload: MappingCreate, session: Session = Depends(get_session)
 ) -> MappingOut:
     m = create_mapping(session, payload)
+    audit_created(session, m.id)
     session.commit()
     return MappingOut.model_validate(m)
 
@@ -56,6 +60,7 @@ def get_m(mapping_id: int, session: Session = Depends(get_session)) -> MappingOu
 
 
 @router.delete("/{mapping_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.MAPPING, "mapping_id")
 def remove_m(
     mapping_id: int,
     if_edit_match: int | None = Header(None, ge=0),
@@ -66,6 +71,7 @@ def remove_m(
 
 
 @router.put("/{mapping_id}/draft", response_model=ApiResponse[MappingRevisionOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.MAPPING, "mapping_id")
 def put_draft(
     mapping_id: int,
     payload: SaveDraftRequest,
@@ -92,6 +98,7 @@ def get_draft(
 
 
 @router.post("/{mapping_id}/publish", response_model=ApiResponse[MappingRevisionOut])
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.MAPPING, "mapping_id")
 def publish_m(
     mapping_id: int,
     payload: PublishRequest,

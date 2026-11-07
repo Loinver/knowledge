@@ -1493,5 +1493,58 @@
     "empty": "此版本没有记录",
     "missingPins": "此旧本体没有钉住部分依赖版本，无法单独打开；不会读取当前版本替代历史。",
     "missingProperty": "此旧属性版本未记录类型、默认值和约束正文。可查看所属资源中已冻结的属性信息。"
+  },
+  "assetAudit": {
+    "title": "业务资产审计",
+    "accountTitle": "账号与安全审计",
+    "hint": "仅管理员可查看。记录操作者、动作、对象、版本和关联 ID，不记录凭据或业务正文。历史默认持续保留，无删除入口。",
+    "searchHint": "操作者 ID、对象 ID 或关联 ID",
+    "actorId": "操作者 ID",
+    "object": "业务对象",
+    "objectType": "对象类型",
+    "before": "变更前版本",
+    "after": "变更后版本",
+    "errorCode": "错误码",
+    "correlationId": "关联 ID",
+    "timeRange": "时间范围",
+    "reset": "重置筛选",
+    "loadFailed": "审计记录加载失败",
+    "empty": "暂无符合筛选条件的审计记录",
+    "total": "共 {count} 条记录",
+    "unavailable": "无已保存版本",
+    "unversioned": "对象未设置版本号",
+    "unassigned": "尚未分配 ID",
+    "actions": {
+      "CREATE": "创建",
+      "EDIT": "编辑",
+      "RENAME": "重命名",
+      "ASSEMBLE": "装配",
+      "PUBLISH": "发布",
+      "UNPUBLISH": "撤回发布",
+      "DELETE": "删除",
+      "SWITCH_CURRENT": "切换当前图谱",
+      "IMPORT": "导入"
+    },
+    "objects": {
+      "NAMESPACE": "命名空间",
+      "ENTITY_TYPE": "实体类型",
+      "RELATION_TYPE": "关系类型",
+      "BUSINESS_DOMAIN": "业务域",
+      "ONTOLOGY": "本体",
+      "MAPPING": "映射",
+      "DATASOURCE": "数据源",
+      "RULE": "规则",
+      "ASSEMBLY_TEMPLATE": "装配模板",
+      "ENUM_DICTIONARY": "枚举字典",
+      "STANDARD_CLAUSE": "标准条款",
+      "GRAPH_REVISION": "图谱版本"
+    },
+    "versions": {
+      "revision": "修订",
+      "current_revision": "发布版本",
+      "edit_revision": "编辑版本",
+      "run_id": "运行 ID",
+      "current_graph_revision_id": "当前图谱 ID"
+    }
   }
 }
