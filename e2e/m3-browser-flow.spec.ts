@@ -649,7 +649,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     .getByRole('textbox', { name: '目标结果集' })
     .fill(String(partial.graph_revision.id))
   await diffDrawer.getByRole('button', { name: '计算差异' }).click()
-  await expect(diffDrawer.getByText(/实体 \+\d+\/−\d+，事实 \+\d+\/−\d+/)).toBeVisible()
+  await expect(diffDrawer.getByText(/实体 \+\d+\/−\d+，修改 \d+；事实 \+\d+\/−\d+/)).toBeVisible()
   await diffDrawer.locator('.n-drawer-header__close').click()
 
   // 质量叠加（G-28）：PARTIAL 结果集的隔离命中节点带标记

@@ -12,6 +12,21 @@ class DiffTriple(BaseModel):
     subject: str
     predicate: str
     object: str
+    kind: Literal["DIRECT", "DERIVED"] = "DIRECT"
+    props: dict[str, Any] | None = None
+    count: int = 1
+
+
+class DiffEntityValue(BaseModel):
+    type_iri: str
+    row_key: str
+    attrs: dict[str, Any]
+
+
+class DiffEntityChange(BaseModel):
+    iri: str
+    before: DiffEntityValue
+    after: DiffEntityValue
 
 
 class GraphDiffOut(BaseModel):
@@ -19,10 +34,12 @@ class GraphDiffOut(BaseModel):
     target_graph_revision_id: int
     entities_added: list[str]
     entities_removed: list[str]
+    entities_modified: list[DiffEntityChange] = Field(default_factory=list)
     triples_added: list[DiffTriple]
     triples_removed: list[DiffTriple]
     entity_added_count: int
     entity_removed_count: int
+    entity_modified_count: int = 0
     triple_added_count: int
     triple_removed_count: int
     truncated: bool

@@ -26,6 +26,15 @@ from app.schemas.mapping import (
 )
 
 
+def get_frozen_revision(session: Session, revision_id: int) -> MappingRevision:
+    revision = session.get(MappingRevision, revision_id)
+    if revision is None or revision.revision <= 0:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND, {"mapping_revision_id": revision_id}
+        )
+    return revision
+
+
 def create_mapping(session: Session, payload: MappingCreate) -> Mapping:
     """创建映射方案，可选带初始草稿。"""
     onto = session.get(Ontology, payload.ontology_id)

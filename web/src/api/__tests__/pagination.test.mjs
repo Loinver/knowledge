@@ -10,6 +10,7 @@ for (const [file, name, path] of [
   ['ontology', 'ontologyApi', '/ontologies'],
   ['datasources', 'datasourcesApi', '/datasources'],
   ['mappings', 'mappingsApi', '/mappings'],
+  ['graph', 'graphApi', '/extraction/graph/revisions'],
 ]) {
   test(`${name} includes tail records and does not present a failed tail as complete`, async (t) => {
     const calls = []

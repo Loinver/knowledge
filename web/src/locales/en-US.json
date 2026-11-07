@@ -481,7 +481,7 @@
     "diffBase": "Base revision",
     "diffTarget": "Target revision",
     "diffRun": "Compute diff",
-    "diffSummary": "Entities +{entityAdded}/−{entityRemoved}, facts +{added}/−{removed}",
+    "diffSummary": "Entities +{entityAdded}/−{entityRemoved}, modified {entityModified}; facts +{added}/−{removed}",
     "export": {
       "title": "Export",
       "png": "Export PNG",
@@ -540,7 +540,19 @@
     "degreeOut": "Out",
     "degreeTotal": "Total",
     "exploreShort": "Open",
-    "replay": "Time replay"
+    "replay": "Time replay",
+    "history": "Graph revision history",
+    "historyItem": "Graph #{id} · Run #{run}",
+    "currentRevision": "Current revision",
+    "setCurrent": "Set as current",
+    "setCurrentHint": "Default graph browsing will use this revision. History and evidence remain available.",
+    "diffModified": "Modified: {iri} (before → after)",
+    "diffFact": "{change} {kind}: {subject} → {predicate} → {object} × {count}",
+    "frozenMapping": "Frozen mapping r{revision}",
+    "frozenMappingHint": "This published mapping produced the evidence. Corrections open the current mapping; preview, publish and extract again to create a new graph.",
+    "mappingConfiguration": "View fields, endpoints and transforms",
+    "correctMapping": "Correct current mapping",
+    "exportFrozenOntology": "Export frozen ontology snapshot"
   },
   "dashboard": {
     "overview": "Workflow",

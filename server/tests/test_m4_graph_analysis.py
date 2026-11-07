@@ -27,6 +27,7 @@ from app.models.domain import (
     OntologyRuleRef,
 )
 from app.models.extraction import (
+    DerivedEdge,
     EntityIdentity,
     ExtractionRun,
     FactEvidence,
@@ -37,7 +38,7 @@ from app.models.governance import Rule
 from app.models.resource import ModelResource, Namespace, ResourceRevision
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -166,6 +167,54 @@ def test_graph_diff_reports_set_differences(
     assert data["triple_removed_count"] == 0
     assert data["triples_added"][0]["object"] == "https://e/v2b"
     assert data["truncated"] is False
+
+
+def test_diff_covers_attributes_fact_properties_derived_and_multiplicity(
+    client: TestClient, session: Session
+) -> None:
+    base, target = _setup_graph(session)
+    entity = session.scalar(
+        select(EntityIdentity).where(
+            EntityIdentity.graph_revision_id == target.id,
+            EntityIdentity.iri == "https://e/a",
+        )
+    )
+    entity.attrs = {"name": "Changed", "nested": {"a": 1, "b": 2}}
+    entity.type_iri = "https://example.org/Organization"
+    direct = session.scalar(
+        select(GraphTriple).where(
+            GraphTriple.graph_revision_id == target.id,
+            GraphTriple.object_ == "https://e/a",
+        )
+    )
+    direct.props = {"ratio": 50}
+    for _ in range(2):
+        session.add(
+            DerivedEdge(
+                graph_revision_id=target.id,
+                subject="https://e/a",
+                predicate="knows",
+                object_="https://e/a",
+                props={"ratio": 25},
+            )
+        )
+    session.commit()
+    data = client.get(f"/api/v1/extraction/graph/{base.id}/diff/{target.id}").json()
+    assert data["entity_modified_count"] == 1
+    assert data["entities_modified"][0]["after"]["attrs"]["name"] == "Changed"
+    assert data["entities_modified"][0]["before"]["type_iri"].endswith("Person")
+    assert data["triple_added_count"] == 4
+    assert data["triple_removed_count"] == 1
+    derived = [item for item in data["triples_added"] if item["kind"] == "DERIVED"]
+    assert len(derived) == 1 and derived[0]["count"] == 2
+    assert derived[0]["props"] == {"ratio": 25}
+    same = client.get(f"/api/v1/extraction/graph/{target.id}/diff/{target.id}").json()
+    assert (
+        same["entity_modified_count"]
+        == same["triple_added_count"]
+        == same["triple_removed_count"]
+        == 0
+    )
 
 
 def test_shortest_path_finds_and_misses(client: TestClient, session: Session) -> None:

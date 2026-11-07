@@ -481,7 +481,7 @@
     "diffBase": "基准结果集",
     "diffTarget": "目标结果集",
     "diffRun": "计算差异",
-    "diffSummary": "实体 +{entityAdded}/−{entityRemoved}，事实 +{added}/−{removed}",
+    "diffSummary": "实体 +{entityAdded}/−{entityRemoved}，修改 {entityModified}；事实 +{added}/−{removed}",
     "export": {
       "title": "导出",
       "png": "导出 PNG",
@@ -540,7 +540,19 @@
     "degreeOut": "出度",
     "degreeTotal": "合计",
     "exploreShort": "打开",
-    "replay": "时间回放"
+    "replay": "时间回放",
+    "history": "历史图谱版本",
+    "historyItem": "图谱 #{id} · 运行 #{run}",
+    "currentRevision": "当前版本",
+    "setCurrent": "设为当前",
+    "setCurrentHint": "默认图谱浏览将切换到此版本，历史版本和证据保留。",
+    "diffModified": "修改：{iri}（前 → 后）",
+    "diffFact": "{change} {kind}：{subject} → {predicate} → {object} × {count}",
+    "frozenMapping": "冻结映射 r{revision}",
+    "frozenMappingHint": "以下为产生此证据的已发布映射。修正入口打开当前方案，须另行预览、发布和抽取才会生成新图谱。",
+    "mappingConfiguration": "查看字段、端点与转换配置",
+    "correctMapping": "修正当前映射",
+    "exportFrozenOntology": "导出冻结本体快照"
   },
   "dashboard": {
     "overview": "主流程入口",

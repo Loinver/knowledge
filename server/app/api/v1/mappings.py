@@ -11,6 +11,7 @@ from app.domain.mapping_service import (
     create_mapping,
     delete_mapping,
     get_draft_revision,
+    get_frozen_revision,
     get_mapping,
     get_published_revision,
     list_mappings,
@@ -29,6 +30,13 @@ from app.schemas.mapping import (
 from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/mappings", tags=["mappings"])
+
+
+@router.get("/revisions/{revision_id}", response_model=ApiResponse[MappingRevisionOut])
+def frozen_revision(
+    revision_id: int, session: Session = Depends(get_session)
+) -> MappingRevisionOut:
+    return MappingRevisionOut.model_validate(get_frozen_revision(session, revision_id))
 
 
 @router.get("", response_model=ApiResponse[list[MappingBrief]])

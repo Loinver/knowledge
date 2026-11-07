@@ -1,12 +1,15 @@
 """图谱分析：版本差异（G-24）与关系路径（G-12）。
 
-diff 按 IRI / SPO 集合差计算，输出有界的增删清单——超过上限时如实
+diff 比较实体内容及直接/派生事实多重集，输出有界的变更清单——超过上限时如实
 标记 truncated，不伪装成完整差异。
 path 在同一结果集内做有向 BFS，直接边与派生边可分别参与；
 找到即返回最短路径（节点 + 边 + 证据定位所需的边 id）。
 """
 
 from __future__ import annotations
+
+import json
+from collections import Counter
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,30 +32,38 @@ def diff_graph_revisions(session: Session, base_id: int, target_id: int) -> dict
     """两个图谱版本的实体/三元组/派生边差异。"""
     base = _require_revision(session, base_id)
     target = _require_revision(session, target_id)
-    base_entities = _entity_iris(session, base)
-    target_entities = _entity_iris(session, target)
-    base_triples = _triple_spos(session, base)
-    target_triples = _triple_spos(session, target)
+    base_entities = _entity_values(session, base)
+    target_entities = _entity_values(session, target)
+    base_triples = _fact_counts(session, base)
+    target_triples = _fact_counts(session, target)
 
-    entities_added = sorted(target_entities - base_entities)
-    entities_removed = sorted(base_entities - target_entities)
-    triples_added = sorted(target_triples - base_triples)
-    triples_removed = sorted(base_triples - target_triples)
+    entities_added = sorted(target_entities.keys() - base_entities.keys())
+    entities_removed = sorted(base_entities.keys() - target_entities.keys())
+    entities_modified = [
+        {"iri": iri, "before": base_entities[iri], "after": target_entities[iri]}
+        for iri in sorted(base_entities.keys() & target_entities.keys())
+        if base_entities[iri] != target_entities[iri]
+    ]
+    triples_added = target_triples - base_triples
+    triples_removed = base_triples - target_triples
     return {
         "base_graph_revision_id": base.id,
         "target_graph_revision_id": target.id,
         "entities_added": entities_added[:MAX_DIFF_ITEMS],
         "entities_removed": entities_removed[:MAX_DIFF_ITEMS],
-        "triples_added": [_spo_tuple(t) for t in triples_added[:MAX_DIFF_ITEMS]],
-        "triples_removed": [_spo_tuple(t) for t in triples_removed[:MAX_DIFF_ITEMS]],
+        "entities_modified": entities_modified[:MAX_DIFF_ITEMS],
+        "triples_added": _fact_changes(triples_added),
+        "triples_removed": _fact_changes(triples_removed),
         "entity_added_count": len(entities_added),
         "entity_removed_count": len(entities_removed),
-        "triple_added_count": len(triples_added),
-        "triple_removed_count": len(triples_removed),
+        "entity_modified_count": len(entities_modified),
+        "triple_added_count": sum(triples_added.values()),
+        "triple_removed_count": sum(triples_removed.values()),
         "truncated": _truncated(
             [
                 len(entities_added),
                 len(entities_removed),
+                len(entities_modified),
                 len(triples_added),
                 len(triples_removed),
             ]
@@ -149,25 +160,50 @@ def _require_revision(session: Session, graph_revision_id: int) -> GraphRevision
     return gr
 
 
-def _entity_iris(session: Session, gr: GraphRevision) -> set[str]:
-    return set(
+def _entity_values(session: Session, gr: GraphRevision) -> dict[str, dict]:
+    return {
+        entity.iri: {
+            "type_iri": entity.type_iri,
+            "row_key": entity.row_key,
+            "attrs": entity.attrs,
+        }
+        for entity in session.scalars(
+            select(EntityIdentity).where(EntityIdentity.graph_revision_id == gr.id)
+        )
+    }
+
+
+def _fact_counts(session: Session, gr: GraphRevision) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    rows: list[GraphTriple | DerivedEdge] = list(
         session.scalars(
-            select(EntityIdentity.iri).where(EntityIdentity.graph_revision_id == gr.id)
+            select(GraphTriple).where(GraphTriple.graph_revision_id == gr.id)
         )
     )
-
-
-def _triple_spos(session: Session, gr: GraphRevision) -> set[tuple[str, str, str]]:
-    rows = session.execute(
-        select(GraphTriple.subject, GraphTriple.predicate, GraphTriple.object_).where(
-            GraphTriple.graph_revision_id == gr.id
+    rows.extend(
+        session.scalars(
+            select(DerivedEdge).where(DerivedEdge.graph_revision_id == gr.id)
         )
     )
-    return {(s, p, o) for s, p, o in rows}
+    for row in rows:
+        if row.predicate == "_entity_attrs":
+            continue
+        value = {
+            "subject": row.subject,
+            "predicate": row.predicate,
+            "object": row.object_,
+            "kind": "DERIVED" if isinstance(row, DerivedEdge) else "DIRECT",
+            "props": row.props,
+        }
+        counts[json.dumps(value, sort_keys=True, ensure_ascii=False)] += 1
+    return counts
 
 
-def _spo_tuple(t: tuple[str, str, str]) -> dict:
-    return {"subject": t[0], "predicate": t[1], "object": t[2]}
+def _fact_changes(counts: Counter[str]) -> list[dict]:
+    return [
+        {**json.loads(key), "count": counts[key]}
+        for key in sorted(counts)[:MAX_DIFF_ITEMS]
+    ]
 
 
 def _truncated(counts: list[int]) -> bool:

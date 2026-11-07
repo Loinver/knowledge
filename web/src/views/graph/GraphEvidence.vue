@@ -16,6 +16,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import type { EvidenceItem, EvidenceTrace, ReverseTrace } from '@/api/graph'
 import { graphApi } from '@/api/graph'
+import { mappingsApi } from '@/api/mappings'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
@@ -115,6 +116,21 @@ async function search() {
 
 // ===== 证据冻结链（G-26）：事实 → 来源行 → 运行 → 冻结版本 =====
 const chainItem = ref<EvidenceItem | null>(null)
+watch(
+  data,
+  () => {
+    chainItem.value = null
+  },
+  { flush: 'sync' },
+)
+const frozenMapping = useAsyncData((signal) => {
+  const id = chainItem.value?.mapping_revision_id
+  return id ? mappingsApi.revision(id, signal) : Promise.resolve(null)
+})
+const mappingOwner = useAsyncData((signal) => {
+  const id = frozenMapping.data.value?.mapping_id
+  return id ? mappingsApi.get(id, signal) : Promise.resolve(null)
+})
 function showChain(item: EvidenceItem) {
   chainItem.value = item
 }
@@ -323,6 +339,47 @@ const canSubmit = computed(() =>
             <span class="chain-value">{{ step.value }}</span>
           </li>
         </ol>
+        <NAlert v-if="frozenMapping.error.value || mappingOwner.error.value" type="error">{{
+          frozenMapping.error.value || mappingOwner.error.value
+        }}</NAlert>
+        <NButton v-if="frozenMapping.error.value" @click="frozenMapping.reload">{{
+          t('graph.refresh')
+        }}</NButton>
+        <template v-if="frozenMapping.data.value">
+          <h3>{{ t('graph.frozenMapping', { revision: frozenMapping.data.value.revision }) }}</h3>
+          <p>{{ t('graph.frozenMappingHint') }}</p>
+          <details>
+            <summary>{{ t('graph.mappingConfiguration') }}</summary>
+            <pre>{{
+              JSON.stringify(
+                {
+                  entity_maps: frozenMapping.data.value.entity_maps,
+                  rel_maps: frozenMapping.data.value.rel_maps,
+                },
+                null,
+                2,
+              )
+            }}</pre>
+          </details>
+          <RouterLink
+            :to="{
+              name: 'mapping-wizard',
+              query: { mapping: frozenMapping.data.value.mapping_id },
+            }"
+            >{{ t('graph.correctMapping') }}</RouterLink
+          >
+          <RouterLink
+            v-if="mappingOwner.data.value"
+            :to="{
+              name: 'ontology-export',
+              query: {
+                ontology: mappingOwner.data.value.ontology_id,
+                revision: frozenMapping.data.value.onto_version,
+              },
+            }"
+            >{{ t('graph.exportFrozenOntology') }}</RouterLink
+          >
+        </template>
       </NCard>
     </template>
     <NEmpty

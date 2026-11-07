@@ -10,6 +10,7 @@ from app.domain.mapping_service import (
     create_mapping,
     delete_mapping,
     get_draft_revision,
+    get_frozen_revision,
     get_mapping,
     get_published_revision,
     list_mappings,
@@ -86,6 +87,40 @@ def _em(entity_type, table, fields, key_fields=None):
         ],
         key_fields=key_fields or [],
     )
+
+
+def test_frozen_revision_read_ignores_later_draft_and_rejects_drafts(
+    session: Session,
+) -> None:
+    ontology = _make_ontology(session)
+    mapping = create_mapping(
+        session, MappingCreate(name="history", ontology_id=ontology.id)
+    )
+    save_draft(
+        session,
+        mapping.id,
+        MappingRevisionCreate(
+            entity_maps=[_em("Person", "people", [("name", "name")])]
+        ),
+        if_match=0,
+    )
+    draft = get_draft_revision(session, mapping.id)
+    with pytest.raises(KGError):
+        get_frozen_revision(session, draft.id)
+    published = publish_mapping(session, mapping.id, if_match=0)
+    with pytest.raises(KGError):
+        save_draft(
+            session,
+            mapping.id,
+            MappingRevisionCreate(
+                entity_maps=[_em("Person", "people", [("name", "changed")])]
+            ),
+            if_match=1,
+        )
+    frozen = get_frozen_revision(session, published.id)
+    assert frozen.entity_maps[0]["field_maps"][0]["source_field"] == "name"
+    with pytest.raises(KGError):
+        get_frozen_revision(session, 99999)
 
 
 def test_create_mapping_with_draft(session):

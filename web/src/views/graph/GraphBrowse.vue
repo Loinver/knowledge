@@ -434,7 +434,30 @@ async function findPath() {
   }
 }
 
-const revisions = ref<{ id: number }[]>([])
+const showHistory = ref(false)
+const revisions = useAsyncData((signal) =>
+  showHistory.value || showDiff.value ? graphApi.revisions(signal) : Promise.resolve(null),
+)
+const switching = ref(false)
+const switchError = ref('')
+const viewController = new AbortController()
+onBeforeUnmount(() => viewController.abort())
+async function switchCurrent(id: number) {
+  if (switching.value) return
+  switching.value = true
+  switchError.value = ''
+  try {
+    await graphApi.switchCurrent(id)
+    if (viewController.signal.aborted) return
+    revisions.reload()
+    selectGraph(id)
+    reload()
+  } catch (cause) {
+    if (!viewController.signal.aborted) switchError.value = toMessage(cause)
+  } finally {
+    switching.value = false
+  }
+}
 const diffBase = ref<number | null>(null)
 const diffTarget = ref<number | null>(null)
 // 打开抽屉时预填最近两个结果集，便于直接计算差异
@@ -442,30 +465,35 @@ watch(showDiff, (open) => {
   if (!open) return
   const target = data.value?.graph_revision_id
   if (target) diffTarget.value = target
-  if (!diffBase.value && target) diffBase.value = Math.max(1, target - 1)
 })
 const diffResult = ref<GraphDiff | null>(null)
 const diffError = ref('')
-watch(showDiff, async (open) => {
-  if (!open || revisions.value.length) return
-  try {
-    const page = await graphApi.revisions(new AbortController().signal)
-    revisions.value = page.items
-  } catch {
-    revisions.value = []
-  }
-})
+const diffLoading = ref(false)
+let diffGeneration = 0
+watch(
+  [diffBase, diffTarget, showDiff],
+  () => {
+    diffGeneration++
+    diffResult.value = null
+    diffError.value = ''
+    diffLoading.value = false
+  },
+  { flush: 'sync' },
+)
 async function runDiff() {
   if (!diffBase.value || !diffTarget.value) return
+  const generation = ++diffGeneration
+  diffResult.value = null
+  diffLoading.value = true
   diffError.value = ''
   try {
-    diffResult.value = await graphApi.diff(
-      diffBase.value,
-      diffTarget.value,
-      new AbortController().signal,
-    )
+    const result = await graphApi.diff(diffBase.value, diffTarget.value, viewController.signal)
+    if (!viewController.signal.aborted && generation === diffGeneration) diffResult.value = result
   } catch (cause) {
-    diffError.value = toMessage(cause)
+    if (!viewController.signal.aborted && generation === diffGeneration)
+      diffError.value = toMessage(cause)
+  } finally {
+    if (generation === diffGeneration) diffLoading.value = false
   }
 }
 
@@ -628,6 +656,7 @@ function onExport(kind: string) {
   <section class="graph-page">
     <PageHeader :title="t('page.graphBrowse')" :description="t('graph.canvasHint')">
       <template #actions>
+        <NButton @click="showHistory = true">{{ t('graph.history') }}</NButton>
         <RouterLink :to="{ name: 'graph-entities', query: { graph: data?.graph_revision_id } }">{{
           t('page.graphEntities')
         }}</RouterLink>
@@ -914,9 +943,13 @@ function onExport(kind: string) {
               :aria-label="t('graph.diffTarget')"
             />
           </label>
-          <NButton type="primary" :disabled="!diffBase || !diffTarget" @click="runDiff">{{
-            t('graph.diffRun')
-          }}</NButton>
+          <NButton
+            type="primary"
+            :loading="diffLoading"
+            :disabled="!diffBase || !diffTarget || diffLoading"
+            @click="runDiff"
+            >{{ t('graph.diffRun') }}</NButton
+          >
           <NAlert v-if="diffError" type="warning">{{ diffError }}</NAlert>
           <template v-if="diffResult">
             <p>
@@ -926,6 +959,7 @@ function onExport(kind: string) {
                   removed: diffResult.triple_removed_count,
                   entityAdded: diffResult.entity_added_count,
                   entityRemoved: diffResult.entity_removed_count,
+                  entityModified: diffResult.entity_modified_count,
                 })
               }}
             </p>
@@ -937,9 +971,76 @@ function onExport(kind: string) {
               <li v-for="iri in diffResult.entities_removed" :key="'r' + iri" class="removed">
                 {{ t('graph.diffRemoved', { iri }) }}
               </li>
+              <li v-for="item in diffResult.entities_modified" :key="'m' + item.iri">
+                {{ t('graph.diffModified', { iri: item.iri }) }}
+                <pre>{{ JSON.stringify(item.before, null, 2) }}</pre>
+                <pre>{{ JSON.stringify(item.after, null, 2) }}</pre>
+              </li>
+              <li
+                v-for="(item, index) in diffResult.triples_added"
+                :key="'fa' + index"
+                class="added"
+              >
+                {{
+                  t('graph.diffFact', {
+                    change: '+',
+                    kind: t(`graph.${item.kind === 'DERIVED' ? 'derived' : 'direct'}`),
+                    subject: item.subject,
+                    predicate: item.predicate,
+                    object: item.object,
+                    count: item.count,
+                  })
+                }}
+                <pre v-if="item.props">{{ JSON.stringify(item.props, null, 2) }}</pre>
+              </li>
+              <li
+                v-for="(item, index) in diffResult.triples_removed"
+                :key="'fr' + index"
+                class="removed"
+              >
+                {{
+                  t('graph.diffFact', {
+                    change: '−',
+                    kind: t(`graph.${item.kind === 'DERIVED' ? 'derived' : 'direct'}`),
+                    subject: item.subject,
+                    predicate: item.predicate,
+                    object: item.object,
+                    count: item.count,
+                  })
+                }}
+                <pre v-if="item.props">{{ JSON.stringify(item.props, null, 2) }}</pre>
+              </li>
             </ul>
           </template>
         </div>
+      </NDrawerContent>
+    </NDrawer>
+    <NDrawer v-model:show="showHistory" width="min(520px, 100vw)">
+      <NDrawerContent :title="t('graph.history')" closable>
+        <NAlert v-if="revisions.error.value || switchError" type="error">{{
+          revisions.error.value || switchError
+        }}</NAlert>
+        <NButton :loading="revisions.loading.value" @click="revisions.reload">{{
+          t('graph.refresh')
+        }}</NButton>
+        <ul class="diff-list">
+          <li v-for="item in revisions.data.value ?? []" :key="item.id">
+            <span>{{ t('graph.historyItem', { id: item.id, run: item.run_id }) }}</span>
+            <NTag v-if="item.is_current" type="success">{{ t('graph.currentRevision') }}</NTag>
+            <NButton size="small" @click="selectGraph(item.id)">{{ t('common.view') }}</NButton>
+            <NPopconfirm
+              v-if="item.publishable && !item.is_current"
+              @positive-click="switchCurrent(item.id)"
+            >
+              <template #trigger
+                ><NButton size="small" :disabled="switching">{{
+                  t('graph.setCurrent')
+                }}</NButton></template
+              >
+              {{ t('graph.setCurrentHint') }}
+            </NPopconfirm>
+          </li>
+        </ul>
       </NDrawerContent>
     </NDrawer>
     <NDrawer v-model:show="showMatrix" :width="560">

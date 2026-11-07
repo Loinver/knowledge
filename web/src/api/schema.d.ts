@@ -721,6 +721,23 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/mappings/revisions/{revision_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Frozen Revision */
+    get: operations['frozen_revision_api_v1_mappings_revisions__revision_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/mappings': {
     parameters: {
       query?: never
@@ -4804,6 +4821,24 @@ export interface components {
       /** Source Fact Ids */
       source_fact_ids?: number[] | null
     }
+    /** DiffEntityChange */
+    DiffEntityChange: {
+      /** Iri */
+      iri: string
+      before: components['schemas']['DiffEntityValue']
+      after: components['schemas']['DiffEntityValue']
+    }
+    /** DiffEntityValue */
+    DiffEntityValue: {
+      /** Type Iri */
+      type_iri: string
+      /** Row Key */
+      row_key: string
+      /** Attrs */
+      attrs: {
+        [key: string]: unknown
+      }
+    }
     /** DiffTriple */
     DiffTriple: {
       /** Subject */
@@ -4812,6 +4847,21 @@ export interface components {
       predicate: string
       /** Object */
       object: string
+      /**
+       * Kind
+       * @default DIRECT
+       * @enum {string}
+       */
+      kind: 'DIRECT' | 'DERIVED'
+      /** Props */
+      props?: {
+        [key: string]: unknown
+      } | null
+      /**
+       * Count
+       * @default 1
+       */
+      count: number
     }
     /** DocumentExtractRequest */
     DocumentExtractRequest: {
@@ -5733,6 +5783,8 @@ export interface components {
       entities_added: string[]
       /** Entities Removed */
       entities_removed: string[]
+      /** Entities Modified */
+      entities_modified?: components['schemas']['DiffEntityChange'][]
       /** Triples Added */
       triples_added: components['schemas']['DiffTriple'][]
       /** Triples Removed */
@@ -5741,6 +5793,11 @@ export interface components {
       entity_added_count: number
       /** Entity Removed Count */
       entity_removed_count: number
+      /**
+       * Entity Modified Count
+       * @default 0
+       */
+      entity_modified_count: number
       /** Triple Added Count */
       triple_added_count: number
       /** Triple Removed Count */
@@ -9921,6 +9978,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_list_EnumReferenceOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  frozen_revision_api_v1_mappings_revisions__revision_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        revision_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_MappingRevisionOut_']
         }
       }
       /** @description Validation Error */

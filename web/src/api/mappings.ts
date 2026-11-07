@@ -14,6 +14,8 @@ export type PublishRequest = S['PublishRequest']
 export type FusionPolicy = S['FusionPolicy']
 
 export const mappingsApi = {
+  revision: (id: number, signal?: AbortSignal) =>
+    http.get<MappingRevision>(`/mappings/revisions/${id}`, { signal }).then((r) => r.data),
   list: (signal?: AbortSignal) =>
     listPages(
       (page, page_size) =>

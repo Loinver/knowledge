@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components, operations } from '@/api/schema'
 
 type Schemas = components['schemas']
@@ -17,12 +18,15 @@ export type ViewTemplate = Schemas['ViewTemplateOut']
 export type ViewTemplatePage = Schemas['ViewTemplatePage']
 export type SemanticViewConfig = Schemas['SemanticViewConfig']
 export type SemanticViewFields = Schemas['SemanticViewFieldsOut']
+export type GraphRevision = Schemas['GraphRevisionOut']
 
 type EntityQuery =
   operations['search_entities_api_v1_extraction_entities_get']['parameters']['query']
 type ViewQuery = operations['browse_graph_api_v1_extraction_graph_view_get']['parameters']['query']
 
 export const graphApi = {
+  switchCurrent: (id: number) =>
+    http.post<GraphRevision>(`/extraction/graph/${id}/switch`).then((r) => r.data),
   view: (params: ViewQuery, signal: AbortSignal) =>
     http
       .get<GraphView>('/extraction/graph-view', {
@@ -95,9 +99,16 @@ export const graphApi = {
       })
       .then((r) => r.data),
   revisions: (signal: AbortSignal) =>
-    http
-      .get<{ items: Schemas['GraphRevisionOut'][] }>('/extraction/graph/revisions', { signal })
-      .then((r) => r.data),
+    listPages(
+      (page, page_size) =>
+        http
+          .get<Schemas['GraphRevisionOut'][]>('/extraction/graph/revisions', {
+            params: { page, page_size },
+            signal,
+          })
+          .then((r) => r.data),
+      signal,
+    ),
   runQuarantine: (runId: number, signal: AbortSignal) =>
     http
       .get<Schemas['QuarantineOut'][]>(`/extraction/runs/${runId}/quarantine`, { signal })
