@@ -18,3 +18,10 @@ class KGError(Exception):
         self.params = params or {}
         self.message = message or code.value
         super().__init__(code.value)
+
+
+class ExtractionCancelledError(KGError):
+    """Cooperative cancellation must survive source connector error boundaries."""
+
+    def __init__(self) -> None:
+        super().__init__(ErrorCode.INVALID_REQUEST, {"reason": "extraction_cancelled"})

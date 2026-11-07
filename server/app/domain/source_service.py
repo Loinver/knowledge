@@ -78,7 +78,8 @@ def datasource_engine(ds: Datasource) -> Iterator[Engine]:
         with readonly_engine(ds.kind, ds.params or {}, credential) as engine:
             yield engine
     except KGError as exc:
-        raise KGError(exc.code, {**exc.params, "datasource_id": ds.id}) from None
+        exc.params = {**exc.params, "datasource_id": ds.id}
+        raise
     except Exception:
         raise KGError(
             ErrorCode.SOURCE_UNREACHABLE,

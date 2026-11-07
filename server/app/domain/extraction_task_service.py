@@ -9,21 +9,24 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.db import bound_scope
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.extraction_incremental import invalid_incremental
 from app.domain.extraction_service import (
     ExtractionCancelledError,
+    _publish_graph_revision,
     start_run,
 )
 from app.models.data_access import MappingRevision
 from app.models.enums import RunResult
-from app.models.extraction import ExtractionTask
+from app.models.extraction import ExtractionRun, ExtractionTask, GraphRevision
 
 _POLL_SECONDS = 2.0
 _MAX_WORKERS = 2
@@ -31,12 +34,22 @@ _MAX_WORKERS = 2
 _executor = ThreadPoolExecutor(
     max_workers=_MAX_WORKERS, thread_name_prefix="kg-extraction"
 )
-_cancel_flags: dict[int, threading.Event] = {}
+
+
+@dataclass
+class _TaskControl:
+    cancel: threading.Event
+    lock: threading.RLock = field(default_factory=threading.RLock)
+    finished: bool = False
+
+
+_controls: dict[tuple[Engine, int], _TaskControl] = {}
+_runtime_lock = threading.Lock()
 # 任务归属引擎：随创建会话注册（生产为全局单引擎；测试为各库内存/文件引擎）。
 _engines: set[Engine] = set()
 # 运行中任务的实时进度（进程内）：SQLite 下跨连接写进度会与工作事务抢锁，
 # 因此进度驻留内存，任务结束前的最终计数以 run.counts 落库为准。
-_progress_memory: dict[int, dict] = {}
+_progress_memory: dict[tuple[Engine, int], dict] = {}
 _scheduler_started = threading.Event()
 _scheduler_lock = threading.Lock()
 
@@ -103,16 +116,33 @@ def cancel_task(session: Session, task_id: int) -> ExtractionTask:
     """取消任务：PENDING 直接取消；RUNNING 置协作标志，阶段边界生效。"""
     task = get_task(session, task_id)
     if task.status == "PENDING":
-        task.status = "CANCELLED"
-        task.finished_at = datetime.now(UTC)
-        task.error = "cancelled_before_start"
-        session.flush()
-        return task
+        changed = session.scalar(
+            update(ExtractionTask)
+            .where(ExtractionTask.id == task_id, ExtractionTask.status == "PENDING")
+            .values(
+                status="CANCELLED",
+                finished_at=datetime.now(UTC),
+                error="cancelled_before_start",
+            )
+            .returning(ExtractionTask.id)
+        )
+        session.refresh(task)
+        if changed is not None:
+            return task
     if task.status == "RUNNING":
-        flag = _cancel_flags.get(task.id)
-        if flag is not None:
-            flag.set()
-        return task
+        bind = session.get_bind()
+        assert isinstance(bind, Engine)
+        with _runtime_lock:
+            control = _controls.get((bind, task.id))
+        if control is None:
+            raise KGError(
+                ErrorCode.INVALID_REQUEST,
+                {"reason": "task_worker_not_available", "task_id": task.id},
+            )
+        with control.lock:
+            if not control.finished:
+                control.cancel.set()
+                return task
     raise KGError(
         ErrorCode.VALIDATION_VIOLATION,
         {"reason": "task_not_cancellable", "status": task.status, "task_id": task.id},
@@ -120,9 +150,18 @@ def cancel_task(session: Session, task_id: int) -> ExtractionTask:
 
 
 def _submit(task_id: int, engine: Engine) -> None:
-    flag = threading.Event()
-    _cancel_flags[task_id] = flag
-    _executor.submit(_run_task, task_id, flag, engine)
+    key = (engine, task_id)
+    with _runtime_lock:
+        if key in _controls:
+            return
+        control = _TaskControl(threading.Event())
+        _controls[key] = control
+    try:
+        _executor.submit(_run_task, task_id, control.cancel, engine)
+    except Exception:
+        with _runtime_lock:
+            _controls.pop(key, None)
+        raise
 
 
 def _ensure_scheduler() -> None:
@@ -175,91 +214,152 @@ def _dispatch_due_tasks() -> None:
             _submit(task_id, engine)
 
 
-def _load_watermarks(session: Session, task: ExtractionTask) -> dict | None:
+def _load_incremental_base(
+    session: Session, task: ExtractionTask
+) -> tuple[int | None, dict | None]:
     """增量运行的上次水位：同 (mapping, datasource) 最近成功任务的写出水。"""
     if not task.incremental:
-        return None
-    previous = session.scalars(
-        select(ExtractionTask)
+        return None, None
+    previous = session.execute(
+        select(ExtractionTask, ExtractionRun, GraphRevision)
+        .join(ExtractionRun, ExtractionRun.id == ExtractionTask.run_id)
+        .join(GraphRevision, GraphRevision.run_id == ExtractionRun.id)
         .where(
             ExtractionTask.mapping_revision_id == task.mapping_revision_id,
             ExtractionTask.datasource_id == task.datasource_id,
-            ExtractionTask.status.in_(("SUCCESS", "PARTIAL")),
+            ExtractionTask.namespace == task.namespace,
+            ExtractionTask.status == "SUCCESS",
+            ExtractionRun.status == RunResult.SUCCESS,
+            GraphRevision.publishable.is_(True),
             ExtractionTask.id != task.id,
         )
-        .order_by(ExtractionTask.id.desc())
+        .order_by(ExtractionTask.finished_at.desc(), ExtractionTask.id.desc())
         .limit(1)
     ).first()
-    return previous.watermark if previous is not None else None
+    if previous is None:
+        return None, None
+    predecessor, run, graph = previous
+    if (
+        predecessor.incremental
+        and (run.cfg_snapshot.get("incremental") or {}).get("version") != 1
+    ):
+        raise invalid_incremental("incremental_base_requires_full_rebuild")
+    frozen_watermark = run.cfg_snapshot.get("output_watermarks")
+    if (
+        not isinstance(frozen_watermark, dict)
+        or frozen_watermark != predecessor.watermark
+    ):
+        raise invalid_incremental("incremental_watermark_mismatch")
+    return graph.id, frozen_watermark
 
 
 def _run_task(task_id: int, cancel_flag: threading.Event, engine: Engine) -> None:
-    """线程池入口：独立 session 执行，任务行状态机全程由本函数维护。"""
-    with bound_scope(sessionmaker(bind=engine, expire_on_commit=False)) as session:
-        task = session.get(ExtractionTask, task_id)
-        if task is None or task.status != "PENDING":
-            _cancel_flags.pop(task_id, None)
+    """Claim in a short transaction; serialize cancellation with the final commit."""
+    key = (engine, task_id)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    with _runtime_lock:
+        control = _controls.setdefault(key, _TaskControl(cancel_flag))
+    claimed = False
+    try:
+        with bound_scope(factory) as session:
+            claimed = (
+                session.scalar(
+                    update(ExtractionTask)
+                    .where(
+                        ExtractionTask.id == task_id, ExtractionTask.status == "PENDING"
+                    )
+                    .values(status="RUNNING", started_at=datetime.now(UTC))
+                    .returning(ExtractionTask.id)
+                )
+                is not None
+            )
+        if not claimed:
             return
-        if cancel_flag.is_set():
-            task.status = "CANCELLED"
-            task.finished_at = datetime.now(UTC)
-            task.error = "cancelled_before_start"
-            _cancel_flags.pop(task_id, None)
-            return
-        task.status = "RUNNING"
-        task.started_at = datetime.now(UTC)
-        watermarks = _load_watermarks(session, task)
-        _progress_memory[task_id] = {"phase": "entities"}
-
-        def progress(phase: str, extra: dict) -> None:
-            _progress_memory[task_id] = {"phase": phase, **extra}
 
         watermark_out: dict = {}
-        try:
-            run = start_run(
-                session,
-                task.mapping_revision_id,
-                task.datasource_id,
-                task.namespace,
-                progress=progress,
-                cancel_check=cancel_flag.is_set,
-                watermarks=watermarks,
-                watermark_out=watermark_out,
-            )
-        except ExtractionCancelledError:
-            # 协作式取消：本事务内已写入的候选行随提交保留（run 无发布，
-            # is_current 不受影响），任务如实记 CANCELLED。
-            task.status = "CANCELLED"
+
+        def finalize(session: Session) -> None:
+            task = get_task(session, task_id)
+            run = session.get(ExtractionRun, task.run_id) if task.run_id else None
+            if control.cancel.is_set():
+                task.status = "CANCELLED"
+                task.error = "cancelled_by_request"
+                if run is not None:
+                    run.status = RunResult.CANCELLED
+                    run.finished_at = datetime.now(UTC)
+                    run.counts = {**run.counts, "error": "extraction_cancelled"}
+            elif run is not None and run.status in (
+                RunResult.SUCCESS,
+                RunResult.PARTIAL,
+            ):
+                if not run.counts.get("no_op"):
+                    _publish_graph_revision(session, run)
+                task.progress = {"phase": "done", **run.counts}
+                task.watermark = watermark_out or None
             task.finished_at = datetime.now(UTC)
-            task.error = "cancelled_by_request"
-            _progress_memory.pop(task_id, None)
-            _cancel_flags.pop(task_id, None)
-            return
-        except KGError as exc:
-            task.status = "FAILED"
-            task.finished_at = datetime.now(UTC)
-            task.error = f"{exc.code.value}"
-            _progress_memory.pop(task_id, None)
-            _cancel_flags.pop(task_id, None)
-            return
-        except Exception:
-            task.status = "FAILED"
-            task.finished_at = datetime.now(UTC)
-            task.error = "task_execution_failed"
-            _progress_memory.pop(task_id, None)
-            _cancel_flags.pop(task_id, None)
-            return
-        task.run_id = run.id
-        task.status = run.status.value
-        task.finished_at = datetime.now(UTC)
-        if run.status in (RunResult.SUCCESS, RunResult.PARTIAL):
-            counts = run.counts if isinstance(run.counts, dict) else {}
-            task.progress = {"phase": "done", **counts}
-            task.watermark = watermark_out or None
-        _progress_memory.pop(task_id, None)
-        _cancel_flags.pop(task_id, None)
+            control.finished = True
+
+        with bound_scope(
+            factory, commit_guard=control.lock, before_commit=finalize
+        ) as session:
+            task = get_task(session, task_id)
+            _progress_memory[key] = {"phase": "entities"}
+
+            def progress(phase: str, extra: dict) -> None:
+                _progress_memory[key] = {"phase": phase, **extra}
+
+            try:
+                session.execute(
+                    update(MappingRevision)
+                    .where(MappingRevision.id == task.mapping_revision_id)
+                    .values(id=MappingRevision.id)
+                )
+                base_id, watermarks = _load_incremental_base(session, task)
+                run = start_run(
+                    session,
+                    task.mapping_revision_id,
+                    task.datasource_id,
+                    task.namespace,
+                    progress=progress,
+                    cancel_check=control.cancel.is_set,
+                    watermarks=watermarks,
+                    watermark_out=watermark_out,
+                    publish=False,
+                    incremental=task.incremental,
+                    base_graph_revision_id=base_id,
+                )
+                task.run_id = run.id
+                task.status = run.status.value
+            except KGError as exc:
+                run_id = exc.params.get("run_id")
+                task.run_id = run_id if isinstance(run_id, int) else None
+                task.status = (
+                    "CANCELLED"
+                    if isinstance(exc, ExtractionCancelledError)
+                    else "FAILED"
+                )
+                task.error = str(exc.params.get("reason", exc.code.value))
+    except Exception:
+        # The candidate transaction has rolled back. Persist an honest terminal
+        # status in a fresh transaction, including commit/database failures.
+        if claimed:
+            with bound_scope(factory) as session:
+                task = get_task(session, task_id)
+                task.status = "FAILED"
+                task.error = "task_execution_failed"
+                task.finished_at = datetime.now(UTC)
+    finally:
+        if claimed:
+            _progress_memory.pop(key, None)
+        with _runtime_lock:
+            if _controls.get(key) is control and (
+                claimed or control.cancel is cancel_flag
+            ):
+                _controls.pop(key, None)
 
 
-def live_progress(task_id: int) -> dict | None:
+def live_progress(task_id: int, engine: object) -> dict | None:
     """运行中任务的内存进度；任务结束或不存在返回 None。"""
-    return _progress_memory.get(task_id)
+    return (
+        _progress_memory.get((engine, task_id)) if isinstance(engine, Engine) else None
+    )

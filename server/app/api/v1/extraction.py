@@ -127,13 +127,13 @@ def create_extraction_task(
         run_after=payload.run_after,
     )
     session.commit()
-    return _task_out(task)
+    return _task_out(task, session)
 
 
-def _task_out(task: object) -> ExtractionTaskOut:
+def _task_out(task: object, session: Session) -> ExtractionTaskOut:
     data = ExtractionTaskOut.model_validate(task)
     if data.status == "RUNNING":
-        live = live_progress(data.id)
+        live = live_progress(data.id, session.get_bind())
         if live is not None:
             data = data.model_copy(update={"progress": live})
     return data
@@ -146,14 +146,14 @@ def list_extraction_tasks(
     session: Session = Depends(get_session),
 ) -> list[ExtractionTaskOut]:
     items, _total = list_tasks(session, page, page_size)
-    return [_task_out(item) for item in items]
+    return [_task_out(item, session) for item in items]
 
 
 @router.get("/tasks/{task_id}", response_model=ApiResponse[ExtractionTaskOut])
 def get_extraction_task(
     task_id: int, session: Session = Depends(get_session)
 ) -> ExtractionTaskOut:
-    return _task_out(get_task(session, task_id))
+    return _task_out(get_task(session, task_id), session)
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=ApiResponse[ExtractionTaskOut])
@@ -163,7 +163,7 @@ def cancel_extraction_task(
     """取消任务：PENDING 直接取消；RUNNING 在阶段边界协作生效。"""
     task = cancel_task(session, task_id)
     session.commit()
-    return _task_out(task)
+    return _task_out(task, session)
 
 
 @router.get("/runs", response_model=ApiResponse[list[ExtractionRunOut]])

@@ -48,6 +48,11 @@ def export_run(session: Session, run_id: int) -> ExtractionRunExport:
                 "evidence_count",
                 "derived_edge_count",
                 "rule_violation_count",
+                "inherited_entity_count",
+                "inherited_evidence_count",
+                "new_entity_count",
+                "new_entity_row_count",
+                "no_op",
             )
             if type(counts.get(key)) is int and counts[key] >= 0
         },

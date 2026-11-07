@@ -9,16 +9,30 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from copy import deepcopy
 from datetime import UTC, datetime
 
-from sqlalchemy import bindparam, func, inspect, literal_column, quoted_name, select
+from sqlalchemy import (
+    bindparam,
+    func,
+    inspect,
+    literal_column,
+    quoted_name,
+    select,
+    update,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.connectors.sql import select_source_rows
 from app.core.error_codes import ErrorCode
-from app.core.errors import KGError
+from app.core.errors import ExtractionCancelledError, KGError
 from app.domain.derivation_service import run_derivation_stage
+from app.domain.extraction_incremental import (
+    clone_incremental_base,
+    invalid_incremental,
+    validate_incremental_mapping,
+)
 from app.domain.extraction_rule_stage import run_rule_stage
 from app.domain.mapping_compiler import _apply_transform
 from app.domain.metadata_service import get_latest_snapshot
@@ -74,10 +88,6 @@ def _load_frozen_pins(session: Session, rev: MappingRevision) -> dict:
     }
 
 
-class ExtractionCancelledError(Exception):
-    """协作式取消：任务在阶段边界安全中断，不发布结果集。"""
-
-
 def start_run(
     session: Session,
     mapping_revision_id: int,
@@ -88,12 +98,21 @@ def start_run(
     cancel_check: Callable[[], bool] | None = None,
     watermarks: dict | None = None,
     watermark_out: dict | None = None,
+    publish: bool = True,
+    incremental: bool = False,
+    base_graph_revision_id: int | None = None,
 ) -> ExtractionRun:
     """启动抽取运行。同步执行四阶段，状态机落库。
 
     progress / cancel_check / watermarks 供异步任务使用：进度按阶段
     回调，取消在阶段边界协作生效，水位用于增量过滤与新水位写出。
     """
+    # Serializes runs of one frozen mapping before choosing/publishing a base.
+    session.execute(
+        update(MappingRevision)
+        .where(MappingRevision.id == mapping_revision_id)
+        .values(id=MappingRevision.id)
+    )
     rev = session.get(MappingRevision, mapping_revision_id)
     if rev is None:
         raise KGError(
@@ -121,6 +140,28 @@ def start_run(
         "onto_version": rev.onto_version,
         "pins": pins,
     }
+    if watermarks and (not incremental or base_graph_revision_id is None):
+        raise invalid_incremental("incremental_base_required")
+    if incremental:
+        validate_incremental_mapping(rev, snap.catalog)
+        if base_graph_revision_id is not None:
+            for em in rev.entity_maps:
+                entry = (watermarks or {}).get(em["table"])
+                if (
+                    not isinstance(entry, dict)
+                    or entry.get("field") != em["incremental_field"]
+                    or "value" not in entry
+                    or (entry["value"] is not None and type(entry["value"]) is not int)
+                ):
+                    raise invalid_incremental("incremental_watermark_incomplete")
+        cfg["incremental"] = {
+            "version": 1,
+            "base_graph_revision_id": base_graph_revision_id,
+            "mode": "APPEND_ONLY" if base_graph_revision_id else "INITIAL_FULL",
+            "input_watermarks": deepcopy(watermarks or {}),
+            "relation_scan_mode": "FULL",
+        }
+    staged_watermarks = deepcopy(watermarks or {})
     run = ExtractionRun(
         mapping_revision_id=mapping_revision_id,
         status=RunResult.PARTIAL,
@@ -142,8 +183,19 @@ def start_run(
             progress=progress,
             cancel_check=cancel_check,
             watermarks=watermarks,
-            watermark_out=watermark_out,
+            watermark_out=staged_watermarks,
         )
+    except KGError as exc:
+        run.status = (
+            RunResult.CANCELLED
+            if isinstance(exc, ExtractionCancelledError)
+            else RunResult.FAILED
+        )
+        run.finished_at = datetime.now(UTC)
+        run.counts = {"error": exc.params.get("reason", exc.code.value)}
+        exc.params = {**exc.params, "run_id": run.id}
+        session.flush()
+        raise
     except Exception:
         run.status = RunResult.FAILED
         run.finished_at = datetime.now(UTC)
@@ -163,7 +215,13 @@ def start_run(
     only_quarantine = (
         counts.get("quarantine_count", 0) > 0 and counts.get("entity_count", 0) == 0
     )
-    if zero_output or only_quarantine:
+    if counts.get("no_op"):
+        run.status = RunResult.SUCCESS
+    elif (
+        zero_output
+        or only_quarantine
+        or (incremental and counts.get("quarantine_count", 0))
+    ):
         run.status = RunResult.FAILED
     else:
         run.status = (
@@ -175,7 +233,18 @@ def start_run(
     session.flush()
 
     # 成功才创建 graph_revision 并设 is_current（失败不覆盖）
-    if run.status in (RunResult.SUCCESS, RunResult.PARTIAL):
+    if run.status == RunResult.SUCCESS:
+        run.cfg_snapshot = {
+            **run.cfg_snapshot,
+            "output_watermarks": deepcopy(staged_watermarks),
+        }
+        if watermark_out is not None:
+            watermark_out.update(staged_watermarks)
+    if (
+        publish
+        and not counts.get("no_op")
+        and run.status in (RunResult.SUCCESS, RunResult.PARTIAL)
+    ):
         _publish_graph_revision(session, run)
     return run
 
@@ -207,6 +276,14 @@ def _execute_four_phases(
     entity_iri_index: dict[str, dict] = {}  # IRI -> {type, row_key}
     # (table, row_key) / ("type:<entity_type>", 业务键) -> IRI，端点解析索引
     key_index: dict[tuple[str, str], str] = {}
+    incremental_cfg = run.cfg_snapshot.get("incremental") or {}
+    inherited_entities = 0
+    inherited_evidence = 0
+    base_id = incremental_cfg.get("base_graph_revision_id")
+    if base_id is not None:
+        inherited_entities, inherited_evidence = clone_incremental_base(
+            session, base_id, run, gr, rev, entity_iri_index, key_index
+        )
 
     def _check_cancel() -> None:
         if cancel_check is not None and cancel_check():
@@ -251,6 +328,17 @@ def _execute_four_phases(
         _report("entities", {"evidence_count": evidence_count})
 
         _check_cancel()
+        if base_id is not None and evidence_count == 0 and quarantine_count == 0:
+            return {
+                "entity_count": 0,
+                "triple_count": 0,
+                "quarantine_count": 0,
+                "evidence_count": 0,
+                "derived_edge_count": 0,
+                "no_op": 1,
+                "inherited_entity_count": inherited_entities,
+                "new_entity_row_count": 0,
+            }
         # 阶段2：关系映射
         for rm in rev.rel_maps or []:
             t, q, e = _phase2_relation(
@@ -281,17 +369,25 @@ def _execute_four_phases(
     # 阶段4：派生推导（DERIVATION 规则执行，写 DerivedEdge）
     derived_count = run_derivation_stage(session, run, gr, rev)
     _report("derivation", {"evidence_count": evidence_count + rel_evidence})
+    _check_cancel()
 
     counts = {
         "entity_count": entity_count,
         "triple_count": triple_count,
         "quarantine_count": quarantine_count,
-        "evidence_count": evidence_count + rel_evidence,
+        "evidence_count": inherited_evidence + evidence_count + rel_evidence,
         "derived_edge_count": derived_count,
         "rule_violation_count": rule_stage["rule_violation_count"],
         "validation_summary": rule_stage["validation_summary"],
         "rule_results": rule_stage["rule_results"],
     }
+    if incremental_cfg:
+        counts.update(
+            inherited_entity_count=inherited_entities,
+            inherited_evidence_count=inherited_evidence,
+            new_entity_row_count=evidence_count,
+            new_entity_count=entity_count - inherited_entities,
+        )
     return counts
 
 
@@ -314,7 +410,7 @@ def _greater_value(candidate: object, incumbent: object | None) -> bool:
     if incumbent is None:
         return True
     if isinstance(candidate, int | float) and isinstance(incumbent, int | float):
-        return float(candidate) > float(incumbent)
+        return candidate > incumbent
     return str(candidate) > str(incumbent)
 
 
@@ -394,6 +490,11 @@ def _phase1_entity(
         return 0, 1
 
     for idx, raw in enumerate(raw_rows):
+        if run.cfg_snapshot.get("incremental") and (
+            type(raw.get(incremental_field)) is not int
+            or any(type(raw.get(key)) is not int for key in key_fields)
+        ):
+            raise invalid_incremental("incremental_requires_integer_values")
         # row_key
         if key_fields:
             key_parts = [str(raw.get(k)) for k in key_fields if raw.get(k) is not None]
@@ -443,6 +544,10 @@ def _phase1_entity(
                 match_value = f"{match_value}|{value}" if match_value else str(value)
         identity_key = match_value if match_value else row_key
         iri = _stable_iri(namespace, entity_type, identity_key)
+        if run.cfg_snapshot.get("incremental") and (table, row_key) in key_index:
+            raise invalid_incremental("incremental_row_update_unsupported")
+        if run.cfg_snapshot.get("incremental") and iri in entity_iri_index:
+            raise invalid_incremental("incremental_identity_collision")
         key_index[(table, row_key)] = iri
         if match_value:
             key_index[(f"type:{entity_type}", match_value)] = iri
@@ -538,7 +643,11 @@ def _phase1_entity(
         )
         evidence_n += 1
     session.flush()
-    if watermark_out is not None and incremental_field and watermark_max is not None:
+    if (
+        watermark_out is not None
+        and incremental_field
+        and (watermark_max is not None or table not in watermark_out)
+    ):
         watermark_out[table] = {"field": incremental_field, "value": watermark_max}
     return evidence_n, quarantine_n
 
@@ -589,6 +698,13 @@ def _phase2_relation(
                 inspect(conn)
                 .get_pk_constraint(table, schema=None if schema == "main" else schema)
                 .get("constrained_columns", [])
+            )
+            foreign_keys = (
+                inspect(conn).get_foreign_keys(
+                    table, schema=None if schema == "main" else schema
+                )
+                if run.cfg_snapshot.get("incremental") and mode == "FK"
+                else []
             )
             result = conn.execute(sql)
             raw_rows = [dict(r._mapping) for r in result.fetchall()]
@@ -651,13 +767,29 @@ def _phase2_relation(
                 quarantine_n += 1
                 continue
             # FK: subject 是当前表实体，object 是被引用表实体
-            subject_key = str(raw.get("id", f"fk-{idx}"))
+            subject_key = (
+                row_key
+                if run.cfg_snapshot.get("incremental")
+                else str(raw.get("id", f"fk-{idx}"))
+            )
             subject_iri = _lookup_or_stub(
                 entity_iri_index, namespace, table, subject_key, session, gr, key_index
             )
-            object_iri = _resolve_ref_iri(
-                entity_iri_index, namespace, src_val, session, gr
-            )
+            if run.cfg_snapshot.get("incremental"):
+                targets = [
+                    fk
+                    for fk in foreign_keys
+                    if fk.get("constrained_columns") == [fk_field]
+                ]
+                if len(targets) != 1:
+                    raise invalid_incremental("incremental_fk_target_unknown")
+                object_iri = key_index.get((targets[0]["referred_table"], str(src_val)))
+                if object_iri is None:
+                    raise invalid_incremental("incremental_fk_endpoint_missing")
+            else:
+                object_iri = _resolve_ref_iri(
+                    entity_iri_index, namespace, src_val, session, gr
+                )
             triple = GraphTriple(
                 graph_revision_id=gr.id,
                 subject=subject_iri,
@@ -1072,7 +1204,11 @@ def switch_current(session: Session, graph_revision_id: int) -> GraphRevision:
             ErrorCode.RESOURCE_NOT_FOUND, {"graph_revision_id": graph_revision_id}
         )
     run = session.get(ExtractionRun, gr.run_id)
-    if run is None or run.status not in (RunResult.SUCCESS, RunResult.PARTIAL):
+    if (
+        not gr.publishable
+        or run is None
+        or run.status not in (RunResult.SUCCESS, RunResult.PARTIAL)
+    ):
         raise KGError(
             ErrorCode.VALIDATION_VIOLATION,
             {

@@ -55,6 +55,8 @@ const formRef = ref<FormInst | null>(null)
 let taskController: AbortController | undefined
 let optionController: AbortController | undefined
 let pollTimer: number | undefined
+let disposed = false
+let mappingGeneration = 0
 
 const mappingOptions = computed(() =>
   mappings.value
@@ -159,26 +161,30 @@ async function loadOptions(): Promise<void> {
 }
 
 async function chooseMapping(value: number | null): Promise<void> {
+  const generation = ++mappingGeneration
   selectedMappingId.value = value
   publishedRevisionId.value = null
   createError.value = ''
   if (value === null) return
   try {
     const revision = await mappingsApi.published(value)
+    if (disposed || generation !== mappingGeneration) return
     if (!revision) throw { code: 'KG.REVISION_NOT_FOUND' }
     publishedRevisionId.value = revision.id
   } catch (err) {
-    createError.value = toMessage(err)
+    if (!disposed && generation === mappingGeneration) createError.value = toMessage(err)
   }
 }
 
 async function createTask(): Promise<void> {
   if (!canCreate.value) return
+  const generation = mappingGeneration
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (disposed || generation !== mappingGeneration || !canCreate.value) return
   creating.value = true
   createError.value = ''
   notice.value = ''
@@ -221,12 +227,15 @@ function gotoRuns(): void {
 
 onMounted(async () => {
   await Promise.all([loadOptions(), loadTasks()])
+  if (disposed) return
   pollTimer = window.setInterval(() => {
     if (!document.hidden) void loadTasks()
   }, 2000)
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  mappingGeneration += 1
   if (pollTimer !== undefined) window.clearInterval(pollTimer)
   taskController?.abort()
   optionController?.abort()

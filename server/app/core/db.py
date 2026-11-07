@@ -6,8 +6,8 @@ SQLAlchemy 2.0 风格。写接口的事务边界由调用方（API 路由或领�
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -79,12 +79,20 @@ def session_scope() -> Iterator[Session]:
 
 
 @contextmanager
-def bound_scope(factory: sessionmaker) -> Iterator[Session]:
+def bound_scope(
+    factory: sessionmaker,
+    *,
+    commit_guard: AbstractContextManager | None = None,
+    before_commit: Callable[[Session], None] | None = None,
+) -> Iterator[Session]:
     """绑定任意引擎工厂的事务上下文（异步任务线程使用）。"""
     session = factory()
     try:
         yield session
-        session.commit()
+        with commit_guard if commit_guard is not None else nullcontext():
+            if before_commit is not None:
+                before_commit(session)
+            session.commit()
     except Exception:
         session.rollback()
         raise
