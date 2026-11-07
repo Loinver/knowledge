@@ -1,7 +1,9 @@
 # 产品承诺、路由与功能闭环审计
 
-日期：2026-11-06（Asia/Shanghai）  
-仓库：`/Users/linyer/Public/Private/knowledge`  
+日期：2026-11-06（Asia/Shanghai）
+
+仓库：`/Users/linyer/Public/Private/knowledge`
+
 基线：`3e729e4213db3cd61a2430aa49962f226e65f312`；开始与报告整理前 `git status --short` 均为空。
 
 ## 1. 结论与证据边界
