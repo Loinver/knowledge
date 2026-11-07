@@ -227,7 +227,10 @@
     "positionValue": "{x}, {y}",
     "aiAssist": "AI suggestions",
     "configureRules": "Attach rules",
-    "rulesHint": "Select the rules used by this ontology, then validate and publish. Rules without an execution engine are marked Not run."
+    "rulesHint": "Select the rules used by this ontology, then validate and publish. Rules without an execution engine are marked Not run.",
+    "addDomainMembers": "Add domain members",
+    "addDomainMembersHint": "Add members from the latest published domain and pin their resource revisions. Republish older domains that did not record member revisions.",
+    "domainMembersHint": "This group displays business domain members. Select a type or relation to change its ontology reference; domain membership remains unchanged."
   },
   "entityType": {
     "list": "Entity Type List",

@@ -65,6 +65,20 @@ test('ontology list and exports preserve pagination, file bytes, MIME types and 
   }
 })
 
+test('domain assembly sends a domain identity and frozen revision separately from resource references', async (t) => {
+  const calls = []
+  const refs = [{ id: 20, resource_id: 42, pinned_revision: 3 }]
+  const api = await loadApi(t, {
+    post: async (...args) => {
+      calls.push(args)
+      return { data: refs }
+    },
+  })
+  const payload = { domain_id: 4, domain_revision: 2, if_edit_match: 7 }
+  assert.equal(await api.addDomainMembers(1, payload), refs)
+  assert.deepEqual(calls, [['/ontologies/1/domain-members', payload]])
+})
+
 test('ontology export rejects JSON error envelopes in successful and failed Blob responses', async (t) => {
   const detail = {
     code: 'KG.RESOURCE_NOT_FOUND',

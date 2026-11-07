@@ -199,7 +199,15 @@ const canvasRelationIds = computed(() =>
   refs.value.map((r) => r.resource_id).filter((id) => relationById.value[id] !== undefined),
 )
 const canvasDomainIds = computed(() =>
-  refs.value.map((r) => r.resource_id).filter((id) => domainById.value[id] !== undefined),
+  domains.value
+    .filter((domain) => {
+      const members = domainMembers.value[domain.id] ?? []
+      return (
+        members.length > 0 &&
+        members.every((member) => refs.value.some((ref) => ref.resource_id === member.resource_id))
+      )
+    })
+    .map((domain) => domain.id),
 )
 
 const nodes = computed(() =>
@@ -899,6 +907,24 @@ async function addToCanvas(resourceId: number) {
   )
 }
 
+async function addPoolItem(kind: PoolCategory['kind'], id: number) {
+  if (kind !== 'domain') {
+    await addToCanvas(id)
+    return
+  }
+  const domain = domainById.value[id]
+  if (!domain?.current_revision) return
+  await updateOntology(
+    (ontologyId, editRevision) =>
+      ontologyApi.addDomainMembers(ontologyId, {
+        domain_id: domain.id,
+        domain_revision: domain.current_revision,
+        if_edit_match: editRevision,
+      }),
+    true,
+  )
+}
+
 // B-7 画布直接建模：在资源池新建实体类型并加入画布（关系类型需端点，引导到关系类型库）
 const showCreate = ref(false)
 const createNamespace = ref<number | null>(null)
@@ -1223,12 +1249,20 @@ onBeforeUnmount(() => {
               :key="`a-${cat.kind}-${item.id}`"
               type="button"
               class="pool-item addable"
-              :disabled="!canEdit"
-              @click="addToCanvas(item.id)"
+              :disabled="
+                !canEdit || (cat.kind === 'domain' && !domainById[item.id]?.current_revision)
+              "
+              :title="cat.kind === 'domain' ? t('designer.addDomainMembersHint') : undefined"
+              @click="addPoolItem(cat.kind, item.id)"
             >
               <i class="dot" :style="{ background: STATUS_VAR[item.status] }" />
               <span class="pool-name">{{ item.label }}</span>
-              <span class="plus" :aria-label="t('designer.addToCanvas')" />
+              <span
+                class="plus"
+                :aria-label="
+                  t(cat.kind === 'domain' ? 'designer.addDomainMembers' : 'designer.addToCanvas')
+                "
+              />
             </button>
           </template>
         </div>
@@ -1496,7 +1530,16 @@ onBeforeUnmount(() => {
             <p v-else class="inspect-empty">{{ t('common.empty') }}</p>
           </div>
 
-          <NButton size="small" block :disabled="!canEdit" @click="removeFromCanvas(selected.id)">
+          <p v-if="selected.kind === 'domain'" class="inspect-empty">
+            {{ t('designer.domainMembersHint') }}
+          </p>
+          <NButton
+            v-else
+            size="small"
+            block
+            :disabled="!canEdit"
+            @click="removeFromCanvas(selected.id)"
+          >
             {{ t('designer.removeFromCanvas') }}
           </NButton>
         </div>

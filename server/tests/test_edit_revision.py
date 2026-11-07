@@ -435,7 +435,11 @@ def test_membership_and_publish_share_edit_token_without_rewriting_snapshots(
             assert frozen_domain is not None
             assert frozen_domain.payload["label_i18n"] == {"en-US": "Saved"}
             assert frozen_domain.payload["members"] == [
-                {"resource_id": published_resource_id, "as_ref": False}
+                {
+                    "resource_id": published_resource_id,
+                    "as_ref": False,
+                    "pinned_revision": 1,
+                }
             ]
         else:
             frozen_onto = session.scalar(select(OntologyRevision))

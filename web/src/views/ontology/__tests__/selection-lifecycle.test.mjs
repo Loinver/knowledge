@@ -16,7 +16,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed = {
   Designer:
-    'catalogLoading,catalogError,loading,detail,ontologyId,refs,positions,selectedKey,canEdit,saving,working,loadError,actionError,saveError,needsRefresh,loadCatalog,selectOntology,persist,addToCanvas,removeFromCanvas,publish',
+    'catalogLoading,catalogError,loading,detail,ontologyId,refs,positions,selectedKey,canEdit,saving,working,loadError,actionError,saveError,needsRefresh,loadCatalog,selectOntology,persist,addToCanvas,addPoolItem,canvasDomainIds,removeFromCanvas,publish',
   Domains:
     'items,selected,members,loading,membersLoading,checking,working,canEdit,checkResult,listError,membersError,actionError,needsRefresh,addTypeId,load,select,refreshSelection,addMember,removeMember,publishCheck,publish',
 }
@@ -324,6 +324,22 @@ test('designer refreshes the complete snapshot before accepting the next edit to
   api.ontology.publish = async (...args) => published.push(args)
   await vm.publish()
   assert.deepEqual(published, [[1, 3]])
+})
+
+test('designer assembles a domain through its own identity and never aliases a same-numbered resource', async (t) => {
+  const { vm, api } = await mount(t, 'Designer')
+  api.domains.members = async () => [member(3)]
+  await vm.loadCatalog()
+  assert.deepEqual(vm.canvasDomainIds, [])
+  const calls = []
+  api.ontology.addDomainMembers = async (...args) => calls.push(['domain', ...args])
+  api.ontology.addRef = async (...args) => calls.push(['resource', ...args])
+  api.ontology.refs = async () => [reference(1), reference(3)]
+  await vm.addPoolItem('domain', 1)
+  assert.deepEqual(calls, [['domain', 1, { domain_id: 1, domain_revision: 1, if_edit_match: 1 }]])
+  assert.deepEqual(vm.canvasDomainIds, [1, 2])
+  await vm.addPoolItem('type', 2)
+  assert.deepEqual(calls[1], ['resource', 1, 2, undefined, 1])
 })
 
 test('designer suppresses stale edit conflicts and pending read callbacks after unmount', async (t) => {

@@ -8,13 +8,13 @@ import { ensureAdmin, loginAsAdmin } from './admin'
  * 既有 m3-browser-flow 的建模部分是 API 预置的（seedOntology / seedMapping），
  * 所以"业务人员能不能只靠界面走到本体"一直没有实测证据。本 spec 专门验证
  * 「登记命名空间 → 建实体类型（含数据属性） → 建关系类型（含端点） → 建业务域
- * （含成员、发布）」这一段。
+ * （含成员、发布）→ 按域装配本体并发布」这一段。
  *
  * 边界（如实说明，不做超出范围的成功声明）：
  * - 管理员账号由 scripts/seed_admin.py 种入，与既有 spec 一致，属环境准备；
  *   登录本身走界面。除此之外本文件不调用任何业务 API。
- * - 「本体装配」需要在设计器画布上把资源拖进画布，属另一段工作，不在本 spec 范围；
- *   业务域之后的主流程（映射、抽取、图谱、追溯）由 m3-browser-flow 覆盖。
+ * - 本体装配通过资源池加入业务域已发布成员，刷新后仍保留节点和关系；
+ *   后续映射、抽取、图谱和追溯由 m3-browser-flow 覆盖。
  *
  * 该链路已通过隔离 Playwright 环境验证；管理员准备由共享的 ensureAdmin 幂等处理。
  */
@@ -201,6 +201,7 @@ async function createAndDeleteOntologyThroughUI(
   name: string,
   iri: string,
   label: string,
+  domainLabel: string,
 ): Promise<void> {
   await page.goto('/ontology/ontologies')
   await page.getByRole('button', { name: '新建本体' }).first().click()
@@ -210,6 +211,17 @@ async function createAndDeleteOntologyThroughUI(
   await saveOverlay(page)
   await expect(page).toHaveURL(/\/ontology\/designer\?ontology=\d+/)
 
+  const domain = page.locator('.pool-item.addable').filter({ hasText: domainLabel })
+  await expect(domain).toBeEnabled()
+  await domain.click()
+  await expect(page.locator('.node')).toHaveCount(2)
+  await expect(page.locator('.edge-label')).toHaveCount(1)
+  await page.getByRole('button', { name: '发布', exact: true }).first().click()
+  await expect(page.locator('.toolbar .status-tag')).toHaveText('已发布')
+  await page.reload()
+  await expect(page.locator('.node')).toHaveCount(2)
+  await expect(page.locator('.edge-label')).toHaveCount(1)
+
   await page.goto('/ontology/ontologies')
   const row = page.locator('tr').filter({ hasText: name }).first()
   await row.getByRole('button', { name: '删除', exact: true }).click()
@@ -218,7 +230,7 @@ async function createAndDeleteOntologyThroughUI(
   await expect(row).toHaveCount(0)
 }
 
-test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 → 业务域', async ({ page }) => {
+test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 → 业务域 → 本体', async ({ page }) => {
   await ensureAdmin(page)
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
@@ -299,14 +311,14 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
   }
   await page.getByRole('button', { name: '发布', exact: true }).first().click()
   await expect(page.getByText('已发布').first()).toBeVisible()
-  await deleteDomainThroughUI(page, `界面业务域${stamp}`)
-
   await createAndDeleteOntologyThroughUI(
     page,
     `UiDeleteOntology${stamp}`,
     `https://example.org/${prefix}/delete-ontology#`,
     `界面删除本体${stamp}`,
+    `界面业务域${stamp}`,
   )
+  await deleteDomainThroughUI(page, `界面业务域${stamp}`)
 
   expect(pageErrors, '界面操作不应产生未捕获的前端错误').toEqual([])
 })

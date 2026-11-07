@@ -23,6 +23,14 @@ class OntologyRefAdd(BaseModel):
     if_edit_match: int | None = Field(default=None, ge=0)
 
 
+class OntologyDomainAdd(BaseModel):
+    """装配指定已发布业务域版本的冻结成员，不混用域与资源的 ID。"""
+
+    domain_id: int = Field(gt=0)
+    domain_revision: int = Field(gt=0)
+    if_edit_match: int = Field(ge=0)
+
+
 class OntologyCreate(BaseModel):
     name: str
     iri: str

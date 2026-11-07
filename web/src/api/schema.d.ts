@@ -168,6 +168,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ontologies/{ontology_id}/domain-members': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Add Domain Members Endpoint
+     * @description 写权限由主应用 business_router 的 EDITOR/ADMIN 依赖统一校验。
+     */
+    post: operations['add_domain_members_endpoint_api_v1_ontologies__ontology_id__domain_members_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/ontologies/{ontology_id}/refs/{ref_id}': {
     parameters: {
       query?: never
@@ -5876,6 +5896,18 @@ export interface components {
       rule_ids?: number[]
     }
     /**
+     * OntologyDomainAdd
+     * @description 装配指定已发布业务域版本的冻结成员，不混用域与资源的 ID。
+     */
+    OntologyDomainAdd: {
+      /** Domain Id */
+      domain_id: number
+      /** Domain Revision */
+      domain_revision: number
+      /** If Edit Match */
+      if_edit_match: number
+    }
+    /**
      * OntologyExportFormat
      * @enum {string}
      */
@@ -7904,6 +7936,41 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_list_OntologyRuleOut__']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  add_domain_members_endpoint_api_v1_ontologies__ontology_id__domain_members_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OntologyDomainAdd']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_list_OntologyRefOut__']
         }
       }
       /** @description Validation Error */

@@ -15,6 +15,7 @@ from app.core.errors import KGError
 from app.domain.ontology_export_service import export_ontology
 from app.domain.ontology_import_service import apply_import, preview_import
 from app.domain.ontology_service import (
+    add_domain_members,
     add_ref,
     create_ontology,
     delete_ontology,
@@ -37,6 +38,7 @@ from app.schemas.ontology import (
     ConflictInfo,
     OntologyBrief,
     OntologyCreate,
+    OntologyDomainAdd,
     OntologyExportFormat,
     OntologyOut,
     OntologyRefAdd,
@@ -149,6 +151,20 @@ def add_ref_endpoint(
     ref = add_ref(session, ontology_id, payload)
     session.commit()
     return OntologyRefOut.model_validate(ref)
+
+
+@router.post(
+    "/{ontology_id}/domain-members", response_model=ApiResponse[list[OntologyRefOut]]
+)
+def add_domain_members_endpoint(
+    ontology_id: int,
+    payload: OntologyDomainAdd,
+    session: Session = Depends(governance_session),
+) -> list[OntologyRefOut]:
+    """写权限由主应用 business_router 的 EDITOR/ADMIN 依赖统一校验。"""
+    with session.begin():
+        refs = add_domain_members(session, ontology_id, payload)
+        return [OntologyRefOut.model_validate(ref) for ref in refs]
 
 
 @router.delete("/{ontology_id}/refs/{ref_id}", response_model=ApiResponse[None])

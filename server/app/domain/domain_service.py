@@ -9,7 +9,7 @@ from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.models.domain import BusinessDomain, DomainMember, DomainRevision
 from app.models.enums import ResourceStatus
-from app.models.resource import ModelResource
+from app.models.resource import ModelResource, ResourceRevision
 from app.schemas.domain import (
     DomainCreate,
     DomainMemberAdd,
@@ -356,6 +356,18 @@ def publish_domain(
 ) -> int:
     """发布业务域：冻结不可变版本。发布前必须通过四项检查。"""
     domain = lock_domain_edit(session, domain, if_edit_match)
+    members = list_members(session, domain.id)
+    # 与资源发布/撤回串行化，避免检查后冻结到另一个版本。
+    resources = {
+        resource.id: resource
+        for resource in session.scalars(
+            select(ModelResource)
+            .where(ModelResource.id.in_({member.resource_id for member in members}))
+            .order_by(ModelResource.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    }
     check = check_publish(session, domain)
     if not check.can_publish:
         raise KGError(
@@ -363,16 +375,36 @@ def publish_domain(
             {"domain": domain.name, "issues": check.issues},
         )
 
-    from app.models.domain import DomainRevision
+    for resource in resources.values():
+        revision_id = session.scalar(
+            select(ResourceRevision.id).where(
+                ResourceRevision.resource_id == resource.id,
+                ResourceRevision.revision == resource.current_revision,
+            )
+        )
+        if resource.current_revision < 1 or revision_id is None:
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {
+                    "reason": "domain_member_revision_missing",
+                    "domain_id": domain.id,
+                    "resource_id": resource.id,
+                    "revision": resource.current_revision,
+                },
+            )
 
     new_rev = domain.current_revision + 1
-    members = list_members(session, domain.id)
     payload = {
         "name": domain.name,
         "iri": domain.iri,
         "label_i18n": domain.label_i18n,
         "members": [
-            {"resource_id": m.resource_id, "as_ref": m.as_ref} for m in members
+            {
+                "resource_id": m.resource_id,
+                "as_ref": m.as_ref,
+                "pinned_revision": resources[m.resource_id].current_revision,
+            }
+            for m in members
         ],
     }
     rev = DomainRevision(

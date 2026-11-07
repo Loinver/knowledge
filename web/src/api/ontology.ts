@@ -107,6 +107,9 @@ export const ontologyApi = {
       })
       .then((r) => r.data),
 
+  addDomainMembers: (id: number, payload: S['OntologyDomainAdd']) =>
+    http.post<OntologyRef[]>(`${base}/${id}/domain-members`, payload).then((r) => r.data),
+
   removeRef: (id: number, refId: number, editRevision?: number) =>
     http.delete(`${base}/${id}/refs/${refId}`, {
       headers: { 'If-Edit-Match': editRevision },

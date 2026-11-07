@@ -18,7 +18,9 @@ from app.domain.template_service import (
 )
 from app.models.data_access import Mapping
 from app.models.domain import (
+    BusinessDomain,
     CanvasLayout,
+    DomainRevision,
     Ontology,
     OntologyResourceRef,
     OntologyRevision,
@@ -26,11 +28,12 @@ from app.models.domain import (
 )
 from app.models.enums import ResourceStatus
 from app.models.governance import Rule
-from app.models.resource import ModelResource
+from app.models.resource import ModelResource, ResourceRevision
 from app.schemas.governance import RuleOut
 from app.schemas.ontology import (
     ConflictInfo,
     OntologyCreate,
+    OntologyDomainAdd,
     OntologyRefAdd,
     OntologyUpdate,
 )
@@ -141,6 +144,143 @@ def add_ref(
     session.add(ref)
     session.flush()
     return ref
+
+
+def add_domain_members(
+    session: Session, ontology_id: int, payload: OntologyDomainAdd
+) -> list[OntologyResourceRef]:
+    """在调用方事务内装配冻结成员；所有预检完成后再新增或固定引用。"""
+    if session.get(BusinessDomain, payload.domain_id) is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"domain_id": payload.domain_id})
+    revision = session.scalar(
+        select(DomainRevision).where(
+            DomainRevision.domain_id == payload.domain_id,
+            DomainRevision.revision == payload.domain_revision,
+        )
+    )
+    context = {
+        "domain_id": payload.domain_id,
+        "domain_revision": payload.domain_revision,
+    }
+    if revision is None:
+        raise KGError(
+            ErrorCode.REVISION_NOT_FOUND,
+            {**context, "reason": "domain_revision_unavailable"},
+        )
+    members = (
+        revision.payload.get("members") if isinstance(revision.payload, dict) else None
+    )
+    if not isinstance(members, list):
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {**context, "reason": "domain_member_versions_unavailable"},
+        )
+    if not members:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {**context, "reason": "domain_members_empty"},
+        )
+    pins: dict[int, int] = {}
+    for member in members:
+        resource_id = member.get("resource_id") if isinstance(member, dict) else None
+        pin = member.get("pinned_revision") if isinstance(member, dict) else None
+        if (
+            type(resource_id) is not int
+            or resource_id < 1
+            or type(pin) is not int
+            or pin < 1
+        ):
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {**context, "reason": "domain_member_versions_unavailable"},
+            )
+        if resource_id in pins and pins[resource_id] != pin:
+            raise KGError(
+                ErrorCode.REVISION_CONFLICT,
+                {
+                    **context,
+                    "reason": "domain_member_version_conflict",
+                    "resource_id": resource_id,
+                },
+            )
+        pins[resource_id] = pin
+
+    lock_ontology_edit(
+        session, get_ontology(session, ontology_id), payload.if_edit_match
+    )
+    resources = {
+        resource.id: resource
+        for resource in session.scalars(
+            select(ModelResource)
+            .where(ModelResource.id.in_(pins))
+            .order_by(ModelResource.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    }
+    existing = {
+        ref.resource_id: ref
+        for ref in session.scalars(
+            select(OntologyResourceRef)
+            .where(
+                OntologyResourceRef.ontology_id == ontology_id,
+                OntologyResourceRef.resource_id.in_(pins),
+            )
+            .execution_options(populate_existing=True)
+        )
+    }
+    for resource_id, pin in pins.items():
+        resource = resources.get(resource_id)
+        if resource is None:
+            raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"resource_id": resource_id})
+        resource_revision = session.scalar(
+            select(ResourceRevision.id).where(
+                ResourceRevision.resource_id == resource_id,
+                ResourceRevision.revision == pin,
+            )
+        )
+        if resource_revision is None:
+            raise KGError(
+                ErrorCode.REVISION_NOT_FOUND,
+                {
+                    **context,
+                    "reason": "domain_member_revision_missing",
+                    "resource_id": resource_id,
+                    "revision": pin,
+                },
+            )
+        ref = existing.get(resource_id)
+        if ref is not None:
+            actual = (
+                ref.pinned_revision
+                if ref.pinned_revision is not None
+                else resource.current_revision
+            )
+            if actual != pin:
+                raise KGError(
+                    ErrorCode.REVISION_CONFLICT,
+                    {
+                        **context,
+                        "reason": "domain_member_version_conflict",
+                        "resource_id": resource_id,
+                        "expected": pin,
+                        "actual": actual,
+                    },
+                )
+
+    refs: list[OntologyResourceRef] = []
+    for resource_id, pin in pins.items():
+        ref = existing.get(resource_id)
+        if ref is None:
+            ref = OntologyResourceRef(
+                ontology_id=ontology_id, resource_id=resource_id, pinned_revision=pin
+            )
+            session.add(ref)
+        elif ref.pinned_revision is None:
+            ref.pinned_revision = pin
+        refs.append(ref)
+    session.flush()
+    return refs
 
 
 def remove_ref(
