@@ -620,6 +620,12 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   const linkedFact = firstTriples.find((fact) => fact.subject !== fact.object_)
   expect(linkedFact, 'sample data contains at least one cross-entity fact').toBeTruthy()
   await page.goto('/graph?graph=' + firstGraph!.id + '&layout=org_tree')
+  await page.getByText('视图语义配置', { exact: true }).click()
+  await page.getByLabel('层级关系', { exact: true }).click()
+  await page
+    .locator('.n-base-select-option:visible')
+    .filter({ hasText: '就职于 · https://example.org/e2e/E2EWorksFor' })
+    .click()
   await expect(page.locator('svg .node').first()).toBeVisible()
   await expect(page.getByText('形态', { exact: true })).toBeVisible()
   await expect(page.getByText('推荐形态：')).toBeVisible()

@@ -21,6 +21,18 @@ import {
 
 import type { GraphView } from '@/api/graph'
 
+import {
+  fieldsFor,
+  hasSemanticConfig,
+  nodeTime,
+  numericValue,
+  semanticBindings,
+  type SemanticContext,
+  type SemanticNotice,
+  semanticValue,
+  utcTime,
+} from './semanticView.ts'
+
 export type GraphViewNode = GraphView['nodes'][number]
 export type GraphViewEdge = GraphView['edges'][number]
 export type PositionedNode = GraphViewNode & { x: number; y: number }
@@ -69,9 +81,13 @@ export type LayoutResult = {
   titles?: LayoutTitle[]
   /** 布局可收窄参与绘制的边（小多图各图块只画块内边）；缺省时画布用原始边。 */
   edges?: GraphViewEdge[]
+  notices?: SemanticNotice[]
 }
 
-export type LayoutCompute = (graph: Pick<GraphView, 'nodes' | 'edges'>) => LayoutResult
+export type LayoutCompute = (
+  graph: Pick<GraphView, 'nodes' | 'edges'>,
+  context?: SemanticContext,
+) => LayoutResult
 export type LayoutPlugin = { id: string; compute: LayoutCompute }
 
 export const NODE_W = 160
@@ -373,7 +389,11 @@ const supplyChain: LayoutPlugin = {
       left.add(edge.subject)
       right.add(edge.object_)
     }
-    for (const iri of left) right.delete(iri)
+    for (const iri of [...left]) {
+      if (!right.has(iri)) continue
+      left.delete(iri)
+      right.delete(iri)
+    }
     const middle = graph.nodes.filter((node) => !left.has(node.iri) && !right.has(node.iri))
     const columns: Set<string>[] = [left, right]
     const placed: PositionedNode[] = []
@@ -410,11 +430,12 @@ function firstDateAttr(attrs: Record<string, unknown>): string | null {
 /** G-21 时间轴：按类型分泳道，横轴按首个日期属性（无日期的排尾部并标记）。 */
 const timeline: LayoutPlugin = {
   id: 'timeline',
-  compute: (graph) => {
-    const dated = graph.nodes.map((node) => ({ node, date: firstDateAttr(node.attrs) }))
-    const times = dated
-      .filter((item) => item.date !== null)
-      .map((item) => new Date(item.date!).getTime())
+  compute: (graph, context) => {
+    const dated = graph.nodes.map((node) => ({
+      node,
+      date: context ? nodeTime(node, context) : utcTime(firstDateAttr(node.attrs)),
+    }))
+    const times = dated.filter((item) => item.date !== null).map((item) => item.date!)
     const min = times.length ? Math.min(...times) : 0
     const max = times.length ? Math.max(...times) : 1
     const span = Math.max(1, max - min)
@@ -423,7 +444,7 @@ const timeline: LayoutPlugin = {
     const laneHeight = 130
     const placed = dated.map(({ node, date }) => {
       const lane = laneOf.get(node.type_iri) ?? 0
-      const ratio = date ? (new Date(date).getTime() - min) / span : 1.04
+      const ratio = date !== null ? (date - min) / span : 1.04
       return { ...node, x: 90 + ratio * 1060, y: 60 + lane * laneHeight + 36 }
     })
     return {
@@ -443,43 +464,8 @@ const timeline: LayoutPlugin = {
 const schema: LayoutPlugin = {
   id: 'schema',
   compute: (graph) => {
-    const byType = new Map<string, GraphViewNode[]>()
-    for (const node of graph.nodes) {
-      byType.set(node.type_iri, [...(byType.get(node.type_iri) ?? []), node])
-    }
-    const typeOf = new Map(graph.nodes.map((node) => [node.iri, node.type_iri] as const))
-    const seenTypePairs = new Set<string>()
-    const typeEdges: GraphViewEdge[] = []
-    for (const edge of graph.edges) {
-      const subjectType = typeOf.get(edge.subject)
-      const objectType = typeOf.get(edge.object_)
-      if (!subjectType || !objectType) continue
-      const key = `${subjectType}|${edge.predicate}|${objectType}`
-      if (seenTypePairs.has(key)) continue
-      seenTypePairs.add(key)
-      typeEdges.push({ ...edge, subject: subjectType, object_: objectType })
-    }
-    const shortName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
-    const typeNodes: GraphViewNode[] = [...byType.entries()].map(([type, members]) => ({
-      ...members[0]!,
-      iri: type,
-      type_iri: type,
-      row_key: String(members.length),
-      attrs: { name: shortName(type), __typeCount__: members.length },
-      distance: 0,
-    }))
-    // 类型对计数进 props.count，供边标签显示
-    for (const edge of typeEdges) {
-      edge.props = {
-        count: graph.edges.filter(
-          (item) =>
-            item.predicate === edge.predicate &&
-            typeOf.get(item.subject) === edge.subject &&
-            typeOf.get(item.object_) === edge.object_,
-        ).length,
-      }
-    }
-    return force.compute({ nodes: typeNodes, edges: typeEdges })
+    const aggregated = typeGraph(graph)
+    return { ...force.compute(aggregated), edges: aggregated.edges }
   },
 }
 
@@ -525,32 +511,49 @@ const bipartite: LayoutPlugin = {
   compute: (graph) => supplyChain.compute(graph),
 }
 
-/** 环检测（G-09）：DFS 找出环上实体，置于中心环，其余实体网格排布。 */
+/** 强连通分量找出全部环上实体；迭代遍历避免长链耗尽调用栈。 */
 function findCycleNodes(nodes: GraphViewNode[], edges: GraphViewEdge[]): Set<string> {
   const iris = new Set(nodes.map((node) => node.iri))
   const adj = new Map<string, string[]>()
+  const reverse = new Map<string, string[]>()
+  const inCycle = new Set<string>()
   for (const edge of edges) {
     if (!iris.has(edge.subject) || !iris.has(edge.object_)) continue
     adj.set(edge.subject, [...(adj.get(edge.subject) ?? []), edge.object_])
+    reverse.set(edge.object_, [...(reverse.get(edge.object_) ?? []), edge.subject])
+    if (edge.subject === edge.object_) inCycle.add(edge.subject)
   }
-  const color = new Map<string, number>()
-  const onStack = new Set<string>()
-  const inCycle = new Set<string>()
-  const visit = (node: string) => {
-    color.set(node, 1)
-    onStack.add(node)
-    for (const next of adj.get(node) ?? []) {
-      if (onStack.has(next)) {
-        inCycle.add(next)
-        inCycle.add(node)
-      } else if (!color.get(next)) {
-        visit(next)
+  const visited = new Set<string>()
+  const finished: string[] = []
+  for (const root of iris) {
+    if (visited.has(root)) continue
+    const stack: [string, boolean][] = [[root, false]]
+    while (stack.length) {
+      const [node, exiting] = stack.pop()!
+      if (exiting) {
+        finished.push(node)
+        continue
       }
+      if (visited.has(node)) continue
+      visited.add(node)
+      stack.push([node, true])
+      for (const next of adj.get(node) ?? []) if (!visited.has(next)) stack.push([next, false])
     }
-    onStack.delete(node)
-    color.set(node, 2)
   }
-  for (const node of iris) if (!color.get(node)) visit(node)
+  visited.clear()
+  for (const root of finished.reverse()) {
+    if (visited.has(root)) continue
+    const members: string[] = []
+    const stack = [root]
+    while (stack.length) {
+      const node = stack.pop()!
+      if (visited.has(node)) continue
+      visited.add(node)
+      members.push(node)
+      stack.push(...(reverse.get(node) ?? []).filter((next) => !visited.has(next)))
+    }
+    if (members.length > 1) for (const node of members) inCycle.add(node)
+  }
   return inCycle
 }
 
@@ -707,27 +710,20 @@ function typeGraph(graph: Pick<GraphView, 'nodes' | 'edges'>): {
     byType.set(node.type_iri, [...(byType.get(node.type_iri) ?? []), node])
   }
   const typeOf = new Map(graph.nodes.map((node) => [node.iri, node.type_iri] as const))
-  const seen = new Set<string>()
-  const edges: GraphViewEdge[] = []
+  const byPair = new Map<string, GraphViewEdge>()
   for (const edge of graph.edges) {
     const st = typeOf.get(edge.subject)
     const ot = typeOf.get(edge.object_)
     if (!st || !ot) continue
-    const key = `${st}|${edge.predicate}|${ot}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    edges.push({ ...edge, subject: st, object_: ot })
-  }
-  for (const edge of edges) {
-    edge.props = {
-      count: graph.edges.filter(
-        (item) =>
-          item.predicate === edge.predicate &&
-          typeOf.get(item.subject) === edge.subject &&
-          typeOf.get(item.object_) === edge.object_,
-      ).length,
+    const key = JSON.stringify([st, edge.predicate, ot, edge.kind])
+    const previous = byPair.get(key)
+    if (previous) {
+      previous.props = { count: Number(previous.props?.count) + 1 }
+    } else {
+      byPair.set(key, { ...edge, subject: st, object_: ot, props: { count: 1 } })
     }
   }
+  const edges = [...byPair.values()]
   const nodes: GraphViewNode[] = [...byType.entries()].map(([type, members]) => ({
     ...members[0]!,
     iri: type,
@@ -748,7 +744,10 @@ const sankey: LayoutPlugin = {
   compute: (graph) => {
     const aggregated = typeGraph(graph)
     const levels = assignLevels(aggregated)
-    return levels ? layeredResult(levels, aggregated) : gridLayout(aggregated.nodes)
+    return {
+      ...(levels ? layeredResult(levels, aggregated) : gridLayout(aggregated.nodes)),
+      edges: aggregated.edges,
+    }
   },
 }
 
@@ -762,6 +761,7 @@ const chord: LayoutPlugin = {
       width: size,
       height: size,
       groups: [],
+      edges: aggregated.edges,
       nodes: aggregated.nodes.map((node, index) => {
         const angle = (2 * Math.PI * index) / aggregated.nodes.length - Math.PI / 2
         return {
@@ -939,9 +939,10 @@ type PartitionDatum = {
   iri?: string
   typeIri?: string
   children?: PartitionDatum[]
+  value?: number
 }
 
-function partitionRoot(graph: Pick<GraphView, 'nodes'>): PartitionDatum {
+function partitionRoot(graph: Pick<GraphView, 'nodes'>, context?: SemanticContext): PartitionDatum {
   const byType = new Map<string, GraphViewNode[]>()
   for (const node of graph.nodes) {
     byType.set(node.type_iri, [...(byType.get(node.type_iri) ?? []), node])
@@ -955,6 +956,16 @@ function partitionRoot(graph: Pick<GraphView, 'nodes'>): PartitionDatum {
         name: String(member.attrs.name ?? member.row_key),
         iri: member.iri,
         typeIri: type,
+        value: context
+          ? (numericValue(
+              semanticValue(
+                member,
+                context.config.measure_property_iri,
+                context.fields,
+                context.instanceNamespace,
+              ),
+            ) ?? 0)
+          : 1,
       })),
     })),
   }
@@ -992,13 +1003,15 @@ function sectorPath(
 /** G-03 旭日图：内环类型、外环实例，实例角度按计数占比分配。 */
 const sunburst: LayoutPlugin = {
   id: 'sunburst',
-  compute: (graph) => {
+  compute: (graph, context) => {
     const W = 760
     const cx = W / 2
     const cy = W / 2
     const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
     const root = d3partition<PartitionDatum>().size([2 * Math.PI, 1])(
-      hierarchy<PartitionDatum>(partitionRoot(graph), (d) => d.children).count(),
+      hierarchy<PartitionDatum>(partitionRoot(graph, context), (d) => d.children).sum(
+        (d) => d.value ?? 0,
+      ),
     )
     const r0 = 120
     const r1 = 250
@@ -1040,7 +1053,7 @@ const sunburst: LayoutPlugin = {
 /** G-04 矩形树图：类型分块、实例占面积（按实例计数），可下钻点击。 */
 const treemapLayout: LayoutPlugin = {
   id: 'treemap',
-  compute: (graph) => {
+  compute: (graph, context) => {
     const W = 1240
     const H = 760
     const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
@@ -1048,7 +1061,11 @@ const treemapLayout: LayoutPlugin = {
       .tile(treemapSquarify)
       .size([W, H])
       .paddingInner(3)
-      .paddingTop(22)(hierarchy<PartitionDatum>(partitionRoot(graph), (d) => d.children).count())
+      .paddingTop(22)(
+      hierarchy<PartitionDatum>(partitionRoot(graph, context), (d) => d.children).sum(
+        (d) => d.value ?? 0,
+      ),
+    )
     const marks: LayoutMark[] = []
     root.each((item) => {
       if (item.depth === 0) return
@@ -1069,7 +1086,7 @@ const treemapLayout: LayoutPlugin = {
           w > 76 && h > 28
             ? clip(isType ? shortType(typeIri) : item.data.name, isType ? 16 : 12)
             : undefined,
-        sublabel: isType && h > 50 ? `${item.value ?? 0} 实例` : undefined,
+        sublabel: isType && h > 50 ? `${item.value ?? 0}` : undefined,
         labelY: isType ? item.y0 + 14 : undefined,
       })
     })
@@ -1086,11 +1103,13 @@ const treemapLayout: LayoutPlugin = {
 /** G-05 圆形打包图：类型大圆嵌套实例小圆（按实例计数定半径）。 */
 const pack: LayoutPlugin = {
   id: 'pack',
-  compute: (graph) => {
+  compute: (graph, context) => {
     const W = 760
     const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
     const root = d3pack<PartitionDatum>().size([W, W]).padding(4)(
-      hierarchy<PartitionDatum>(partitionRoot(graph), (d) => d.children).count(),
+      hierarchy<PartitionDatum>(partitionRoot(graph, context), (d) => d.children).sum(
+        (d) => d.value ?? 0,
+      ),
     )
     const marks: LayoutMark[] = []
     root.each((item) => {
@@ -1139,10 +1158,17 @@ function dateRange(attrs: Record<string, unknown>): [string, string] | null {
  */
 const gantt: LayoutPlugin = {
   id: 'gantt',
-  compute: (graph) => {
+  compute: (graph, context) => {
     const types = [...new Set(graph.nodes.map((node) => node.type_iri))]
     const rows = graph.nodes
-      .map((node) => ({ node, range: dateRange(node.attrs) }))
+      .map((node) => {
+        const time = context ? nodeTime(node, context) : null
+        const instant = time === null ? null : new Date(time).toISOString()
+        return {
+          node,
+          range: context ? (instant ? [instant, instant] : null) : dateRange(node.attrs),
+        }
+      })
       .filter(
         (item): item is { node: GraphViewNode; range: [string, string] } => item.range !== null,
       )
@@ -1355,7 +1381,150 @@ export const LAYOUT_IDS = LAYOUTS.map((layout) => layout.id)
 
 export function resolveLayout(id: string | null | undefined, hasCenter: boolean): LayoutPlugin {
   const found = id ? LAYOUTS.find((layout) => layout.id === id) : undefined
-  if (found) return found
-  // 缺省：有中心实体用距离环（G-11），全图总览用类型网格
-  return hasCenter ? ring : typeGrid
+  const plugin = found ?? (hasCenter ? ring : typeGrid)
+  return {
+    id: plugin.id,
+    compute: (graph, context) => {
+      if (!context) return plugin.compute(graph)
+      const empty = (key: string): LayoutResult => ({
+        width: 900,
+        height: 480,
+        nodes: [],
+        groups: [],
+        edges: [],
+        notices: [{ key }],
+      })
+      if (id && !found) return { ...gridLayout(graph.nodes), notices: [{ key: 'unsupported' }] }
+      const bindings = semanticBindings(plugin.id)
+      if (context.stale) return empty('stale')
+      if (context.pending && bindings.length) return empty('loading')
+      if (context.legacy) return { ...plugin.compute(graph), notices: [{ key: 'legacy' }] }
+      if (!bindings.length)
+        return {
+          ...plugin.compute(graph),
+          notices: hasSemanticConfig(context.config) ? [{ key: 'unsupported' }] : [],
+        }
+      if (bindings.some((key) => !context.config[key])) return empty('missing')
+      if (
+        bindings.some(
+          (key) =>
+            !fieldsFor(key, context.fields).some((field) => field.iri === context.config[key]),
+        )
+      )
+        return empty('invalidConfig')
+
+      if (bindings.includes('hierarchy_relation_iri')) {
+        const relation = context.fields.find(
+          (field) =>
+            field.kind === 'RELATION' && field.iri === context.config.hierarchy_relation_iri,
+        )
+        const instancePredicate =
+          context.instanceNamespace && relation
+            ? `${context.instanceNamespace}${relation.name}`
+            : null
+        const edges = graph.edges.filter(
+          (edge) =>
+            edge.predicate === context.config.hierarchy_relation_iri ||
+            edge.predicate === instancePredicate ||
+            edge.predicate === relation?.name,
+        )
+        if (!edges.length) return empty('noRelation')
+        if (findCycleNodes(graph.nodes, edges).size) return empty('invalidHierarchy')
+        if (['org_tree', 'indent_tree', 'impact'].includes(plugin.id)) {
+          const parents = new Map<string, string>()
+          for (const edge of edges) {
+            if (parents.has(edge.subject) && parents.get(edge.subject) !== edge.object_)
+              return empty('invalidHierarchy')
+            parents.set(edge.subject, edge.object_)
+          }
+        }
+        const result = plugin.compute({ ...graph, edges })
+        return { ...result, edges }
+      }
+      const notices: SemanticNotice[] = []
+      let reason = 'invalidMeasure'
+      const nodes = graph.nodes.filter((node) => {
+        if (bindings.includes('time_property_iri')) {
+          reason = 'invalidTime'
+          return nodeTime(node, context) !== null
+        }
+        if (bindings.includes('latitude_property_iri')) {
+          reason = 'invalidCoordinates'
+          const lat = numericValue(
+            semanticValue(
+              node,
+              context.config.latitude_property_iri,
+              context.fields,
+              context.instanceNamespace,
+            ),
+          )
+          const lon = numericValue(
+            semanticValue(
+              node,
+              context.config.longitude_property_iri,
+              context.fields,
+              context.instanceNamespace,
+            ),
+          )
+          return (
+            lat !== null && lon !== null && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
+          )
+        }
+        const value = numericValue(
+          semanticValue(
+            node,
+            context.config.measure_property_iri,
+            context.fields,
+            context.instanceNamespace,
+          ),
+        )
+        return value !== null && value > 0
+      })
+      if (nodes.length < graph.nodes.length)
+        notices.push({ key: reason, count: graph.nodes.length - nodes.length })
+      if (!nodes.length) return { ...empty('noData'), notices: [...notices, { key: 'noData' }] }
+      if (plugin.id === 'geo') {
+        // Equirectangular WGS84: explicit degrees, fixed world extent, never inferred regions.
+        return {
+          width: 1240,
+          height: 680,
+          groups: [],
+          edges: [],
+          notices,
+          nodes: nodes.map((node) => ({
+            ...node,
+            x:
+              80 +
+              (Number(
+                semanticValue(
+                  node,
+                  context.config.longitude_property_iri,
+                  context.fields,
+                  context.instanceNamespace,
+                ),
+              ) +
+                180) *
+                3,
+            y:
+              70 +
+              (90 -
+                Number(
+                  semanticValue(
+                    node,
+                    context.config.latitude_property_iri,
+                    context.fields,
+                    context.instanceNamespace,
+                  ),
+                )) *
+                3,
+          })),
+        }
+      }
+      const keep = new Set(nodes.map((node) => node.iri))
+      const edges = graph.edges.filter((edge) => keep.has(edge.subject) && keep.has(edge.object_))
+      const result = plugin.compute({ nodes, edges }, context)
+      if (plugin.id === 'gantt') notices.push({ key: 'instantOnly' })
+      return { ...result, edges, notices }
+    },
+  }
 }

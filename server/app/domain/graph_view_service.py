@@ -22,7 +22,7 @@ def _ontology_id(session: Session, gr: GraphRevision) -> int | None:
     run = session.get(ExtractionRun, gr.run_id)
     rev = session.get(MappingRevision, run.mapping_revision_id) if run else None
     mapping = session.get(Mapping, rev.mapping_id) if rev else None
-    return mapping.id if mapping else None
+    return mapping.ontology_id if mapping else None
 
 
 def _ontology_revision(session: Session, gr: GraphRevision) -> int | None:
@@ -162,11 +162,13 @@ def graph_view(
             }
             for edge in edges[:remaining]
         )
+    run = session.get(ExtractionRun, gr.run_id)
     return {
         "graph_revision_id": gr.id,
         # 供前端视图模板钉扎与实体 360 下钻：当前结果集对应的本体版本
         "ontology_id": _ontology_id(session, gr),
         "ontology_revision": _ontology_revision(session, gr),
+        "instance_namespace": run.cfg_snapshot.get("namespace") if run else None,
         "run_id": gr.run_id,
         "nodes": [
             {

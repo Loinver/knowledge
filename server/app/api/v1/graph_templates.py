@@ -7,14 +7,21 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_session
 from app.domain.graph_template_service import (
+    applicable_template,
     create_template,
     delete_template,
     get_template,
     list_templates,
+    semantic_fields,
     template_stale,
 )
 from app.models.governance import ViewTemplate
-from app.schemas.graph_view import ViewTemplateCreate, ViewTemplateOut, ViewTemplatePage
+from app.schemas.graph_view import (
+    SemanticViewFieldsOut,
+    ViewTemplateCreate,
+    ViewTemplateOut,
+    ViewTemplatePage,
+)
 from app.schemas.response import ApiResponse
 
 router = APIRouter(prefix="/view-templates", tags=["view-templates"])
@@ -48,6 +55,28 @@ def create_view_template(
     template = create_template(session, payload)
     session.commit()
     return _out(session, template)
+
+
+@router.get("/semantic-fields", response_model=ApiResponse[SemanticViewFieldsOut])
+def get_semantic_fields(
+    ontology_id: int = Query(gt=0),
+    ontology_revision: int = Query(gt=0),
+    session: Session = Depends(get_session),
+) -> SemanticViewFieldsOut:
+    return semantic_fields(session, ontology_id, ontology_revision)
+
+
+@router.get("/{template_id}/applicable", response_model=ApiResponse[ViewTemplateOut])
+def get_applicable_template(
+    template_id: int,
+    ontology_id: int = Query(gt=0),
+    ontology_revision: int = Query(gt=0),
+    session: Session = Depends(get_session),
+) -> ViewTemplateOut:
+    return _out(
+        session,
+        applicable_template(session, template_id, ontology_id, ontology_revision),
+    )
 
 
 @router.get("/{template_id}", response_model=ApiResponse[ViewTemplateOut])

@@ -21,7 +21,7 @@ from app.models.extraction import (
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -97,6 +97,25 @@ def test_overview_includes_isolates_and_parallel_facts(session: Session) -> None
     ]
     assert len(parallel) == 2 and parallel[0]["id"] != parallel[1]["id"]
     assert data["truncated"] is False
+
+
+def test_semantic_context_uses_ontology_identity_and_frozen_run_namespace(
+    session: Session,
+) -> None:
+    ontology = Ontology(
+        id=91, name="separate-identity", iri="https://example.org/canonical#"
+    )
+    session.add(ontology)
+    mapping = session.scalar(select(Mapping))
+    run = session.scalar(select(ExtractionRun))
+    assert mapping is not None and run is not None
+    mapping.ontology_id = ontology.id
+    run.cfg_snapshot = {"namespace": "https://example.org/instances#"}
+    session.commit()
+    data = graph_view(session)
+    assert data["ontology_id"] == 91
+    assert data["ontology_id"] != mapping.id
+    assert data["instance_namespace"] == "https://example.org/instances#"
 
 
 def test_one_and_two_degree_neighborhood(session: Session) -> None:

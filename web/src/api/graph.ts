@@ -15,6 +15,8 @@ export type EntityFusion = Schemas['EntityFusionOut']
 export type FusionAttributeDecision = Schemas['FusionAttributeDecision']
 export type ViewTemplate = Schemas['ViewTemplateOut']
 export type ViewTemplatePage = Schemas['ViewTemplatePage']
+export type SemanticViewConfig = Schemas['SemanticViewConfig']
+export type SemanticViewFields = Schemas['SemanticViewFieldsOut']
 
 type EntityQuery =
   operations['search_entities_api_v1_extraction_entities_get']['parameters']['query']
@@ -103,6 +105,20 @@ export const graphApi = {
 }
 
 export const viewTemplateApi = {
+  fields: (ontologyId: number, revision: number, signal: AbortSignal) =>
+    http
+      .get<SemanticViewFields>('/view-templates/semantic-fields', {
+        params: { ontology_id: ontologyId, ontology_revision: revision },
+        signal,
+      })
+      .then((r) => r.data),
+  applicable: (id: number, ontologyId: number, revision: number, signal: AbortSignal) =>
+    http
+      .get<ViewTemplate>(`/view-templates/${id}/applicable`, {
+        params: { ontology_id: ontologyId, ontology_revision: revision },
+        signal,
+      })
+      .then((r) => r.data),
   list: (ontologyId: number | undefined, signal: AbortSignal) =>
     http
       .get<ViewTemplatePage>('/view-templates', {
@@ -110,12 +126,8 @@ export const viewTemplateApi = {
         signal,
       })
       .then((r) => r.data),
-  create: (payload: {
-    name_i18n: Record<string, string>
-    layout_id: string
-    config: Record<string, unknown>
-    ontology_id: number
-    ontology_revision: number
-  }) => http.post<ViewTemplate>('/view-templates', payload).then((r) => r.data),
-  remove: (id: number) => http.delete(`/view-templates/${id}`).then((r) => r.data),
+  create: (payload: Schemas['ViewTemplateCreate'], signal?: AbortSignal) =>
+    http.post<ViewTemplate>('/view-templates', payload, { signal }).then((r) => r.data),
+  remove: (id: number, signal?: AbortSignal) =>
+    http.delete(`/view-templates/${id}`, { signal }).then((r) => r.data),
 }

@@ -1905,6 +1905,40 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/view-templates/semantic-fields': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Semantic Fields */
+    get: operations['get_semantic_fields_api_v1_view_templates_semantic_fields_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/view-templates/{template_id}/applicable': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Applicable Template */
+    get: operations['get_applicable_template_api_v1_view_templates__template_id__applicable_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/view-templates/{template_id}': {
     parameters: {
       query?: never
@@ -3521,6 +3555,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['RunStartResponse'] | null
+    }
+    /** ApiResponse[SemanticViewFieldsOut] */
+    ApiResponse_SemanticViewFieldsOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['SemanticViewFieldsOut'] | null
     }
     /** ApiResponse[StandardClauseOut] */
     ApiResponse_StandardClauseOut_: {
@@ -5799,6 +5850,8 @@ export interface components {
       ontology_id?: number | null
       /** Ontology Revision */
       ontology_revision?: number | null
+      /** Instance Namespace */
+      instance_namespace?: string | null
       /** Nodes */
       nodes: components['schemas']['GraphViewNode'][]
       /** Edges */
@@ -7290,6 +7343,59 @@ export interface components {
       /** If Edit Match */
       if_edit_match?: number | null
     }
+    /**
+     * SemanticViewConfig
+     * @description Optional semantic bindings; preserve existing JSON display/filter options.
+     */
+    SemanticViewConfig: {
+      /** Semantic Version */
+      semantic_version?: 1 | null
+      /** Hierarchy Relation Iri */
+      hierarchy_relation_iri?: string | null
+      /** Measure Property Iri */
+      measure_property_iri?: string | null
+      /** Time Property Iri */
+      time_property_iri?: string | null
+      /** Latitude Property Iri */
+      latitude_property_iri?: string | null
+      /** Longitude Property Iri */
+      longitude_property_iri?: string | null
+    } & {
+      [key: string]: unknown
+    }
+    /** SemanticViewField */
+    SemanticViewField: {
+      /** Iri */
+      iri: string
+      /** Name */
+      name: string
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      }
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: 'RELATION' | 'PROPERTY'
+      /** Datatype */
+      datatype?: string | null
+      /** Type Iri */
+      type_iri?: string | null
+      /** Type Name */
+      type_name?: string | null
+    }
+    /** SemanticViewFieldsOut */
+    SemanticViewFieldsOut: {
+      /** Ontology Id */
+      ontology_id: number
+      /** Ontology Revision */
+      ontology_revision: number
+      /** Stale */
+      stale: boolean
+      /** Fields */
+      fields: components['schemas']['SemanticViewField'][]
+    }
     /** StandardClauseBrief */
     StandardClauseBrief: {
       /** Id */
@@ -7844,10 +7950,7 @@ export interface components {
       }
       /** Layout Id */
       layout_id: string
-      /** Config */
-      config?: {
-        [key: string]: unknown
-      }
+      config?: components['schemas']['SemanticViewConfig']
       /** Ontology Id */
       ontology_id: number
       /** Ontology Revision */
@@ -7863,10 +7966,7 @@ export interface components {
       }
       /** Layout Id */
       layout_id: string
-      /** Config */
-      config: {
-        [key: string]: unknown
-      }
+      config: components['schemas']['SemanticViewConfig']
       /** Ontology Id */
       ontology_id: number
       /** Ontology Revision */
@@ -12379,6 +12479,72 @@ export interface operations {
     responses: {
       /** @description Successful Response */
       201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_ViewTemplateOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_semantic_fields_api_v1_view_templates_semantic_fields_get: {
+    parameters: {
+      query: {
+        ontology_id: number
+        ontology_revision: number
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_SemanticViewFieldsOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_applicable_template_api_v1_view_templates__template_id__applicable_get: {
+    parameters: {
+      query: {
+        ontology_id: number
+        ontology_revision: number
+      }
+      header?: never
+      path: {
+        template_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
         headers: {
           [name: string]: unknown
         }

@@ -1620,5 +1620,33 @@
       "INVALID_SOURCE": "Source transform or required-field validation failed",
       "ENTITY_QUARANTINED": "Another attribute quarantined this entity"
     }
+  },
+  "semanticView": {
+    "title": "View semantics",
+    "pin": "Fields come from frozen ontology v{revision}. Saving a template pins this version.",
+    "hierarchy_relation_iri": "Hierarchy relation",
+    "measure_property_iri": "Numeric measure property",
+    "time_property_iri": "Time property",
+    "latitude_property_iri": "Latitude property",
+    "longitude_property_iri": "Longitude property",
+    "select": "Select a frozen ontology field",
+    "noFields": "This frozen version has no supported fields for this binding.",
+    "utc": "Dates mean midnight UTC. Timestamps must use ISO 8601 with Z or an explicit offset and are displayed in UTC.",
+    "wgs84": "Use numeric WGS84 decimal degrees: latitude −90 to 90 and longitude −180 to 180. Text and place names are not converted.",
+    "positiveMeasure": "Areas and radii use the selected positive numeric measure. Missing, nonnumeric, zero and negative values are excluded.",
+    "hierarchyDirection": "Only the selected relation is used. Organization, indent and impact trees follow child→parent; equity, control and clan trees follow upstream→downstream.",
+    "missing": "Semantic fields are not configured for this view. Expand View semantics to select them.",
+    "invalidConfig": "A selected field is unavailable in the frozen ontology or has an unsupported type. Select a valid field.",
+    "unsupported": "This layout does not consume these bindings. Choose the corresponding hierarchy, measure, time or map layout.",
+    "legacy": "This older template has no semantic bindings and retains its previous display. Configure fields and save a new template to make their meaning explicit.",
+    "stale": "The ontology version has changed. This template cannot be applied. Switch to a graph using the current ontology version and configure it again.",
+    "noRelation": "The visible graph has no edges for the selected relation, so a hierarchy cannot be drawn.",
+    "invalidHierarchy": "The selected relation contains cycles or multiple parents for a tree node. Choose another relation or a general graph layout.",
+    "noData": "No data meets the configuration requirements for this view.",
+    "invalidMeasure": "Excluded {count} entities whose selected measure is missing or not a valid positive number.",
+    "invalidTime": "Excluded {count} entities with missing or invalid dates, or timestamps without a time zone.",
+    "invalidCoordinates": "Excluded {count} entities with missing, nonnumeric or out-of-range WGS84 coordinates.",
+    "instantOnly": "Only one time property is configured. Gantt marks represent instants; end dates and durations are not inferred.",
+    "loading": "Loading semantic fields from the frozen ontology…"
   }
 }

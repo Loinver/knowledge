@@ -166,6 +166,62 @@ test('schema aggregates instances into typed nodes with counts', () => {
   assert.equal(person.attrs.__typeCount__, 2)
 })
 
+for (const id of ['schema', 'sankey', 'chord']) {
+  test(`${id} renders aggregated edges and preserves direct/derived semantics`, () => {
+    const layout = layoutOf(
+      id,
+      [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')],
+      [
+        edge(1, 'a', 'c'),
+        edge(2, 'b', 'c'),
+        edge(1, 'a', 'c', 'DERIVED'),
+        edge(3, 'a', 'b'),
+        edge(4, 'missing', 'c'),
+      ],
+    )
+    const paths = graphPaths(layout.nodes, layout.edges, layout.edgePaths)
+    assert.equal(paths.length, 3)
+    assert.equal(new Set(paths.map((path) => path.key)).size, 3)
+    assert.equal(
+      layout.edges.find((e) => e.kind === 'DIRECT' && e.object_ === 'Project').props.count,
+      2,
+    )
+    assert.equal(layout.edges.find((e) => e.kind === 'DERIVED').props.count, 1)
+    assert.ok(paths.every((path) => !/NaN|Infinity/.test(path.path)))
+  })
+}
+
+test('cycle view contains all members of overlapping cycles and self loops', () => {
+  const nodes = ['a', 'b', 'c', 'd', 'self', 'tail', 'isolated'].map((iri) => node(iri, 'Ent'))
+  const layout = layoutOf('cycle_view', nodes, [
+    edge(1, 'a', 'b'),
+    edge(2, 'b', 'c'),
+    edge(3, 'c', 'a'),
+    edge(4, 'b', 'd'),
+    edge(5, 'd', 'c'),
+    edge(6, 'self', 'self'),
+    edge(7, 'c', 'tail'),
+  ])
+  assert.deepEqual(
+    layout.nodes
+      .filter((n) => n.x < 800)
+      .map((n) => n.iri)
+      .sort(),
+    ['a', 'b', 'c', 'd', 'self'],
+  )
+})
+
+test('supply chain puts dual-role participants in the middle column', () => {
+  const layout = layoutOf(
+    'supply_chain',
+    ['supplier', 'dual', 'buyer'].map((iri) => node(iri, 'Ent')),
+    [edge(1, 'supplier', 'dual'), edge(2, 'dual', 'buyer')],
+  )
+  const byIri = new Map(layout.nodes.map((n) => [n.iri, n]))
+  assert.ok(byIri.get('supplier').x < byIri.get('dual').x)
+  assert.ok(byIri.get('dual').x < byIri.get('buyer').x)
+})
+
 test('edge props are available to renderer and keep stable keys', () => {
   const layout = layoutOf('type_grid', [node('a', 'Person'), node('b', 'Project')])
   const paths = graphPaths(layout.nodes, [

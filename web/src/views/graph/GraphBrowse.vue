@@ -18,7 +18,7 @@ import {
   NTabs,
   NTag,
 } from 'naive-ui'
-import { computed, h, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -27,7 +27,7 @@ import {
   type GraphDiff,
   type GraphPath,
   type GraphRecommendations,
-  type ViewTemplate,
+  type SemanticViewConfig as SemanticConfig,
   viewTemplateApi,
 } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
@@ -37,8 +37,14 @@ import GraphCanvas from '@/views/graph/components/GraphCanvas.vue'
 import { exportCsv, exportPng, exportSvg } from '@/views/graph/components/graphExport'
 import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 import { LAYOUTS } from '@/views/graph/components/graphLayout'
+import {
+  hasSemanticConfig,
+  nodeTime,
+  type SemanticContext,
+} from '@/views/graph/components/layouts/semanticView'
+import SemanticViewConfig from '@/views/graph/components/SemanticViewConfig.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
@@ -94,14 +100,26 @@ const layoutOptions = LAYOUTS.map((layout) => ({
 }))
 
 function updateQuery(patch: Record<string, unknown>) {
-  const query: Record<string, string | number | undefined> = {}
+  const query = { ...route.query }
   for (const [key, value] of Object.entries(patch)) {
-    if (value !== null && value !== undefined) query[key] = value as string | number
+    if (value === null || value === undefined) delete query[key]
+    else query[key] = String(value)
   }
-  void router.replace({ query: { ...route.query, ...query } })
+  void router.replace({ query })
 }
 
 function explore(iri: string | null) {
+  if (iri && ['schema', 'sankey', 'chord'].includes(layoutId.value ?? '')) {
+    excludedTypes.value = (data.value?.type_counts ?? [])
+      .map((item) => item.type_iri)
+      .filter((type) => type !== iri)
+    updateQuery({
+      graph: graphId.value ?? data.value?.graph_revision_id,
+      center: undefined,
+      layout: 'type_grid',
+    })
+    return
+  }
   updateQuery({
     graph: graphId.value ?? data.value?.graph_revision_id,
     center: iri || undefined,
@@ -110,11 +128,14 @@ function explore(iri: string | null) {
 
 function selectGraph(id: number | null) {
   excludedTypes.value = []
-  updateQuery({ graph: id || undefined, layout: undefined })
+  updateQuery({ graph: id || undefined, layout: undefined, template: undefined })
 }
 
 function selectLayout(id: string | null) {
-  updateQuery({ layout: id || undefined })
+  cancelTemplateRequest()
+  legacyTemplate.value = false
+  selectedTemplateId.value = null
+  updateQuery({ layout: id || undefined, template: undefined })
 }
 
 // ===== 形态推荐（语义信号 → 形态 + 理由） =====
@@ -149,95 +170,208 @@ const reasonText = (reasonKey: string, params: Record<string, unknown>) => {
 }
 
 // ===== 视图模板（版本钉扎 + 失效提示） =====
-const templates = ref<ViewTemplate[]>([])
+const templateData = useAsyncData((signal) =>
+  data.value?.ontology_id
+    ? viewTemplateApi.list(data.value.ontology_id, signal)
+    : Promise.resolve(null),
+)
+const templates = computed(() => templateData.data.value?.items ?? [])
+const semanticFields = useAsyncData((signal) =>
+  data.value?.ontology_id && data.value.ontology_revision
+    ? viewTemplateApi.fields(data.value.ontology_id, data.value.ontology_revision, signal)
+    : Promise.resolve(null),
+)
+const semanticConfig = ref<SemanticConfig>({})
+const legacyTemplate = ref(false)
+const semanticContext = computed<SemanticContext>(() => ({
+  config: semanticConfig.value,
+  fields: semanticFields.data.value?.fields ?? [],
+  instanceNamespace: data.value?.instance_namespace,
+  legacy: legacyTemplate.value,
+  pending: semanticFields.loading.value,
+  stale: selectedTemplateId.value !== null && semanticFields.data.value?.stale,
+}))
+function configureSemantics(config: SemanticConfig) {
+  cancelTemplateRequest()
+  semanticConfig.value = config
+  legacyTemplate.value = false
+  selectedTemplateId.value = null
+  updateQuery({ template: undefined })
+}
 const templateError = ref('')
 const templateName = ref('')
+const savingTemplate = ref(false)
+const applyingTemplate = ref(false)
+const selectedTemplateId = ref<number | null>(null)
+const removingTemplate = ref(false)
+let templateController: AbortController | null = null
+let previousPin = ''
+function cancelTemplateRequest() {
+  templateController?.abort()
+  savingTemplate.value = applyingTemplate.value = removingTemplate.value = false
+}
+function resetTemplateContext() {
+  cancelTemplateRequest()
+  semanticConfig.value = {}
+  legacyTemplate.value = false
+  selectedTemplateId.value = null
+  templateError.value = ''
+}
+watch(graphId, resetTemplateContext)
 watch(
-  () => data.value?.ontology_id,
-  () => {
-    const signal = new AbortController().signal
-    if (!data.value?.ontology_id) {
-      templates.value = []
-      return
-    }
-    void viewTemplateApi
-      .list(data.value.ontology_id, signal)
-      .then((page) => {
-        templates.value = page.items
-      })
-      .catch(() => {
-        templates.value = []
-      })
+  () => [data.value?.ontology_id, data.value?.ontology_revision],
+  ([id, revision]) => {
+    if (!id || !revision) return
+    const pin = `${id}:${revision}`
+    if (previousPin && previousPin !== pin) resetTemplateContext()
+    previousPin = pin
   },
-  { immediate: true },
 )
+onBeforeUnmount(() => templateController?.abort())
+function templateRequest() {
+  templateController?.abort()
+  const controller = new AbortController()
+  templateController = controller
+  savingTemplate.value = applyingTemplate.value = removingTemplate.value = false
+  templateError.value = ''
+  const owner = data.value?.graph_revision_id
+  const routeOwner = graphId.value
+  return {
+    signal: controller.signal,
+    current: () =>
+      !controller.signal.aborted &&
+      graphId.value === routeOwner &&
+      data.value?.graph_revision_id === owner,
+    active: () => !controller.signal.aborted && templateController === controller,
+  }
+}
 const templateOptions = computed(() =>
   templates.value.map((template) => ({
     value: template.id,
-    label: `${template.name_i18n['zh-CN'] || template.layout_id}${template.stale ? ` · ${t('graph.templateStale')}` : ''}`,
+    label: `${template.name_i18n[locale.value] || template.layout_id}${template.stale ? ` · ${t('graph.templateStale')}` : ''}`,
+    disabled: template.stale || template.ontology_revision !== data.value?.ontology_revision,
   })),
 )
 async function saveTemplate() {
   const name = templateName.value.trim()
-  if (!name || !data.value?.ontology_id || !data.value?.ontology_revision) return
+  if (!name || !data.value?.ontology_id || !data.value?.ontology_revision || savingTemplate.value)
+    return
+  if (semanticFields.data.value?.stale) {
+    templateError.value = t('semanticView.stale')
+    return
+  }
+  const request = templateRequest()
+  savingTemplate.value = true
   try {
-    await viewTemplateApi.create({
-      name_i18n: { 'zh-CN': name, 'en-US': name },
-      layout_id: layoutId.value ?? (center.value ? 'ring' : 'type_grid'),
-      config: {
-        center: center.value || undefined,
-        depth: depth.value,
-        excluded_types: excludedTypes.value,
+    const saved = await viewTemplateApi.create(
+      {
+        name_i18n: { 'zh-CN': name, 'en-US': name },
+        layout_id: layoutId.value ?? (center.value ? 'ring' : 'type_grid'),
+        config: {
+          ...semanticConfig.value,
+          semantic_version: 1,
+          center: center.value || undefined,
+          depth: depth.value,
+          excluded_types: excludedTypes.value,
+        },
+        ontology_id: data.value.ontology_id,
+        ontology_revision: data.value.ontology_revision,
       },
-      ontology_id: data.value.ontology_id,
-      ontology_revision: data.value.ontology_revision,
-    })
+      request.signal,
+    )
+    if (!request.current()) return
+    semanticConfig.value = { ...saved.config }
+    legacyTemplate.value = false
+    selectedTemplateId.value = saved.id
+    updateQuery({ template: saved.id })
     templateName.value = ''
-    const page = await viewTemplateApi.list(data.value.ontology_id, new AbortController().signal)
-    templates.value = page.items
+    templateData.reload()
   } catch (cause) {
-    templateError.value = toMessage(cause)
+    if (request.current()) templateError.value = toMessage(cause)
+  } finally {
+    if (request.active()) savingTemplate.value = false
   }
 }
-function applyTemplate(id: number) {
-  selectedTemplateId.value = id
-  const template = templates.value.find((item) => item.id === id)
-  if (!template) return
-  const config = template.config as {
-    center?: string
-    depth?: number
-    excluded_types?: string[]
+async function applyTemplate(id: number) {
+  const listed = templates.value.find((item) => item.id === id)
+  const graph = data.value
+  if (!graph?.ontology_id || !graph.ontology_revision) return
+  if (listed && (listed.stale || listed.ontology_revision !== graph.ontology_revision)) {
+    templateError.value = t('semanticView.stale')
+    return
   }
-  depth.value = config.depth ?? 1
-  excludedTypes.value = config.excluded_types ?? []
-  updateQuery({
-    layout: template.layout_id,
-    center: config.center || undefined,
-  })
+  const request = templateRequest()
+  applyingTemplate.value = true
+  try {
+    const template = await viewTemplateApi.applicable(
+      id,
+      graph.ontology_id,
+      graph.ontology_revision,
+      request.signal,
+    )
+    if (!request.current()) return
+    if (template.stale) {
+      templateError.value = t('semanticView.stale')
+      return
+    }
+    const config = template.config
+    semanticConfig.value = { ...config }
+    legacyTemplate.value = config.semantic_version == null && !hasSemanticConfig(config)
+    selectedTemplateId.value = id
+    depth.value = config.depth === 2 ? 2 : 1
+    excludedTypes.value = Array.isArray(config.excluded_types)
+      ? config.excluded_types.filter((item): item is string => typeof item === 'string')
+      : []
+    updateQuery({
+      layout: template.layout_id,
+      center: typeof config.center === 'string' ? config.center : undefined,
+      template: id,
+    })
+  } catch (cause) {
+    if (request.current()) templateError.value = toMessage(cause)
+  } finally {
+    if (request.active()) applyingTemplate.value = false
+  }
 }
 
+// The explicit template query restores the same pinned configuration after a page reload.
+watch(
+  [() => route.query.template, () => data.value?.ontology_id, () => data.value?.ontology_revision],
+  ([value, ontology, revision]) => {
+    const id = typeof value === 'string' ? Number(value) : NaN
+    if (
+      Number.isSafeInteger(id) &&
+      id > 0 &&
+      ontology &&
+      revision &&
+      selectedTemplateId.value !== id
+    )
+      void applyTemplate(id)
+  },
+  { immediate: true },
+)
+
 // 模板此前只能创建和应用，已保存的视图无法删除；应用后出现删除入口。
-const selectedTemplateId = ref<number | null>(null)
-const removingTemplate = ref(false)
 const selectedTemplateName = computed(
   () =>
-    templates.value.find((item) => item.id === selectedTemplateId.value)?.name_i18n['zh-CN'] ?? '',
+    templates.value.find((item) => item.id === selectedTemplateId.value)?.name_i18n[locale.value] ??
+    '',
 )
 async function removeTemplate() {
   if (selectedTemplateId.value === null || removingTemplate.value) return
+  const request = templateRequest()
   removingTemplate.value = true
   templateError.value = ''
   try {
-    await viewTemplateApi.remove(selectedTemplateId.value)
-    if (data.value?.ontology_id) {
-      const page = await viewTemplateApi.list(data.value.ontology_id, new AbortController().signal)
-      templates.value = page.items
-    }
+    await viewTemplateApi.remove(selectedTemplateId.value, request.signal)
+    if (!request.current()) return
+    templateData.reload()
     selectedTemplateId.value = null
+    updateQuery({ template: undefined })
   } catch (cause) {
-    templateError.value = toMessage(cause)
+    if (request.current()) templateError.value = toMessage(cause)
   } finally {
-    removingTemplate.value = false
+    if (request.active()) removingTemplate.value = false
   }
 }
 
@@ -446,19 +580,14 @@ const centralityRows = computed(() => {
 })
 
 // ===== 时间切片回放（G-23）：timeline 形态下按日期窗口过滤画布数据 =====
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/
 const replayRange = ref<[number, number] | null>(null)
 const replayBounds = computed<[number, number] | null>(() => {
   const graph = data.value
   if (!graph) return null
   const times: number[] = []
   for (const node of graph.nodes) {
-    for (const value of Object.values(node.attrs)) {
-      if (typeof value === 'string' && ISO_DATE_RE.test(value)) {
-        times.push(new Date(value.slice(0, 10)).getTime())
-        break
-      }
-    }
+    const time = nodeTime(node, semanticContext.value)
+    if (time !== null) times.push(time)
   }
   if (!times.length) return null
   return [Math.min(...times), Math.max(...times)]
@@ -479,13 +608,8 @@ const replayedGraph = computed(() => {
   const keep = new Set(
     graph.nodes
       .filter((node) => {
-        for (const value of Object.values(node.attrs)) {
-          if (typeof value === 'string' && ISO_DATE_RE.test(value)) {
-            const time = new Date(value.slice(0, 10)).getTime()
-            return time >= range[0] && time <= range[1]
-          }
-        }
-        return false
+        const time = nodeTime(node, semanticContext.value)
+        return time !== null && time >= range[0] && time <= range[1]
       })
       .map((node) => node.iri),
   )
@@ -587,7 +711,9 @@ function onExport(kind: string) {
         trigger="click"
         @update:value="applyTemplate"
       >
-        <NButton>{{ t('graph.templates') }}</NButton>
+        <NButton :loading="applyingTemplate || templateData.loading.value">{{
+          t('graph.templates')
+        }}</NButton>
       </NPopselect>
       <NPopconfirm v-if="selectedTemplateId !== null" @positive-click="removeTemplate">
         <template #trigger>
@@ -604,11 +730,26 @@ function onExport(kind: string) {
           :placeholder="t('graph.templateName')"
           @keydown.enter.prevent="saveTemplate"
         />
-        <NButton size="small" :disabled="!templateName.trim()" @click="saveTemplate">{{
-          t('graph.templateSave')
-        }}</NButton>
+        <NButton
+          size="small"
+          :loading="savingTemplate"
+          :disabled="
+            !templateName.trim() || semanticFields.loading.value || semanticFields.data.value?.stale
+          "
+          @click="saveTemplate"
+          >{{ t('graph.templateSave') }}</NButton
+        >
       </span>
     </NSpace>
+    <SemanticViewConfig
+      :layout-id="layoutId ?? (center ? 'ring' : 'type_grid')"
+      :config="semanticConfig"
+      :catalog="semanticFields.data.value"
+      :loading="semanticFields.loading.value"
+      :error="semanticFields.error.value"
+      @change="configureSemantics"
+      @retry="semanticFields.reload"
+    />
     <label>
       <span>{{ t('graph.hiddenTypes') }}</span>
       <NSelect
@@ -664,14 +805,15 @@ function onExport(kind: string) {
         range
         :min="replayBounds[0]"
         :max="replayBounds[1]"
-        :step="24 * 3600 * 1000"
-        :format-tooltip="(value: number) => new Date(value).toISOString().slice(0, 10)"
+        :step="1"
+        :format-tooltip="(value: number) => new Date(value).toISOString()"
         :aria-label="t('graph.replay')"
       />
     </label>
     <NAlert v-if="error" type="warning">{{ error }}</NAlert>
     <NAlert v-if="exportError" type="warning">{{ exportError }}</NAlert>
     <NAlert v-if="templateError" type="warning">{{ templateError }}</NAlert>
+    <NAlert v-if="templateData.error.value" type="warning">{{ templateData.error.value }}</NAlert>
     <p v-if="loading" role="status">{{ t('common.loading') }}</p>
     <template v-if="data">
       <p>
@@ -694,6 +836,7 @@ function onExport(kind: string) {
           :graph="replayedGraph ?? data"
           :neighborhood="!!center"
           :layout-id="layoutId"
+          :semantic-context="semanticContext"
           :flagged-iris="qualityOverlay ? flaggedIris : undefined"
           :highlight-iris="highlightIris"
           @select="explore"

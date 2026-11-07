@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NSpace } from 'naive-ui'
+import { NAlert, NButton, NSpace } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -7,11 +7,13 @@ import type { GraphView } from '@/api/graph'
 
 import { graphPaths } from './graphLayout'
 import { resolveLayout, typeColor } from './layouts/index.ts'
+import type { SemanticContext } from './layouts/semanticView'
 
 const props = defineProps<{
   graph: GraphView
   neighborhood: boolean
   layoutId?: string | null
+  semanticContext?: SemanticContext
   /** 质量叠加（G-28）：被隔离/违规命中的实体 IRI，节点叠加红色标记。 */
   flaggedIris?: Set<string>
   /** G-12 路径查询结果高亮。 */
@@ -22,14 +24,17 @@ const { t } = useI18n()
 const zoom = ref(1)
 const shortName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
 const layout = computed(() =>
-  resolveLayout(props.layoutId, props.neighborhood).compute(props.graph),
+  resolveLayout(props.layoutId, props.neighborhood).compute(
+    props.graph,
+    props.semanticContext ?? { config: {}, fields: [] },
+  ),
 )
 const marks = computed(() => layout.value.marks ?? null)
 const legendTypes = computed(() => layout.value.groups.map((group) => group.type))
 const paths = computed(() =>
   graphPaths(layout.value.nodes, layout.value.edges ?? props.graph.edges, layout.value.edgePaths),
 )
-const isSchema = computed(() => props.layoutId === 'schema')
+const isSchema = computed(() => ['schema', 'sankey', 'chord'].includes(props.layoutId ?? ''))
 const edgeLabel = (edge: { props?: Record<string, unknown> | null; kind: string }) => {
   if (!edge.props) return ''
   const short = (value: unknown) => {
@@ -123,6 +128,9 @@ onBeforeUnmount(() => window.removeEventListener('resize', syncViewport))
 
 <template>
   <div class="canvas-panel">
+    <NAlert v-for="notice in layout.notices ?? []" :key="notice.key" type="warning">
+      {{ t(`semanticView.${notice.key}`, { count: notice.count ?? 0 }) }}
+    </NAlert>
     <NSpace align="center">
       <NButton
         :disabled="zoom <= 0.4"

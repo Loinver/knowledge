@@ -226,6 +226,7 @@ class GraphViewOut(BaseModel):
     run_id: int
     ontology_id: int | None = None
     ontology_revision: int | None = None
+    instance_namespace: str | None = None
     nodes: list[GraphViewNode]
     edges: list[GraphViewEdge]
     type_counts: list[GraphTypeCount]

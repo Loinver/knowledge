@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -51,10 +51,39 @@ class GraphRecommendationOut(BaseModel):
     recommendations: list[LayoutRecommendation]
 
 
+class SemanticViewConfig(BaseModel):
+    """Optional semantic bindings; preserve existing JSON display/filter options."""
+
+    model_config = ConfigDict(extra="allow")
+    semantic_version: Literal[1] | None = None
+    hierarchy_relation_iri: str | None = Field(default=None, min_length=1)
+    measure_property_iri: str | None = Field(default=None, min_length=1)
+    time_property_iri: str | None = Field(default=None, min_length=1)
+    latitude_property_iri: str | None = Field(default=None, min_length=1)
+    longitude_property_iri: str | None = Field(default=None, min_length=1)
+
+
+class SemanticViewField(BaseModel):
+    iri: str
+    name: str
+    label_i18n: dict[str, str] = Field(default_factory=dict)
+    kind: Literal["RELATION", "PROPERTY"]
+    datatype: str | None = None
+    type_iri: str | None = None
+    type_name: str | None = None
+
+
+class SemanticViewFieldsOut(BaseModel):
+    ontology_id: int
+    ontology_revision: int
+    stale: bool
+    fields: list[SemanticViewField]
+
+
 class ViewTemplateCreate(BaseModel):
     name_i18n: dict[str, str]
     layout_id: str = Field(min_length=1, max_length=64)
-    config: dict = Field(default_factory=dict)
+    config: SemanticViewConfig = Field(default_factory=SemanticViewConfig)
     ontology_id: int = Field(gt=0)
     ontology_revision: int = Field(gt=0)
 
@@ -74,7 +103,7 @@ class ViewTemplateOut(BaseModel):
     id: int
     name_i18n: dict[str, str]
     layout_id: str
-    config: dict
+    config: SemanticViewConfig
     ontology_id: int
     ontology_revision: int
     created_at: datetime
