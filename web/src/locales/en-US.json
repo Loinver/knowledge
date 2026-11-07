@@ -1546,5 +1546,23 @@
       "run_id": "Run ID",
       "current_graph_revision_id": "Current graph ID"
     }
+  },
+  "ontologyRestore": {
+    "title": "Import ontology",
+    "intro": "Restore a supported Turtle / JSON-LD file into a new local ontology. Preview dependencies and conflicts before the atomic import. Resource IRIs are preserved; local revisions are assigned anew. Existing names or IRIs and unsupported semantics block import without overwriting content.",
+    "file": "Choose an RDF file (up to 64 KiB)",
+    "content": "RDF content",
+    "preview": "Preview import",
+    "ready": "Preflight passed",
+    "blocked": "Conflicts or unsupported content found. Correct the file and preview again.",
+    "tooLarge": "The file must not exceed 64 KiB.",
+    "readFailed": "Could not read the file. Select it again.",
+    "summary": "{name} · {resources} resources · {dictionaries} dictionaries · source revision {revision}",
+    "unsupported": "Unsupported triples ({count})",
+    "resources": "Resources and dependencies",
+    "dependencies": "Dependencies",
+    "apply": "Import as a new local ontology",
+    "applyFailed": "Import was not confirmed ({code}). Preview again to check the current state.",
+    "restored": "Created ontology #{id}, local revision r{revision}; source revision r{source}. Inspect and export it above."
   }
 }

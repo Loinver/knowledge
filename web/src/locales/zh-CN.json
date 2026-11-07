@@ -1546,5 +1546,23 @@
       "run_id": "运行 ID",
       "current_graph_revision_id": "当前图谱 ID"
     }
+  },
+  "ontologyRestore": {
+    "title": "本体导入",
+    "intro": "将受支持的 Turtle / JSON-LD 文件完整恢复为本地新本体。先预览依赖与冲突，再原子导入；保留资源 IRI，版本号从本地重新生成。已有同名或同 IRI 资源及不支持的语义会阻止导入，不覆盖已有内容。",
+    "file": "选择 RDF 文件（最大 64 KiB）",
+    "content": "RDF 内容",
+    "preview": "预览导入",
+    "ready": "预检通过",
+    "blocked": "存在冲突或不支持内容，请修正文件后重新预览。",
+    "tooLarge": "文件不能超过 64 KiB。",
+    "readFailed": "无法读取文件，请重新选择。",
+    "summary": "{name} · {resources} 个资源 · {dictionaries} 个枚举字典 · 源版本 {revision}",
+    "unsupported": "不支持的三元组（{count}）",
+    "resources": "资源与依赖",
+    "dependencies": "依赖",
+    "apply": "导入为本地新本体",
+    "applyFailed": "导入未确认成功（{code}），请重新预览以检查当前状态。",
+    "restored": "已创建本体 #{id}，本地版本 r{revision}；文件来源版本 r{source}。可在上方查看与再次导出。"
   }
 }

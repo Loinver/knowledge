@@ -359,6 +359,40 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ontologies/import/restore-preview': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Preview Restore Endpoint */
+    post: operations['preview_restore_endpoint_api_v1_ontologies_import_restore_preview_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ontologies/import/restore': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Restore Endpoint */
+    post: operations['restore_endpoint_api_v1_ontologies_import_restore_post']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/datasources': {
     parameters: {
       query?: never
@@ -3232,6 +3266,40 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['OntologyRefOut'] | null
+    }
+    /** ApiResponse[OntologyRestorePreview] */
+    ApiResponse_OntologyRestorePreview_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyRestorePreview'] | null
+    }
+    /** ApiResponse[OntologyRestoreResult] */
+    ApiResponse_OntologyRestoreResult_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyRestoreResult'] | null
     }
     /** ApiResponse[OntologyRevisionContents] */
     ApiResponse_OntologyRevisionContents_: {
@@ -6263,6 +6331,56 @@ export interface components {
       /** Pinned Revision */
       pinned_revision?: number | null
     }
+    /** OntologyRestorePreview */
+    OntologyRestorePreview: {
+      /** Preview Digest */
+      preview_digest: string
+      /** Name */
+      name: string | null
+      /** Root Iri */
+      root_iri: string | null
+      /** Source Revision */
+      source_revision: number | null
+      /** Triple Count */
+      triple_count: number
+      /** Resources */
+      resources: components['schemas']['RestoreResourceOut'][]
+      /** Enum Names */
+      enum_names: string[]
+      /** Conflicts */
+      conflicts: components['schemas']['OntologyImportConflict'][]
+      /** Unsupported Triples */
+      unsupported_triples: string[]
+      /** Can Apply */
+      can_apply: boolean
+    }
+    /** OntologyRestoreRequest */
+    OntologyRestoreRequest: {
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: 'turtle' | 'json-ld'
+      /** Content */
+      content: string
+      /** Ontology Id */
+      ontology_id?: number | null
+      /** Preview Digest */
+      preview_digest: string
+    }
+    /** OntologyRestoreResult */
+    OntologyRestoreResult: {
+      /** Ontology Id */
+      ontology_id: number
+      /** Current Revision */
+      current_revision: number
+      /** Source Revision */
+      source_revision: number | null
+      /** Created Resource Count */
+      created_resource_count: number
+      /** Created Dictionary Count */
+      created_dictionary_count: number
+    }
     /** OntologyRevisionContents */
     OntologyRevisionContents: {
       /** Ontology Id */
@@ -6819,6 +6937,22 @@ export interface components {
      * @enum {string}
      */
     ResourceStatus: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+    /** RestoreResourceOut */
+    RestoreResourceOut: {
+      /** Iri */
+      iri: string
+      /** Name */
+      name: string
+      kind: components['schemas']['ResourceKind']
+      /** Namespace Iri */
+      namespace_iri: string
+      /** Namespace Prefix */
+      namespace_prefix: string
+      /** Dependencies */
+      dependencies: string[]
+      /** Existing Resource Id */
+      existing_resource_id?: number | null
+    }
     /** ReverseTraceFact */
     ReverseTraceFact: {
       /** Subject */
@@ -8490,6 +8624,72 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_OntologyHistoryRuleOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  preview_restore_endpoint_api_v1_ontologies_import_restore_preview_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OntologyImportPreviewRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyRestorePreview_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  restore_endpoint_api_v1_ontologies_import_restore_post: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OntologyRestoreRequest']
+      }
+    }
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyRestoreResult_']
         }
       }
       /** @description Validation Error */

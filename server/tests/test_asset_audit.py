@@ -27,6 +27,7 @@ from app.api.v1 import (
     types,
 )
 from app.api.v1.deps import authorize_business_request
+from app.api.v1.ontology_restore import router as ontology_restore_router
 from app.core.db import Base, get_session
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
@@ -123,6 +124,7 @@ def h(tmp_path: Path) -> Iterator[Harness]:
     ):
         business.include_router(module.router)
     business.include_router(enum_dictionaries.legacy_router)
+    business.include_router(ontology_restore_router)
     app.include_router(business)
     app.include_router(accounts.router, prefix=API)
     app.dependency_overrides[get_session] = request_session
@@ -649,6 +651,50 @@ def test_same_asset_concurrent_edits_record_serialized_previous_versions(
         (row["version_before"]["edit_revision"], row["version_after"]["edit_revision"])
         for row in rows
     ] == [(0, 1), (1, 2)]
+
+
+def test_restore_creation_and_publish_share_audit_transaction(
+    h: Harness, tmp_path: Path
+) -> None:
+    # Reuse the two-database transfer fixture without changing the restore service.
+    from app.schemas.ontology import OntologyExportFormat
+
+    from test_ontology_restore_apply import source_content
+
+    content = source_content(tmp_path, OntologyExportFormat.TURTLE)
+    preview = h.call(
+        "POST",
+        "/ontologies/import/restore-preview",
+        json={
+            "format": "turtle",
+            "content": content,
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["can_apply"]
+    payload = {
+        "format": "turtle",
+        "content": content,
+        "preview_digest": preview.json()["preview_digest"],
+    }
+    response = h.call("POST", "/ontologies/import/restore", json=payload)
+    assert response.status_code == 200, response.text
+    rows = h.logs()["items"]
+    assert len(rows) == 1
+    assert rows[0]["action"] == "CREATE" and rows[0]["object_type"] == "ONTOLOGY"
+    assert rows[0]["object_id"] == response.json()["ontology_id"]
+    assert rows[0]["version_before"] is None
+    assert (
+        rows[0]["version_after"]["current_revision"]
+        == response.json()["current_revision"]
+        == 1
+    )
+    assert content not in str(rows)
+    again = h.call("POST", "/ontologies/import/restore", json=payload)
+    assert again.status_code == 409, again.text
+    failed = h.logs(result="FAILED")["items"]
+    assert len(failed) == 1 and failed[0]["action"] == "CREATE"
+    assert failed[0]["object_id"] is None and failed[0]["version_after"] is None
 
 
 def test_main_exposes_audit_once_and_requires_admin(h: Harness) -> None:

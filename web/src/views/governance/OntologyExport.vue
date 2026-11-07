@@ -6,8 +6,10 @@ import { useRoute } from 'vue-router'
 
 import type { Ontology, OntologyExportFormat } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
+import type { RestoreResult } from '@/api/ontology-restore'
 import PageHeader from '@/components/PageHeader.vue'
 import OntologyHistory from '@/views/governance/components/OntologyHistory.vue'
+import OntologyRestore from '@/views/governance/components/OntologyRestore.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -104,6 +106,12 @@ async function download() {
 }
 
 onMounted(load)
+async function restored(result: RestoreResult) {
+  await load()
+  if (controller.signal.aborted) return
+  selectedId.value = result.ontology_id
+  revision.value = result.current_revision
+}
 onBeforeUnmount(() => controller.abort())
 </script>
 
@@ -157,6 +165,7 @@ onBeforeUnmount(() => controller.abort())
       :ontology-id="selected.id"
       :revision="revision ?? selected.current_revision"
     />
+    <OntologyRestore @restored="restored" />
   </section>
 </template>
 
