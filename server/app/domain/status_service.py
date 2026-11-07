@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.enum_dictionary_service import get_snapshot
-from app.models.enums import ResourceStatus
+from app.models.enums import ResourceKind, ResourceStatus
 from app.models.resource import (
     DatatypePropDetail,
     ModelResource,
@@ -27,6 +27,36 @@ def _checksum(payload: dict) -> str:
     """计算 payload 的稳定校验和，用于版本完整性。"""
     raw = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
     return hashlib.sha256(raw).hexdigest()
+
+
+def _property_snapshot(
+    session: Session,
+    prop: ModelResource,
+    detail: DatatypePropDetail,
+    role: str,
+) -> dict[str, object]:
+    return {
+        "role": role,
+        "name": detail.prop_name,
+        "iri": prop.iri,
+        "label_i18n": deepcopy(prop.label_i18n),
+        "definition_i18n": deepcopy(prop.definition_i18n),
+        "datatype": detail.datatype,
+        "enum_dict_id": detail.enum_dict_id,
+        "enum_dict_revision": detail.enum_dict_revision,
+        "enum_dictionary": get_snapshot(
+            session, detail.enum_dict_id, detail.enum_dict_revision
+        )
+        if detail.enum_dict_id is not None and detail.enum_dict_revision is not None
+        else None,
+        "nullable": detail.nullable,
+        "default_value": detail.default_value,
+        "min_cardinality": detail.min_cardinality,
+        "max_cardinality": detail.max_cardinality,
+        "min_value": detail.min_value,
+        "max_value": detail.max_value,
+        "source_clause_ref": detail.source_clause_ref,
+    }
 
 
 def check_revision(resource: ModelResource, if_match: int | None) -> None:
@@ -79,7 +109,14 @@ def lock_resource_edit(
     return locked
 
 
-def publish_resource(session: Session, resource: ModelResource) -> ResourceRevision:
+def publish_resource(
+    session: Session,
+    resource: ModelResource,
+    *,
+    _owned: bool = False,
+    _ancestors: frozenset[int] = frozenset(),
+    _frozen_owned: dict[int, ResourceRevision] | None = None,
+) -> ResourceRevision:
     """发布资源：冻结当前内容为不可变版本。
 
     resource_revision 只增不改；current_revision 前移。
@@ -88,11 +125,18 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
     409 ALREADY_PUBLISHED，而不是双双通过后撞 (resource_id, revision)
     唯一约束变成 503。
     """
+    if resource.id in _ancestors:
+        raise KGError(ErrorCode.VALIDATION_VIOLATION, {"reason": "ownership_cycle"})
+    frozen_owned = {} if _frozen_owned is None else _frozen_owned
+    if _owned and resource.id in frozen_owned:
+        return frozen_owned[resource.id]
     claimed = session.scalar(
         update(ModelResource)
         .where(
             ModelResource.id == resource.id,
-            ModelResource.status == ResourceStatus.DRAFT,
+            ModelResource.status.in_([ResourceStatus.DRAFT, ResourceStatus.PUBLISHED])
+            if _owned
+            else ModelResource.status == ResourceStatus.DRAFT,
         )
         .values(edit_revision=ModelResource.edit_revision + 1)
         .returning(ModelResource)
@@ -102,6 +146,37 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
         session.refresh(resource)
         raise KGError(ErrorCode.ALREADY_PUBLISHED, {"resource": resource.name})
     resource = claimed
+    owned_versions: dict[str, int] = {}
+    for ref in session.scalars(
+        select(ResourceRef)
+        .where(
+            ResourceRef.source_id == resource.id,
+            ResourceRef.role.in_(["data_prop", "assoc_attribute", "assoc_resource"]),
+        )
+        .order_by(ResourceRef.target_id)
+    ):
+        child = session.get(ModelResource, ref.target_id)
+        expected = (
+            ResourceKind.ASSOC
+            if ref.role == "assoc_resource"
+            else ResourceKind.DATATYPE_PROP
+        )
+        if child is None or child.kind != expected:
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {
+                    "reason": "invalid_owned_resource",
+                    "resource_id": ref.target_id,
+                },
+            )
+        frozen_child = publish_resource(
+            session,
+            child,
+            _owned=True,
+            _ancestors=_ancestors | {resource.id},
+            _frozen_owned=frozen_owned,
+        )
+        owned_versions[str(child.id)] = frozen_child.revision
     new_rev = resource.current_revision + 1
     payload = {
         "name": resource.name,
@@ -128,11 +203,18 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
                 .order_by(ResourceRef.role, ResourceRef.target_id)
             )
         ],
+        "owned_versions": owned_versions,
     }
     # 属性/关系约束一并冻结：否则发布版本拿不到 data type、基数与 OWL 特征，
     # 「不静默影响下游」就只剩端点引用一层（M-07 补齐）。
     # 属性明细挂在属性子资源上，按引用聚合；关系明细挂在关系资源自身上。
     prop_details: list[dict[str, object]] = []
+    if resource.kind == ResourceKind.DATATYPE_PROP:
+        own_detail = session.get(DatatypePropDetail, resource.id)
+        if own_detail is not None:
+            prop_details.append(
+                _property_snapshot(session, resource, own_detail, "self")
+            )
     property_owners = [
         resource.id,
         *session.scalars(
@@ -154,25 +236,8 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
         if detail is None:
             continue
         prop = session.get(ModelResource, ref.target_id)
-        prop_details.append(
-            {
-                "role": ref.role,
-                "name": detail.prop_name,
-                "iri": prop.iri if prop is not None else None,
-                "label_i18n": deepcopy(prop.label_i18n) if prop is not None else None,
-                "datatype": detail.datatype,
-                "enum_dict_id": detail.enum_dict_id,
-                "enum_dict_revision": detail.enum_dict_revision,
-                "enum_dictionary": get_snapshot(
-                    session, detail.enum_dict_id, detail.enum_dict_revision
-                )
-                if detail.enum_dict_id is not None
-                and detail.enum_dict_revision is not None
-                else None,
-                "nullable": detail.nullable,
-                "default_value": detail.default_value,
-            }
-        )
+        if prop is not None:
+            prop_details.append(_property_snapshot(session, prop, detail, ref.role))
     if prop_details:
         payload["datatype_props"] = prop_details
 
@@ -193,17 +258,26 @@ def publish_resource(session: Session, resource: ModelResource) -> ResourceRevis
             "range_role_i18n": deepcopy(object_detail.range_role_i18n),
             "owl": deepcopy(object_detail.owl),
         }
+    checksum = _checksum(payload)
+    if _owned and resource.current_revision > 0:
+        previous = get_revision(session, resource.id, resource.current_revision)
+        if previous.checksum == checksum and previous.payload == payload:
+            resource.status = ResourceStatus.PUBLISHED
+            session.flush()
+            frozen_owned[resource.id] = previous
+            return previous
     rev = ResourceRevision(
         resource_id=resource.id,
         revision=new_rev,
         payload=payload,
-        checksum=_checksum(payload),
+        checksum=checksum,
     )
     session.add(rev)
     resource.current_revision = new_rev
     # edit_revision 已在抢占发布的原子 UPDATE 里递增，使在途编辑令牌全部失效。
     resource.status = ResourceStatus.PUBLISHED
     session.flush()
+    frozen_owned[resource.id] = rev
     return rev
 
 

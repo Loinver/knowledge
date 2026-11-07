@@ -506,6 +506,7 @@ def test_publish_freezes_prop_constraints_into_revision(
                 "name": "level",
                 "iri": "https://example.org/kg#Employee/level",
                 "label_i18n": None,
+                "definition_i18n": None,
                 "datatype": "enum",
                 "enum_dict_id": 1,
                 "enum_dict_revision": 1,
@@ -519,6 +520,11 @@ def test_publish_freezes_prop_constraints_into_revision(
                 },
                 "nullable": False,
                 "default_value": "P3",
+                "min_cardinality": None,
+                "max_cardinality": None,
+                "min_value": None,
+                "max_value": None,
+                "source_clause_ref": None,
             }
         ]
         assert type_revision.checksum

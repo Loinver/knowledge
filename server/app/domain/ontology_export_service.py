@@ -111,7 +111,11 @@ def export_ontology(
         _validate_references(rid, snapshot, snapshots)
 
     content = serialize_ontology_rdf(
-        metadata, snapshots, revision=revision, rdf_format=rdf_format
+        metadata,
+        snapshots,
+        revision=revision,
+        rdf_format=rdf_format,
+        rules=published.rules,
     )
     filename = re.sub(r"[^A-Za-z0-9_-]+", "-", metadata.name).strip("-") or "ontology"
     if rdf_format == OntologyExportFormat.TURTLE:

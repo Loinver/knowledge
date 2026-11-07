@@ -448,6 +448,42 @@ def test_rule_changed_after_pin_is_not_run(session, stage_db):
     assert results["R-DRIFT"]["reason"] == "rule_changed_after_pin"
 
 
+@pytest.mark.parametrize("language", ["SHACL", "OWL", "DERIVATION"])
+def test_unsupported_or_changed_auto_rule_is_reported_not_run(
+    session: Session, stage_db: str, language: str
+) -> None:
+    onto = _setup_onto(session)
+    ds = create_datasource(
+        session,
+        DatasourceCreate(
+            name="unexecuted", kind="sqlite", params={"database": stage_db}
+        ),
+    )
+    session.commit()
+    capture_metadata(session, ds.id)
+    rule = _add_rule(session, onto, "R-NOT-RUN", language, "{}")
+    if language == "DERIVATION":
+        rule.revision = 2
+        session.flush()
+    rev = _mapping(session, onto)
+
+    run = start_run(session, rev.id, ds.id, "https://example.org/kg/")
+    session.commit()
+
+    assert run.counts["rule_results"] == [
+        {
+            "rule_id": "R-NOT-RUN",
+            "language": language,
+            "state": "NOT_RUN",
+            "hits": 0,
+            "reason": "rule_changed_after_pin"
+            if language == "DERIVATION"
+            else "language_not_executed_in_pipeline",
+        }
+    ]
+    assert run.counts["derived_edge_count"] == 0
+
+
 def test_derivation_stage_writes_provenance_and_count(session, stage_db):
     """派生边带 rule_id 与 source_fact_ids；derived_edge_count 真实计数。"""
     onto = _setup_onto(session)

@@ -77,7 +77,9 @@ def delete_resource(session: Session, resource: ModelResource) -> None:
     session.flush()
 
 
-def _ensure_unreferenced(session: Session, resource: ModelResource) -> None:
+def _ensure_unreferenced(
+    session: Session, resource: ModelResource, owned_ids: set[int] | None = None
+) -> None:
     """有外部引用就拒绝删除，引用计数进 RESOURCE_IN_USE 供界面提示。"""
 
     def _count(stmt: Any) -> int:
@@ -95,10 +97,15 @@ def _ensure_unreferenced(session: Session, resource: ModelResource) -> None:
         + _count(
             select(ResourceRef).where(
                 ResourceRef.target_id == resource.id,
-                ResourceRef.source_id != resource.id,
+                ResourceRef.source_id.not_in(owned_ids or {resource.id}),
             )
         )
-        + _count(select(ResourceParent).where(ResourceParent.parent_id == resource.id))
+        + _count(
+            select(ResourceParent).where(
+                ResourceParent.parent_id == resource.id,
+                ResourceParent.child_id.not_in(owned_ids or {resource.id}),
+            )
+        )
     )
     if blockers:
         raise KGError(
@@ -131,37 +138,41 @@ def _cleanup(session: Session, resource: ModelResource) -> None:
                 )
             )
         )
-    for ids in (grandchild_ids, child_ids):
-        if not ids:
-            continue
-        session.execute(
-            delete(DatatypePropDetail).where(DatatypePropDetail.resource_id.in_(ids))
-        )
-        session.execute(delete(ResourceRef).where(ResourceRef.source_id.in_(ids)))
-        session.execute(
-            delete(ResourceRevision).where(ResourceRevision.resource_id.in_(ids))
-        )
-        session.execute(delete(ModelResource).where(ModelResource.id.in_(ids)))
+    owned_ids = {resource.id, *child_ids, *grandchild_ids}
+    owned = list(
+        session.scalars(select(ModelResource).where(ModelResource.id.in_(owned_ids)))
+    )
+    # Validate the complete ownership closure before the first delete. A child
+    # may itself be referenced by an ontology or have published history.
+    for item in owned:
+        if (
+            item.current_revision
+            or session.scalar(
+                select(ResourceRevision.id)
+                .where(ResourceRevision.resource_id == item.id)
+                .limit(1)
+            )
+            is not None
+        ):
+            raise KGError(
+                ErrorCode.ALREADY_PUBLISHED,
+                {"resource": item.name, "reason": "delete_requires_fresh_draft"},
+            )
+        _ensure_unreferenced(session, item, owned_ids)
+    # Remove incoming ownership references before deleting their targets.
+    session.execute(delete(ResourceRef).where(ResourceRef.source_id.in_(owned_ids)))
     session.execute(
-        delete(ObjectPropDetail).where(ObjectPropDetail.resource_id == resource.id)
+        delete(DatatypePropDetail).where(DatatypePropDetail.resource_id.in_(owned_ids))
     )
     session.execute(
-        delete(ResourceRef).where(
-            or_(
-                ResourceRef.source_id == resource.id,
-                ResourceRef.target_id == resource.id,
-            )
-        )
+        delete(ObjectPropDetail).where(ObjectPropDetail.resource_id.in_(owned_ids))
     )
     session.execute(
         delete(ResourceParent).where(
             or_(
-                ResourceParent.child_id == resource.id,
-                ResourceParent.parent_id == resource.id,
+                ResourceParent.child_id.in_(owned_ids),
+                ResourceParent.parent_id.in_(owned_ids),
             )
         )
     )
-    session.execute(
-        delete(ResourceRevision).where(ResourceRevision.resource_id == resource.id)
-    )
-    session.execute(delete(ModelResource).where(ModelResource.id == resource.id))
+    session.execute(delete(ModelResource).where(ModelResource.id.in_(owned_ids)))

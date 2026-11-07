@@ -67,6 +67,9 @@ def test_business_routes_require_authentication(
         "/namespaces",
         "/datasources",
         "/extraction/runs",
+        "/ontologies/1/revisions/1/contents",
+        "/ontologies/1/revisions/1/resources/1",
+        "/ontologies/1/revisions/1/rules/1",
     ):
         response = client.get(f"{API}{path}")
         assert response.status_code == 401

@@ -1,16 +1,29 @@
 <script setup lang="ts">
 import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NSelect, NSpace } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 
 import type { Ontology, OntologyExportFormat } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
 import PageHeader from '@/components/PageHeader.vue'
+import OntologyHistory from '@/views/governance/components/OntologyHistory.vue'
 
 const { t, locale } = useI18n()
+const route = useRoute()
 const ontologies = ref<Ontology[]>([])
 const selectedId = ref<number | null>(null)
 const revision = ref<number | null>(null)
+watch(
+  () => [route.query.ontology, route.query.revision],
+  ([ontology, version]) => {
+    const id = Number(ontology)
+    const rev = Number(version)
+    selectedId.value = Number.isSafeInteger(id) && id > 0 ? id : null
+    revision.value = Number.isSafeInteger(rev) && rev > 0 ? rev : null
+  },
+  { immediate: true },
+)
 const format = ref<OntologyExportFormat>('turtle')
 const loading = ref(false)
 const downloading = ref(false)
@@ -139,6 +152,11 @@ onBeforeUnmount(() => controller.abort())
         </NSpace>
       </NForm>
     </NCard>
+    <OntologyHistory
+      v-if="selected && (revision ?? selected.current_revision) > 0"
+      :ontology-id="selected.id"
+      :revision="revision ?? selected.current_revision"
+    />
   </section>
 </template>
 

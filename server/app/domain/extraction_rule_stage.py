@@ -65,8 +65,8 @@ def run_rule_stage(
     quarantined_by_rule = 0
     rule_violation_count = 0
     for rule, not_run_reason in rules:
-        # DERIVATION 规则在阶段 4 执行，结果计入派生边，不在本阶段重复执行
-        if rule.language != "DATA":
+        # 可执行的 DERIVATION 由阶段 4 接管；未执行的规则仍必须留下原因。
+        if rule.language == "DERIVATION" and not_run_reason is None:
             continue
         if not_run_reason is not None:
             rule_results.append(

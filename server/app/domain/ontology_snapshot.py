@@ -30,6 +30,11 @@ class SnapshotProperty(BaseModel):
     enum_dict_id: int | None = None
     enum_dict_revision: int | None = None
     enum_dictionary: EnumDictionaryOut | None = None
+    min_cardinality: int | None = Field(default=None, ge=0)
+    max_cardinality: int | None = Field(default=None, ge=0)
+    min_value: str | None = None
+    max_value: str | None = None
+    source_clause_ref: str | None = None
 
 
 class ResourceSnapshot(BaseModel):

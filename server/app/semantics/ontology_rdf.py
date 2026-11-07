@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
@@ -62,6 +63,7 @@ class OntologyRdfMetadata(BaseModel):
 
 
 class OntologyRdfResource(BaseModel):
+    name: str | None = None
     iri: str
     kind: ResourceKind
     label_i18n: dict[str, str] | None = None
@@ -195,8 +197,21 @@ def serialize_ontology_rdf(
     *,
     revision: int,
     rdf_format: OntologyExportFormat,
+    rules: list[dict[str, object]] | None = None,
 ) -> str:
     """将已校验引用闭包与资源种类的快照转换为 RDF。"""
+    datatypes: dict[str, str] = {}
+    for snapshot in snapshots.values():
+        for detail in snapshot.datatype_props:
+            iri, datatype = detail.get("iri"), detail.get("datatype")
+            if not isinstance(iri, str) or not isinstance(datatype, str):
+                continue
+            if iri in datatypes and datatypes[iri] != datatype:
+                raise KGError(
+                    ErrorCode.VALIDATION_VIOLATION,
+                    {"property": iri, "reason": "conflicting_frozen_datatype"},
+                )
+            datatypes[iri] = datatype
     graph = Graph()
     graph.bind("owl", OWL)
     graph.bind("rdfs", RDFS)
@@ -209,6 +224,16 @@ def serialize_ontology_rdf(
     graph.add((ontology_iri, OWL.versionInfo, Literal(str(revision))))
     graph.add((ontology_iri, _SEMANTICS.name, Literal(metadata.name)))
     _add_annotations(graph, ontology_iri, metadata.label_i18n, metadata.definition_i18n)
+    # Preserve rule payloads as explicit annotations. Importers that cannot restore
+    # their execution semantics must report them instead of silently dropping them.
+    for rule in rules or []:
+        graph.add(
+            (
+                ontology_iri,
+                _SEMANTICS.ruleSnapshot,
+                Literal(json.dumps(rule, ensure_ascii=False, sort_keys=True)),
+            )
+        )
     for rid, snapshot in snapshots.items():
         subject = _iri(snapshot.iri)
         graph.bind(
@@ -218,6 +243,12 @@ def serialize_ontology_rdf(
         )
         graph.add((subject, RDF.type, _RDF_TYPES[snapshot.kind]))
         graph.add((subject, _SEMANTICS.resourceKind, Literal(snapshot.kind.value)))
+        if snapshot.name is not None:
+            graph.add((subject, _SEMANTICS.name, Literal(snapshot.name)))
+        graph.add((subject, _SEMANTICS.namespace, Literal(snapshot.namespace["iri"])))
+        graph.add(
+            (subject, _SEMANTICS.namespacePrefix, Literal(snapshot.namespace["prefix"]))
+        )
         graph.add((subject, RDFS.isDefinedBy, ontology_iri))
         _add_annotations(graph, subject, snapshot.label_i18n, snapshot.definition_i18n)
         for parent_id in snapshot.parent_ids:
@@ -225,7 +256,29 @@ def serialize_ontology_rdf(
         _add_references(graph, snapshot, snapshots)
         _add_constraints(graph, rid, snapshot, snapshots)
         if snapshot.kind == ResourceKind.DATATYPE_PROP:
-            datatype = (snapshot.definition_i18n or {}).get("datatype")
+            definitions = snapshot.definition_i18n
+            legacy_datatype = (
+                definitions.get("datatype") if definitions is not None else None
+            )
+            datatype = (
+                legacy_datatype
+                if definitions is not None and "datatype" in definitions
+                else datatypes.get(snapshot.iri)
+            )
+            if (
+                legacy_datatype is not None
+                and snapshot.iri in datatypes
+                and legacy_datatype != datatypes[snapshot.iri]
+            ):
+                raise KGError(
+                    ErrorCode.VALIDATION_VIOLATION,
+                    {"property": snapshot.iri, "reason": "conflicting_frozen_datatype"},
+                )
+            # Enum ranges are the frozen sh:in list emitted from the owner;
+            # there is no XSD datatype named enum. A standalone legacy marker
+            # without the owner's frozen dictionary still fails below.
+            if datatype == "enum" and datatypes.get(snapshot.iri) == "enum":
+                continue
             if datatype is None or datatype not in _DATATYPES:
                 raise KGError(
                     ErrorCode.VALIDATION_VIOLATION,
@@ -296,6 +349,14 @@ def _add_datatype_constraints(
     detail: dict[str, object],
 ) -> None:
     datatype = detail.get("datatype")
+    prop_name = detail.get("name")
+    if isinstance(prop_name, str):
+        graph.add((prop, _SEMANTICS.propertyName, Literal(prop_name)))
+    if not isinstance(datatype, str) or datatype not in {*_DATATYPES, "enum"}:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {"property": str(prop), "reason": "unsupported_datatype"},
+        )
     if isinstance(datatype, str) and datatype in _DATATYPES:
         graph.add((prop, RDFS.range, _DATATYPES[datatype]))
     nullable = detail.get("nullable")
@@ -308,13 +369,85 @@ def _add_datatype_constraints(
     enum_id = detail.get("enum_dict_id")
     enum_revision = detail.get("enum_dict_revision")
     enum_snapshot = detail.get("enum_dictionary")
+    if datatype == "enum":
+        entries = (
+            enum_snapshot.get("entries") if isinstance(enum_snapshot, dict) else None
+        )
+        if (
+            type(enum_id) is not int
+            or type(enum_revision) is not int
+            or not isinstance(enum_snapshot, dict)
+            or enum_snapshot.get("id") != enum_id
+            or enum_snapshot.get("revision") != enum_revision
+            or not isinstance(entries, list)
+            or not entries
+            or any(
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("value"), str)
+                or not entry["value"]
+                for entry in entries
+            )
+        ):
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {"property": str(prop), "reason": "missing_or_invalid_enum_snapshot"},
+            )
     shape = URIRef(f"{prop}#shape")
     graph.add((owner, _SH.property, shape))
     graph.add((shape, _SH.path, prop))
     if isinstance(datatype, str) and datatype in _DATATYPES:
         graph.add((shape, _SH.datatype, _DATATYPES[datatype]))
-    if nullable is False:
-        graph.add((shape, _SH.minCount, Literal(1)))
+    minimum = detail.get("min_cardinality")
+    maximum = detail.get("max_cardinality")
+    minimum_count = max(minimum if type(minimum) is int else 0, int(nullable is False))
+    if minimum_count or type(minimum) is int:
+        graph.add((shape, _SH.minCount, Literal(minimum_count)))
+    if type(maximum) is int:
+        graph.add((shape, _SH.maxCount, Literal(maximum)))
+    for field, predicate in (
+        ("min_value", _SH.minInclusive),
+        ("max_value", _SH.maxInclusive),
+    ):
+        bound = detail.get(field)
+        if isinstance(bound, str):
+            if datatype not in {"integer", "decimal"}:
+                raise KGError(
+                    ErrorCode.VALIDATION_VIOLATION,
+                    {
+                        "property": str(prop),
+                        "reason": "unsupported_property_range_datatype",
+                    },
+                )
+            try:
+                number = Decimal(bound)
+                if not number.is_finite():
+                    raise InvalidOperation
+            except InvalidOperation:
+                raise KGError(
+                    ErrorCode.VALIDATION_VIOLATION,
+                    {
+                        "property": str(prop),
+                        "reason": "invalid_property_range_snapshot",
+                    },
+                ) from None
+            # A decimal point avoids Turtle/JSON-LD lexical drift for whole values.
+            lexical = format(number, "f")
+            if "." not in lexical:
+                lexical += ".0"
+            graph.add((shape, predicate, Literal(lexical, datatype=XSD.decimal)))
+    clause = detail.get("source_clause_ref")
+    if isinstance(clause, str):
+        graph.add((prop, _SEMANTICS.sourceClauseRef, Literal(clause)))
+    graph.add(
+        (
+            prop,
+            _SEMANTICS.constraintsRecorded,
+            Literal(
+                {"min_cardinality", "max_cardinality", "min_value", "max_value"}
+                <= detail.keys()
+            ),
+        )
+    )
     if isinstance(default, str):
         graph.add((shape, _SH.defaultValue, Literal(default)))
     if isinstance(enum_id, int) and isinstance(enum_revision, int):
@@ -322,6 +455,15 @@ def _add_datatype_constraints(
         graph.add((prop, _SEMANTICS.enumDictionary, enum_iri))
         graph.add((enum_iri, _SEMANTICS.revision, Literal(enum_revision)))
         if isinstance(enum_snapshot, dict):
+            enum_name = enum_snapshot.get("name")
+            if isinstance(enum_name, str):
+                graph.add((enum_iri, _SEMANTICS.name, Literal(enum_name)))
+            _add_annotations(
+                graph,
+                enum_iri,
+                enum_snapshot.get("label_i18n"),
+                enum_snapshot.get("definition_i18n"),
+            )
             values: list[str] = []
             for index, entry in enumerate(enum_snapshot.get("entries", [])):
                 if not isinstance(entry, dict):

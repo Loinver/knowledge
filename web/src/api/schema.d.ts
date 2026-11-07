@@ -288,6 +288,57 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/v1/ontologies/{ontology_id}/revisions/{revision}/contents': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Revision Contents Endpoint */
+    get: operations['revision_contents_endpoint_api_v1_ontologies__ontology_id__revisions__revision__contents_get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ontologies/{ontology_id}/revisions/{revision}/resources/{resource_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Revision Resource Endpoint */
+    get: operations['revision_resource_endpoint_api_v1_ontologies__ontology_id__revisions__revision__resources__resource_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/ontologies/{ontology_id}/revisions/{revision}/rules/{rule_id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Revision Rule Endpoint */
+    get: operations['revision_rule_endpoint_api_v1_ontologies__ontology_id__revisions__revision__rules__rule_id__get']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/v1/datasources': {
     parameters: {
       query?: never
@@ -3026,6 +3077,40 @@ export interface components {
        */
       data?: null
     }
+    /** ApiResponse[OntologyHistoryResourceOut] */
+    ApiResponse_OntologyHistoryResourceOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyHistoryResourceOut'] | null
+    }
+    /** ApiResponse[OntologyHistoryRuleOut] */
+    ApiResponse_OntologyHistoryRuleOut_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyHistoryRuleOut'] | null
+    }
     /** ApiResponse[OntologyImportPreview] */
     ApiResponse_OntologyImportPreview_: {
       /**
@@ -3093,6 +3178,23 @@ export interface components {
       message: string
       /** @description 业务数据；无数据时为 null */
       data?: components['schemas']['OntologyRefOut'] | null
+    }
+    /** ApiResponse[OntologyRevisionContents] */
+    ApiResponse_OntologyRevisionContents_: {
+      /**
+       * Code
+       * @description 业务状态码，成功固定为 KG.OK
+       * @default KG.OK
+       */
+      code: string
+      /**
+       * Message
+       * @description 兜底英文消息，界面一律按 code 走 i18n
+       * @default OK
+       */
+      message: string
+      /** @description 业务数据；无数据时为 null */
+      data?: components['schemas']['OntologyRevisionContents'] | null
     }
     /** ApiResponse[PasswordResetIssued] */
     ApiResponse_PasswordResetIssued_: {
@@ -5371,6 +5473,113 @@ export interface components {
       /** Version */
       version: string
     }
+    /** HistoryNamespace */
+    HistoryNamespace: {
+      /** Prefix */
+      prefix: string
+      /** Iri */
+      iri: string
+    }
+    /** HistoryObjectPropertySnapshot */
+    HistoryObjectPropertySnapshot: {
+      domain_cardinality: components['schemas']['CardinalitySpec']
+      range_cardinality: components['schemas']['CardinalitySpec']
+      /** Domain Role I18N */
+      domain_role_i18n?: {
+        [key: string]: string
+      } | null
+      /** Range Role I18N */
+      range_role_i18n?: {
+        [key: string]: string
+      } | null
+      owl: components['schemas']['OwlFeatures']
+    }
+    /**
+     * HistoryPropertySnapshot
+     * @description 保留属性默认值、标签、枚举与约束，不裁剪成校验用投影。
+     */
+    HistoryPropertySnapshot: {
+      /** Name */
+      name: string
+      /** Iri */
+      iri: string
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      } | null
+      /** Definition I18N */
+      definition_i18n?: {
+        [key: string]: string
+      } | null
+      /** Datatype */
+      datatype: string
+      /** Enum Dict Id */
+      enum_dict_id?: number | null
+      /** Enum Dict Revision */
+      enum_dict_revision?: number | null
+      /**
+       * Nullable
+       * @default true
+       */
+      nullable: boolean
+      /** Default Value */
+      default_value?: string | null
+      /** Min Cardinality */
+      min_cardinality?: number | null
+      /** Max Cardinality */
+      max_cardinality?: number | null
+      /** Min Value */
+      min_value?: string | null
+      /** Max Value */
+      max_value?: string | null
+      /** Source Clause Ref */
+      source_clause_ref?: string | null
+      /** Role */
+      role: string
+      enum_dictionary?: components['schemas']['EnumDictionaryOut'] | null
+    }
+    /** HistoryResourceRef */
+    HistoryResourceRef: {
+      /** Target Id */
+      target_id: number
+      /** Role */
+      role: string
+    }
+    /**
+     * HistoryResourceSnapshot
+     * @description 沿用 ResourceSnapshot 结构，HTTP 契约不依赖领域模块。
+     */
+    HistoryResourceSnapshot: {
+      /** Id */
+      id: number
+      /** Name */
+      name: string
+      /** Iri */
+      iri: string
+      kind: components['schemas']['ResourceKind']
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      } | null
+      /** Definition I18N */
+      definition_i18n?: {
+        [key: string]: string
+      } | null
+      namespace: components['schemas']['HistoryNamespace']
+      /** Parent Ids */
+      parent_ids: number[]
+      /** Resource Refs */
+      resource_refs: components['schemas']['HistoryResourceRef'][]
+      /** Datatype Props */
+      datatype_props?: components['schemas']['HistoryPropertySnapshot'][]
+      object_prop?: components['schemas']['HistoryObjectPropertySnapshot'] | null
+      owl?: components['schemas']['OwlFeatures'] | null
+    }
+    /**
+     * HistorySnapshotState
+     * @enum {string}
+     */
+    HistorySnapshotState: 'AVAILABLE' | 'UNAVAILABLE'
     /** ImpactItem */
     ImpactItem: {
       /** Source Id */
@@ -5671,6 +5880,80 @@ export interface components {
      * @enum {string}
      */
     OntologyExportFormat: 'turtle' | 'json-ld'
+    /** OntologyHistoryResourceBrief */
+    OntologyHistoryResourceBrief: {
+      /** Resource Id */
+      resource_id: number
+      /** Revision */
+      revision: number
+      /** Name */
+      name: string
+      /** Iri */
+      iri: string
+      kind: components['schemas']['ResourceKind']
+      /** Label I18N */
+      label_i18n?: {
+        [key: string]: string
+      } | null
+    }
+    /** OntologyHistoryResourceOut */
+    OntologyHistoryResourceOut: {
+      /** Ontology Id */
+      ontology_id: number
+      /** Ontology Revision */
+      ontology_revision: number
+      /** Resource Id */
+      resource_id: number
+      /** Revision */
+      revision: number
+      /** Checksum */
+      checksum: string
+      /**
+       * Published At
+       * Format: date-time
+       */
+      published_at: string
+      snapshot: components['schemas']['HistoryResourceSnapshot']
+    }
+    /** OntologyHistoryRuleBrief */
+    OntologyHistoryRuleBrief: {
+      /** Rule Id */
+      rule_id: number
+      /** Revision */
+      revision: number
+      /** Identifier */
+      identifier: string
+      /**
+       * Source Kind
+       * @enum {string}
+       */
+      source_kind: 'STANDARD' | 'ENTERPRISE'
+      /** Source Reference */
+      source_reference: string
+      snapshot_state: components['schemas']['HistorySnapshotState']
+    }
+    /** OntologyHistoryRuleOut */
+    OntologyHistoryRuleOut: {
+      /** Rule Id */
+      rule_id: number
+      /** Revision */
+      revision: number
+      /** Identifier */
+      identifier: string
+      /**
+       * Source Kind
+       * @enum {string}
+       */
+      source_kind: 'STANDARD' | 'ENTERPRISE'
+      /** Source Reference */
+      source_reference: string
+      snapshot_state: components['schemas']['HistorySnapshotState']
+      /** Ontology Id */
+      ontology_id: number
+      /** Ontology Revision */
+      ontology_revision: number
+      snapshot?: components['schemas']['RuleOut'] | null
+    }
     /** OntologyImportApplyRequest */
     OntologyImportApplyRequest: {
       /**
@@ -5798,6 +6081,22 @@ export interface components {
       resource_id: number
       /** Pinned Revision */
       pinned_revision?: number | null
+    }
+    /** OntologyRevisionContents */
+    OntologyRevisionContents: {
+      /** Ontology Id */
+      ontology_id: number
+      /** Revision */
+      revision: number
+      /**
+       * Published At
+       * Format: date-time
+       */
+      published_at: string
+      /** Resources */
+      resources: components['schemas']['OntologyHistoryResourceBrief'][]
+      /** Rules */
+      rules: components['schemas']['OntologyHistoryRuleBrief'][]
     }
     /** OntologyRuleOut */
     OntologyRuleOut: {
@@ -7877,6 +8176,104 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ApiResponse_OntologyImportResult_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  revision_contents_endpoint_api_v1_ontologies__ontology_id__revisions__revision__contents_get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+        revision: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyRevisionContents_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  revision_resource_endpoint_api_v1_ontologies__ontology_id__revisions__revision__resources__resource_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+        revision: number
+        resource_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyHistoryResourceOut_']
+        }
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  revision_rule_endpoint_api_v1_ontologies__ontology_id__revisions__revision__rules__rule_id__get: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        ontology_id: number
+        revision: number
+        rule_id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ApiResponse_OntologyHistoryRuleOut_']
         }
       }
       /** @description Validation Error */

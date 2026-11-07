@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
+from app.domain.ontology_dependencies import freeze_dependency_versions
 from app.domain.template_service import (
     lock_template,
     template_resources,
@@ -26,6 +27,7 @@ from app.models.domain import (
 from app.models.enums import ResourceStatus
 from app.models.governance import Rule
 from app.models.resource import ModelResource
+from app.schemas.governance import RuleOut
 from app.schemas.ontology import (
     ConflictInfo,
     OntologyCreate,
@@ -381,32 +383,57 @@ def publish_ontology(
             ref_domains.append(ref.resource_id)
         else:
             ref_types.append(ref.resource_id)
+    resource_versions = freeze_dependency_versions(
+        session,
+        resource_versions,
+        {
+            str(ref.resource_id): ref.pinned_revision
+            for ref in refs
+            if ref.pinned_revision is not None
+        },
+    )
     new_rev = onto.current_revision + 1
     rule_rows = []
     if sqlalchemy_inspect(session.connection()).has_table("ontology_rule_ref"):
         rule_rows = list(
             session.execute(
                 select(Rule, OntologyRuleRef)
-                .join(OntologyRuleRef, OntologyRuleRef.rule_id == Rule.id)
+                .select_from(OntologyRuleRef)
+                .outerjoin(Rule, OntologyRuleRef.rule_id == Rule.id)
                 .where(OntologyRuleRef.ontology_id == onto.id)
-                .order_by(Rule.id)
+                .order_by(OntologyRuleRef.rule_id)
+                .execution_options(populate_existing=True)
             )
+        )
+    frozen_rules = []
+    for rule, ref in rule_rows:
+        if rule is None:
+            raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"rule_id": ref.rule_id})
+        if rule.revision != ref.pinned_revision:
+            raise KGError(
+                ErrorCode.REVISION_CONFLICT,
+                {
+                    "rule_id": rule.id,
+                    "expected": ref.pinned_revision,
+                    "actual": rule.revision,
+                },
+            )
+        frozen_rules.append(
+            {
+                "rule_id": rule.id,
+                "identifier": rule.identifier,
+                "revision": ref.pinned_revision,
+                "source_kind": rule.source_kind,
+                "source_reference": rule.source_reference,
+                "snapshot": RuleOut.model_validate(rule).model_dump(mode="json"),
+            }
         )
     rev = OntologyRevision(
         ontology_id=onto.id,
         revision=new_rev,
         ref_domains=ref_domains,
         ref_types=ref_types,
-        rules=[
-            {
-                "rule_id": rule.id,
-                "identifier": rule.identifier,
-                "revision": rule.revision,
-                "source_kind": rule.source_kind,
-                "source_reference": rule.source_reference,
-            }
-            for rule, ref in rule_rows
-        ],
+        rules=frozen_rules,
         resource_versions=resource_versions,
         metadata_snapshot={
             "name": onto.name,

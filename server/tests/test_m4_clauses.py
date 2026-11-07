@@ -82,6 +82,9 @@ def test_crud_paging_and_search(client: TestClient) -> None:
         "items": [
             {
                 "id": first["id"],
+                "revision": first["revision"],
+                "title_i18n": first["title_i18n"],
+                "appendix_nature": "NORMATIVE",
                 "standard": first["standard"],
                 "clause_number": "7.2",
                 "product_fallback": "装配模板 T-07",
@@ -94,6 +97,9 @@ def test_crud_paging_and_search(client: TestClient) -> None:
     assert client.get(URL, params={"page": 2, "page_size": 1}).json()["items"] == [
         {
             "id": second["id"],
+            "revision": second["revision"],
+            "title_i18n": second["title_i18n"],
+            "appendix_nature": "NORMATIVE",
             "standard": second["standard"],
             "clause_number": "7.3",
             "product_fallback": "装配模板 T-08",

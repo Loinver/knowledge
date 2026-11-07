@@ -16,7 +16,7 @@ from app.domain.type_service import create_entity_type, update_entity_type
 from app.models.domain import BusinessDomain, Ontology
 from app.models.enums import ResourceStatus
 from app.models.governance import Rule
-from app.models.resource import ModelResource
+from app.models.resource import DatatypePropDetail, ModelResource, ResourceRef
 from app.schemas.domain import DomainCreate, DomainMemberAdd
 from app.schemas.ontology import OntologyCreate, OntologyRefAdd
 from app.schemas.relation import (
@@ -25,8 +25,8 @@ from app.schemas.relation import (
     OwlFeatures,
     RelationTypeCreate,
 )
-from app.schemas.type import EntityTypeCreate, EntityTypeUpdate
-from sqlalchemy import create_engine, func, select
+from app.schemas.type import DataTypePropCreate, EntityTypeCreate, EntityTypeUpdate
+from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -34,6 +34,11 @@ from sqlalchemy.orm import Session, sessionmaker
 def session(tmp_path):
     url = f"sqlite:///{tmp_path}/test.db"
     engine = create_engine(url)
+
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(connection: object, record: object) -> None:
+        connection.execute("PRAGMA foreign_keys=ON")  # type: ignore[attr-defined]
+
     Base.metadata.create_all(engine)
     sf = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
     sess = sf()
@@ -138,6 +143,49 @@ def test_delete_fresh_draft_relation(session, ns):
     # 端点实体类型不受影响
     assert session.get(ModelResource, employee.id) is not None
     assert session.get(ModelResource, department.id) is not None
+
+
+@pytest.mark.parametrize("referenced", [False, True])
+def test_delete_properties_respects_foreign_keys_and_external_use(
+    session: Session, ns: object, referenced: bool
+) -> None:
+    resource = create_entity_type(
+        session,
+        EntityTypeCreate(
+            name="Owned",
+            namespace_id=ns.id,
+            label_i18n={},  # type: ignore[attr-defined]
+            data_props=[DataTypePropCreate(name="name", datatype="string")],
+        ),
+    )
+    child_id = session.scalar(
+        select(ResourceRef.target_id).where(
+            ResourceRef.source_id == resource.id, ResourceRef.role == "data_prop"
+        )
+    )
+    assert child_id is not None
+    if referenced:
+        ontology = create_ontology(
+            session,
+            OntologyCreate(
+                name="UseChild", iri="https://example.org/UseChild", label_i18n={}
+            ),
+        )
+        add_ref(session, ontology.id, OntologyRefAdd(resource_id=child_id))
+    session.commit()
+    if referenced:
+        with pytest.raises(KGError) as exc:
+            delete_resource(session, resource)
+        assert exc.value.code == ErrorCode.RESOURCE_IN_USE
+        assert session.get(DatatypePropDetail, child_id) is not None
+        assert session.get(ModelResource, child_id) is not None
+        assert session.get(ModelResource, resource.id) is not None
+    else:
+        delete_resource(session, resource)
+        session.commit()
+        assert session.get(ModelResource, resource.id) is None
+        assert session.get(ModelResource, child_id) is None
+        assert session.get(DatatypePropDetail, child_id) is None
 
 
 def test_delete_published_history_rejected(session, ns):

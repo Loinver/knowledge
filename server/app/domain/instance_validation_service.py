@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import math
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,6 +17,7 @@ from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
 from app.domain.ontology_snapshot import (
     ResourceSnapshot,
+    SnapshotProperty,
     load_ontology_snapshot,
     relation_endpoints,
 )
@@ -202,6 +207,26 @@ def _check_i03_attribute_value_types(
         legacy_props = (
             owner is not None and "datatype_props" not in owner.model_fields_set
         )
+        for name, definition in owner_props.items():
+            constraint_state, reason = _property_constraints(
+                definition, attrs.get(name)
+            )
+            if constraint_state is not None:
+                return ValidationResult(
+                    check_code="I03",
+                    state=constraint_state,
+                    focus_node=entity.iri,
+                    detail={"attr": name, "reason": reason},
+                    message=reason,
+                )
+            if not definition.nullable and name not in attrs:
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.VIOLATION,
+                    focus_node=entity.iri,
+                    detail={"attr": name, "reason": "required_attribute_missing"},
+                    message="required attribute missing",
+                )
         for attr_name, value in attrs.items():
             detail = owner_props.get(attr_name)
             prop = prop_by_name.get(attr_name)
@@ -263,6 +288,44 @@ def _check_i03_attribute_value_types(
                     message="attribute value does not match datatype",
                 )
     return ValidationResult(check_code="I03", state=ValidationState.PASS)
+
+
+def _property_constraints(
+    prop: SnapshotProperty, value: object
+) -> tuple[ValidationState | None, str]:
+    fields = {"min_cardinality", "max_cardinality", "min_value", "max_value"}
+    if not fields <= prop.model_fields_set:
+        return ValidationState.NOT_RUN, "missing_property_constraints_snapshot"
+    values = value if isinstance(value, list) else [value]
+    present = [item for item in values if item is not None]
+    minimum = max(prop.min_cardinality or 0, 0 if prop.nullable else 1)
+    maximum = prop.max_cardinality
+    if maximum is not None and maximum < minimum:
+        return ValidationState.NOT_RUN, "invalid_property_cardinality_snapshot"
+    if len(present) < minimum or (maximum is not None and len(present) > maximum):
+        return ValidationState.VIOLATION, "property_cardinality_violation"
+    if prop.min_value is None and prop.max_value is None:
+        return None, ""
+    if prop.datatype not in {"integer", "decimal"}:
+        return ValidationState.NOT_RUN, "unsupported_property_range_datatype"
+    try:
+        lower = Decimal(prop.min_value) if prop.min_value is not None else None
+        upper = Decimal(prop.max_value) if prop.max_value is not None else None
+        if any(v is not None and not v.is_finite() for v in (lower, upper)):
+            raise InvalidOperation
+        if lower is not None and upper is not None and lower > upper:
+            raise InvalidOperation
+    except InvalidOperation:
+        return ValidationState.NOT_RUN, "invalid_property_range_snapshot"
+    for item in present:
+        if not _value_matches_type(item, prop.datatype):
+            continue  # The datatype check below reports this value.
+        number = Decimal(str(item))
+        if (lower is not None and number < lower) or (
+            upper is not None and number > upper
+        ):
+            return ValidationState.VIOLATION, "property_range_violation"
+    return None, ""
 
 
 def _check_i04_fact_evidence(session: Session, gr: GraphRevision) -> ValidationResult:
@@ -364,13 +427,22 @@ def _value_matches_type(value: object, datatype: str) -> bool:
     if datatype == "string":
         return isinstance(value, str)
     if datatype == "integer":
-        return isinstance(value, int | float) and not isinstance(value, bool)
+        return (isinstance(value, int) and not isinstance(value, bool)) or (
+            isinstance(value, float) and value.is_integer()
+        )
     if datatype == "decimal":
-        return isinstance(value, int | float) and not isinstance(value, bool)
+        return (isinstance(value, int) and not isinstance(value, bool)) or (
+            isinstance(value, float) and math.isfinite(value)
+        )
     if datatype == "boolean":
         return isinstance(value, bool)
     if datatype == "date":
-        return isinstance(value, str)
+        if not isinstance(value, str):
+            return False
+        try:
+            return date.fromisoformat(value).isoformat() == value
+        except ValueError:
+            return False
     if datatype == "enum":
         return isinstance(value, str)
     return True

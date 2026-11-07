@@ -11,6 +11,7 @@ import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
 import { createSSRApp } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const outputDir = path.join(web, 'node_modules/.tmp')
@@ -89,7 +90,13 @@ for (const [name, heading, action] of [
         await readFile(path.join(web, `src/locales/${locale}.json`), 'utf8'),
       )
       const i18n = createI18n({ legacy: false, locale, messages: { [locale]: messages } })
-      const app = createSSRApp(view).use(i18n)
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: '/', component: view }],
+      })
+      await router.push('/')
+      await router.isReady()
+      const app = createSSRApp(view).use(i18n).use(router)
       setup(app)
       const html = await renderToString(app)
       assert.ok(html.includes(i18n.global.t(heading)))

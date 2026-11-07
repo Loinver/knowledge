@@ -38,6 +38,7 @@ from app.api.v1.mappings import router as mappings_router
 from app.api.v1.metadata import router as metadata_router
 from app.api.v1.namespaces import router as namespaces_router
 from app.api.v1.ontologies import router as ontologies_router
+from app.api.v1.ontology_history import router as ontology_history_router
 from app.api.v1.preview import router as preview_router
 from app.api.v1.relations import router as relations_router
 from app.api.v1.templates import router as templates_router
@@ -78,6 +79,7 @@ business_router = APIRouter(
 )
 business_router.include_router(namespaces_router)
 business_router.include_router(ontologies_router)
+business_router.include_router(ontology_history_router)
 business_router.include_router(datasources_router)
 business_router.include_router(domains_router)
 business_router.include_router(enum_dictionaries_router)

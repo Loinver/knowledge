@@ -13,6 +13,8 @@ from app.api.errors import install_error_handler
 from app.api.v1.ontologies import router
 from app.core.db import Base, get_session
 from app.core.error_codes import ErrorCode
+from app.core.errors import KGError
+from app.domain.enum_dictionary_service import create_dictionary
 from app.domain.iri_service import register_namespace
 from app.domain.ontology_service import create_ontology, publish_ontology
 from app.domain.relation_service import create_relation_type
@@ -26,9 +28,10 @@ from app.models.resource import (
     ResourceParent,
     ResourceRef,
 )
+from app.schemas.enum_dictionary import EnumDictionaryInput
 from app.schemas.ontology import OntologyCreate, OntologyExportFormat
 from app.schemas.relation import EndpointSpec, RelationTypeCreate
-from app.schemas.type import EntityTypeCreate
+from app.schemas.type import DataTypePropCreate, EntityTypeCreate
 from app.semantics.ontology_rdf import (
     OntologyRdfMetadata,
     OntologyRdfResource,
@@ -94,6 +97,11 @@ def published(session: Session) -> tuple[Ontology, dict[str, ModelResource]]:
             datatype="decimal",
             nullable=False,
             default_value="0",
+            min_cardinality=2,
+            max_cardinality=3,
+            min_value="0",
+            max_value="100",
+            source_clause_ref="example 1.2",
         )
     )
     resources["Salary"] = salary
@@ -122,7 +130,8 @@ def published(session: Session) -> tuple[Ontology, dict[str, ModelResource]]:
     assert association is not None
     resources["Association"] = association
     for resource in resources.values():
-        publish_resource(session, resource)
+        if resource.status == ResourceStatus.DRAFT:
+            publish_resource(session, resource)
     ontology = create_ontology(
         session,
         OntologyCreate(
@@ -213,6 +222,56 @@ def test_formats_roundtrip_and_preserve_semantics(
 
 
 @pytest.mark.parametrize("rdf_format", list(OntologyExportFormat))
+@pytest.mark.parametrize(
+    "dictionary_override",
+    [
+        None,
+        {},
+        {"id": 99},
+        {"revision": 99},
+        {"entries": []},
+        {"entries": [{"value": ""}]},
+    ],
+)
+def test_enum_export_rejects_missing_or_inconsistent_frozen_dictionary(
+    rdf_format: OntologyExportFormat,
+    dictionary_override: dict[str, object] | None,
+) -> None:
+    metadata = OntologyRdfMetadata(
+        name="Enums",
+        iri="https://example.org/enums",
+        label_i18n=None,
+        definition_i18n=None,
+    )
+    snapshot = {"id": 7, "revision": 2, "entries": [{"value": "OPEN"}]}
+    if dictionary_override is not None:
+        snapshot.update(dictionary_override)
+    resource = OntologyRdfResource(
+        iri="https://example.org/kg#Employee",
+        kind=ResourceKind.ENTITY,
+        namespace={"prefix": "ex", "iri": "https://example.org/kg#"},
+        parent_ids=[],
+        resource_refs=[],
+        datatype_props=[
+            {
+                "iri": "https://example.org/kg#status",
+                "datatype": "enum",
+                "enum_dict_id": 7,
+                "enum_dict_revision": 2,
+                "enum_dictionary": snapshot
+                if dictionary_override
+                else dictionary_override,
+            }
+        ],
+    )
+    with pytest.raises(KGError) as caught:
+        serialize_ontology_rdf(
+            metadata, {1: resource}, revision=1, rdf_format=rdf_format
+        )
+    assert caught.value.params["reason"] == "missing_or_invalid_enum_snapshot"
+
+
+@pytest.mark.parametrize("rdf_format", list(OntologyExportFormat))
 def test_rdf_adapter_serializes_frozen_enum_without_database(
     rdf_format: OntologyExportFormat,
 ) -> None:
@@ -237,10 +296,12 @@ def test_rdf_adapter_serializes_frozen_enum_without_database(
                 "enum_dict_id": 7,
                 "enum_dict_revision": 2,
                 "enum_dictionary": {
+                    "id": 7,
+                    "revision": 2,
                     "entries": [
                         {"value": "OPEN", "label_i18n": {"en-US": "Open"}},
                         {"value": "CLOSED", "label_i18n": {"zh-CN": "关闭"}},
-                    ]
+                    ],
                 },
             }
         ],
@@ -296,6 +357,34 @@ def test_export_includes_frozen_property_and_relation_constraints(
     shapes = list(graph.objects(employee, SH.property))
     assert shapes
     assert any((shape, SH.path, salary) in graph for shape in shapes)
+    shape = URIRef(f"{salary}#shape")
+    assert (shape, SH.minCount, Literal(2)) in graph
+    assert (shape, SH.maxCount, Literal(3)) in graph
+    assert (shape, SH.minInclusive, Literal("0.0", datatype=XSD.decimal)) in graph
+    assert (shape, SH.maxInclusive, Literal("100.0", datatype=XSD.decimal)) in graph
+    assert (
+        salary,
+        URIRef("urn:knowledge:semantics:sourceClauseRef"),
+        Literal("example 1.2"),
+    ) in graph
+    detail = session.get(DatatypePropDetail, resources["Salary"].id)
+    assert detail is not None
+    detail.max_value = "999"
+    session.commit()
+    historical = Graph().parse(
+        data=client.get(f"/api/v1/ontologies/{ontology.id}/export?format=turtle").text,
+        format="turtle",
+    )
+    assert (
+        shape,
+        SH.maxInclusive,
+        Literal("100.0", datatype=XSD.decimal),
+    ) in historical
+    assert (
+        shape,
+        SH.maxInclusive,
+        Literal("999.0", datatype=XSD.decimal),
+    ) not in historical
 
     relation = URIRef(resources["WorksFor"].iri)
     assert (
@@ -304,6 +393,86 @@ def test_export_includes_frozen_property_and_relation_constraints(
         None,
     ) in graph
     assert (relation, URIRef("urn:knowledge:semantics:owlFeatures"), None) in graph
+
+
+@pytest.mark.parametrize("rdf_format", list(OntologyExportFormat))
+@pytest.mark.parametrize("datatype", ["decimal", "enum"])
+def test_normal_property_creation_exports_frozen_structured_datatype(
+    client: TestClient,
+    session: Session,
+    rdf_format: OntologyExportFormat,
+    datatype: str,
+) -> None:
+    ns = register_namespace(session, "normal", "https://example.org/normal#")
+    dictionary = (
+        create_dictionary(
+            session,
+            EnumDictionaryInput(
+                name="Scores",
+                label_i18n={"zh-CN": "等级"},
+                definition_i18n={"zh-CN": "测试等级"},
+                entries=[{"value": "A", "label_i18n": {"zh-CN": "甲"}}],
+            ),
+        )
+        if datatype == "enum"
+        else None
+    )
+    owner = create_entity_type(
+        session,
+        EntityTypeCreate(
+            name="Normal",
+            namespace_id=ns.id,
+            label_i18n={},
+            data_props=[
+                DataTypePropCreate(
+                    name="score",
+                    datatype=datatype,
+                    enum_dict_id=dictionary.id if dictionary else None,
+                    enum_dict_revision=dictionary.revision if dictionary else None,
+                    min_value="0" if datatype == "decimal" else None,
+                    max_value="100" if datatype == "decimal" else None,
+                    min_cardinality=1,
+                    max_cardinality=2,
+                    source_clause_ref="example 1.2",
+                )
+            ],
+        ),
+    )
+    prop_id = session.scalar(
+        select(ResourceRef.target_id).where(ResourceRef.source_id == owner.id)
+    )
+    prop = session.get(ModelResource, prop_id)
+    assert prop is not None and prop.definition_i18n is None
+    publish_resource(session, owner)
+    assert prop.status == ResourceStatus.PUBLISHED
+    assert prop.current_revision == 1
+    ontology = create_ontology(
+        session,
+        OntologyCreate(
+            name="NormalExport",
+            label_i18n={},
+            iri="https://example.org/normal",
+            ref_resource_ids=[owner.id, prop.id],
+        ),
+    )
+    publish_ontology(session, ontology)
+    session.commit()
+    url = f"/api/v1/ontologies/{ontology.id}/export?format={rdf_format.value}"
+    response = client.get(url)
+    assert response.status_code == 200, response.text
+    graph = Graph().parse(data=response.text, format=rdf_format.value)
+    shape = URIRef(f"{prop.iri}#shape")
+    if datatype == "decimal":
+        assert (URIRef(prop.iri), RDFS.range, XSD.decimal) in graph
+        assert (shape, SH.maxInclusive, Literal("100.0", datatype=XSD.decimal)) in graph
+    else:
+        assert list(graph.items(graph.value(shape, SH["in"]))) == [Literal("A")]
+        dictionary.entries = [{"value": "B", "label_i18n": {"zh-CN": "乙"}}]
+    detail = session.get(DatatypePropDetail, prop.id)
+    detail.datatype = "string"
+    detail.max_value = "999"
+    session.commit()
+    assert client.get(url).text == response.text
 
 
 def test_export_is_frozen_after_live_mutation_and_republication(
@@ -403,6 +572,14 @@ def test_missing_or_unsupported_datatype_is_not_faked(
     revision.payload = {
         **revision.payload,
         "definition_i18n": {} if datatype is None else {"datatype": datatype},
+    }
+    owner_revision = get_revision(session, resources["Employee"].id, 1)
+    owner_revision.payload = {
+        **owner_revision.payload,
+        "datatype_props": [
+            {key: value for key, value in prop.items() if key != "datatype"}
+            for prop in owner_revision.payload["datatype_props"]
+        ],
     }
     session.commit()
     response = client.get(f"/api/v1/ontologies/{ontology.id}/export")

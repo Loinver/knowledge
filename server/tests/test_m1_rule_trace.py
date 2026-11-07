@@ -12,6 +12,7 @@ from app.core.db import Base, get_session
 from app.domain.ontology_service import create_ontology, publish_ontology
 from app.models.domain import OntologyRevision, OntologyRuleRef
 from app.models.governance import Rule
+from app.schemas.governance import RuleOut
 from app.schemas.ontology import OntologyCreate
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -83,6 +84,7 @@ def test_rule_source_is_pinned_into_ontology_revision_and_queryable(
             "revision": 1,
             "source_kind": "STANDARD",
             "source_reference": "GB/T 48000.3-2026#5.1",
+            "snapshot": RuleOut.model_validate(rule).model_dump(mode="json"),
         }
     ]
 

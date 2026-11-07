@@ -472,9 +472,11 @@ def test_structured_snapshots_keep_association_multivalue_and_enum_checks_frozen
 @pytest.mark.parametrize(
     ("attrs", "state"),
     [
-        ({"aliases": ["Alice", "A"]}, ValidationState.PASS),
+        ({"aliases": ["Alice", "A"], "status": "OPEN"}, ValidationState.PASS),
         ({"aliases": ["Alice", 42]}, ValidationState.VIOLATION),
-        ({"aliases": None}, ValidationState.PASS),
+        ({"aliases": None, "status": "OPEN"}, ValidationState.PASS),
+        ({"aliases": ["Alice"]}, ValidationState.VIOLATION),
+        ({}, ValidationState.VIOLATION),
         ({"status": ["OPEN"]}, ValidationState.PASS),
         ({"status": ["OPEN", "CLOSED"]}, ValidationState.VIOLATION),
         ({"status": None}, ValidationState.VIOLATION),
@@ -491,6 +493,43 @@ def test_i03_checks_values_against_owner_snapshot(
     assert next(r.state for r in report.results if r.check_code == "I03") == state
 
 
+@pytest.mark.parametrize(
+    ("datatype", "value", "valid"),
+    [
+        ("integer", 1.5, False),
+        ("integer", True, False),
+        ("integer", 2, True),
+        ("integer", 2.0, True),
+        ("date", "not-a-date", False),
+        ("date", "2026-02-30", False),
+        ("date", "2026-11-06", True),
+        ("date", "2024-02-29", True),
+        ("decimal", 1.5, True),
+        ("decimal", False, False),
+    ],
+)
+def test_i03_validates_frozen_datatype_values(
+    session: Session, datatype: str, value: object, valid: bool
+) -> None:
+    h = _seed(session)
+    employee = h["employee"]
+    employee.status = ResourceStatus.DRAFT
+    set_data_props(
+        session,
+        employee,
+        [DataTypePropCreate(name="value", datatype=datatype, nullable=False)],
+    )
+    publish_resource(session, employee)
+    h["revision"].onto_version = publish_ontology(session, h["onto"])
+    _add_entity(
+        session, h["graph"], f"{NS}Employee/1", f"{NS}Employee", {"value": value}
+    )
+    session.flush()
+    report = run_instance_validation(session, h["graph"].id)
+    state = next(r.state for r in report.results if r.check_code == "I03")
+    assert state == (ValidationState.PASS if valid else ValidationState.VIOLATION)
+
+
 def test_i02_checks_frozen_structural_endpoints(session: Session) -> None:
     h = _structured_seed(session)
     graph = h["graph"]
@@ -502,6 +541,97 @@ def test_i02_checks_frozen_structural_endpoints(session: Session) -> None:
     result = next(r for r in report.results if r.check_code == "I02")
     assert result.state == ValidationState.VIOLATION
     assert result.detail["expected_domain"] == f"{NS}Employee"
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [
+        ([10, 20], True),
+        ([10, 20, 30], True),
+        ([10], False),
+        ([10, 20, 30, 40], False),
+        ([9, 20], False),
+        ([10, 101], False),
+        (None, False),
+    ],
+)
+def test_i03_enforces_frozen_cardinality_and_range(
+    session: Session, value: object, valid: bool
+) -> None:
+    h = _seed(session)
+    employee = h["employee"]
+    employee.status = ResourceStatus.DRAFT
+    set_data_props(
+        session,
+        employee,
+        [
+            DataTypePropCreate(
+                name="score",
+                datatype="decimal",
+                min_cardinality=2,
+                max_cardinality=3,
+                min_value="10",
+                max_value="100",
+                source_clause_ref="example 1.2",
+            )
+        ],
+    )
+    frozen = publish_resource(session, employee)
+    h["revision"].onto_version = publish_ontology(session, h["onto"])
+    original = frozen.payload["datatype_props"][0]
+    assert original["source_clause_ref"] == "example 1.2"
+    employee.status = ResourceStatus.DRAFT
+    set_data_props(
+        session,
+        employee,
+        [
+            DataTypePropCreate(
+                name="score",
+                datatype="decimal",
+                min_cardinality=0,
+                max_cardinality=9,
+                min_value="0",
+                max_value="999",
+                source_clause_ref="example 2.0",
+            )
+        ],
+    )
+    newer = publish_resource(session, employee)
+    assert newer.payload["datatype_props"][0]["max_value"] == "999"
+    assert frozen.payload["datatype_props"][0] == original
+    _add_entity(session, h["graph"], f"{NS}Employee/1", employee.iri, {"score": value})
+    session.flush()
+    result = next(
+        r
+        for r in run_instance_validation(session, h["graph"].id).results
+        if r.check_code == "I03"
+    )
+    assert result.state == (
+        ValidationState.PASS if valid else ValidationState.VIOLATION
+    )
+
+
+def test_i03_legacy_constraints_are_unknown_not_live_values(session: Session) -> None:
+    h = _structured_seed(session)
+    frozen = get_revision(session, h["employee"].id, 2)
+    frozen.payload = {
+        **frozen.payload,
+        "datatype_props": [
+            {key: value for key, value in prop.items() if key != "max_value"}
+            for prop in frozen.payload["datatype_props"]
+        ],
+    }
+    _add_entity(
+        session, h["graph"], f"{NS}Employee/1", f"{NS}Employee", {"status": "OPEN"}
+    )
+    session.flush()
+    result = next(
+        r
+        for r in run_instance_validation(session, h["graph"].id).results
+        if r.check_code == "I03"
+    )
+    assert result.state == ValidationState.NOT_RUN
+    assert result.detail["reason"] == "missing_property_constraints_snapshot"
 
 
 @pytest.mark.parametrize(
