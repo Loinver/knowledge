@@ -1,0 +1,27 @@
+pnpm test:e2e
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ playwright test
+[isolated API] INFO:     Started server process [21236]
+[isolated API] INFO:     Waiting for application startup.
+[isolated API] INFO:     Application startup complete.
+[isolated API] INFO:     Uvicorn running on http://127.0.0.1:8123 (Press CTRL+C to quit)
+[Vite frontend] (node:21282) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[Vite frontend] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 8 tests using 1 worker
+
+(node:21290) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/account-admin-ui.spec.ts:33:1 › account profile, admin user lifecycle, reset link and password change (18.6s)
+  ✓  2 e2e/asset-audit.spec.ts:5:1 › admin searches retained asset versions and safely retries failed reads (5.7s)
+
+  ✓  3 e2e/audit-correction-flow.spec.ts:186:1 › UI modeling, frozen evidence, correction and history switch (1.7m)
+
+  ✓  4 e2e/fusion-policy.spec.ts:32:1 › UI policies select and quarantine conflicting values with frozen source explanations (24.6s)
+  ✓  5 e2e/m3-browser-flow.spec.ts:342:1 › M3 browser flow, failure protection and responsive route smoke (3.3m)
+  ✓  6 e2e/m3-ui-modeling-flow.spec.ts:233:1 › 建模链全程走界面：命名空间 → 实体类型 → 关系类型 → 业务域 → 本体 (48.0s)
+
+  ✓  7 e2e/ontology-restore-flow.spec.ts:10:1 › UI export, restore into an independent database, and semantic reexport (22.0s)
+  ✓  8 e2e/session-tabs.spec.ts:5:1 › two real browser tabs share refresh rotation and observe logout (4.6s)
+
+  8 passed (7.2m)

@@ -1,0 +1,6 @@
+pnpm run check:api
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ pnpm -C web check:api
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ node ../scripts/api-schema.mjs --check
+OpenAPI types are up to date.

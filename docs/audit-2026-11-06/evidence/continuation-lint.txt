@@ -1,0 +1,22 @@
+pnpm run lint:web
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ eslint web
+pnpm -C web typecheck
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ vue-tsc --build --force
+pnpm run format:check
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ prettier --check .
+Checking formatting...
+All matched files use Prettier code style!
+cd server && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy app
+All checks passed!
+189 files already formatted
+pyproject.toml: note: unused section(s): module = ['alembic.*']
+Success: no issues found in 130 source files
+pnpm run check:architecture
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ cd server && .venv/bin/pytest tests/test_architecture.py
+........................................................................ [ 51%]
+...................................................................      [100%]
+139 passed in 1.20s
