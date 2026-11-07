@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type S = components['schemas']
@@ -13,9 +14,13 @@ export type PublishRequest = S['PublishRequest']
 
 export const mappingsApi = {
   list: (signal?: AbortSignal) =>
-    http
-      .get<Mapping[]>('/mappings', { params: { page: 1, page_size: 200 }, signal })
-      .then((r) => r.data),
+    listPages(
+      (page, page_size) =>
+        http
+          .get<Mapping[]>('/mappings', { params: { page, page_size }, signal })
+          .then((r) => r.data),
+      signal,
+    ),
   create: (payload: MappingCreate) => http.post<Mapping>('/mappings', payload).then((r) => r.data),
   get: (id: number, signal?: AbortSignal) =>
     http.get<Mapping>(`/mappings/${id}`, { signal }).then((r) => r.data),

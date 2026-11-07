@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type S = components['schemas']
@@ -24,7 +25,18 @@ export const entityTypesApi = {
   list: (
     params?: { q?: string; page?: number; page_size?: number; domain_id?: number },
     signal?: AbortSignal,
-  ) => http.get<EntityTypeBrief[]>('/entity-types', { params, signal }).then((r) => r.data),
+  ) => {
+    const page = (page: number, pageSize: number) =>
+      http
+        .get<EntityTypeBrief[]>('/entity-types', {
+          params: { ...params, page, page_size: pageSize },
+          signal,
+        })
+        .then((r) => r.data)
+    return params?.page === undefined
+      ? listPages(page, signal)
+      : page(params.page, params.page_size ?? 50)
+  },
   /** 库级统计：不受分页影响，统计条用它而不是拿当前页去数。 */
   stats: (signal?: AbortSignal) =>
     http.get<EntityTypeStats>('/entity-types/stats', { signal }).then((r) => r.data),

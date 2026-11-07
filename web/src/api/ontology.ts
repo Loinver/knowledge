@@ -1,6 +1,7 @@
 import type { AxiosError } from 'axios'
 
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components, operations } from '@/api/schema'
 
 type S = components['schemas']
@@ -44,10 +45,18 @@ async function readExportError(blob: Blob) {
 const base = '/ontologies'
 
 export const ontologyApi = {
-  list: (params: OntologyListQuery = {}, signal?: AbortSignal) =>
-    http
-      .get<Ontology[]>(base, { params: { page: 1, page_size: 100, ...params }, signal })
-      .then((r) => r.data),
+  list: (params: OntologyListQuery = {}, signal?: AbortSignal) => {
+    const page = (page: number, pageSize: number) =>
+      http
+        .get<Ontology[]>(base, {
+          params: { ...params, page, page_size: pageSize },
+          signal,
+        })
+        .then((r) => r.data)
+    return params.page === undefined
+      ? listPages(page, signal)
+      : page(params.page, params.page_size ?? 100)
+  },
 
   get: (id: number, signal?: AbortSignal) =>
     http.get<OntologyDetail>(`${base}/${id}`, { signal }).then((r) => r.data),

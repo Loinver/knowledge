@@ -32,9 +32,11 @@ router = APIRouter(prefix="/datasources", tags=["datasources"])
 @router.get("", response_model=ApiResponse[list[DatasourceBrief]])
 def list_ds(
     q: str = Query(""),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     session: Session = Depends(get_session),
 ) -> list[DatasourceBrief]:
-    items, _total = list_datasources(session, q)
+    items, _total = list_datasources(session, q, page, page_size)
     return [DatasourceBrief.model_validate(i) for i in items]
 
 

@@ -63,7 +63,11 @@ def test_business_routes_require_authentication(
     client, _ = client_and_tokens
     assert client.get(f"{API}/health").status_code == 200
     assert client.get(f"{API}/auth/config").status_code == 200
-    for path in ("/namespaces", "/datasources", "/extraction/runs"):
+    for path in (
+        "/namespaces",
+        "/datasources",
+        "/extraction/runs",
+    ):
         response = client.get(f"{API}{path}")
         assert response.status_code == 401
         assert response.json()["code"] == "AUTH.TOKEN_EXPIRED"
@@ -72,6 +76,42 @@ def test_business_routes_require_authentication(
         json={"prefix": "anon", "iri": "https://example.org/anon/"},
     )
     assert response.status_code == 401
+
+
+def test_datasource_catalog_pagination_keeps_tail_and_validates_bounds(
+    client_and_tokens: tuple[TestClient, dict[str, str]],
+) -> None:
+    client, tokens = client_and_tokens
+    editor = {"Authorization": f"Bearer {tokens['EDITOR']}"}
+    viewer = {"Authorization": f"Bearer {tokens['VIEWER']}"}
+    ids = set()
+    for index in range(3):
+        created = client.post(
+            f"{API}/datasources",
+            headers=editor,
+            json={
+                "name": f"catalog-{index}",
+                "kind": "sqlite",
+                "params": {"database": "/unused/catalog-test.sqlite"},
+            },
+        )
+        assert created.status_code == 201
+        ids.add(created.json()["id"])
+    pages = []
+    for page in (1, 2, 3):
+        response = client.get(
+            f"{API}/datasources",
+            params={"page": page, "page_size": 2},
+            headers=viewer,
+        )
+        assert response.status_code == 200
+        pages.append(response.json())
+    assert [len(page) for page in pages] == [2, 1, 0]
+    assert {row["id"] for page in pages for row in page} == ids
+    assert (
+        client.get(f"{API}/datasources", params={"page": 0}, headers=viewer).status_code
+        == 422
+    )
 
 
 def test_viewer_can_read_but_only_editor_or_admin_can_write(

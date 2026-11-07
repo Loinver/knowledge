@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type S = components['schemas']
@@ -11,8 +12,18 @@ export type DomainMember = S['DomainMemberOut']
 export type PublishCheckResult = S['PublishCheckResult']
 
 export const domainsApi = {
-  list: (params?: { q?: string; page?: number; page_size?: number }, signal?: AbortSignal) =>
-    http.get<DomainBrief[]>('/domains', { params, signal }).then((r) => r.data),
+  list: (params?: { q?: string; page?: number; page_size?: number }, signal?: AbortSignal) => {
+    const page = (page: number, pageSize: number) =>
+      http
+        .get<DomainBrief[]>('/domains', {
+          params: { ...params, page, page_size: pageSize },
+          signal,
+        })
+        .then((r) => r.data)
+    return params?.page === undefined
+      ? listPages(page, signal)
+      : page(params.page, params.page_size ?? 50)
+  },
   create: (payload: DomainCreate) => http.post('/domains', payload).then((r) => r.data),
   /** 列表只返回 brief；编辑标签与定义需要详情。 */
   get: (id: number, signal?: AbortSignal) =>

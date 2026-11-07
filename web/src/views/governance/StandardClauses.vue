@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FormInst, FormRules } from 'naive-ui'
 import {
+  NAlert,
   NButton,
   NCard,
   NDataTable,
@@ -19,14 +20,14 @@ import {
 import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { Clause, ClauseInput } from '@/api/clauses'
+import type { Clause, ClauseBrief, ClauseInput } from '@/api/clauses'
 import { clausesApi } from '@/api/clauses'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
-const items = ref<Clause[]>([])
+const items = ref<ClauseBrief[]>([])
 const total = ref(0)
 const page = ref(1)
 const search = ref('')
@@ -39,6 +40,7 @@ const saved = ref<Clause | null>(null)
 const form = ref<ClauseInput>(emptyClause())
 let readController: AbortController | undefined
 let alive = true
+const editorController = new AbortController()
 
 /** 附录性质是枚举码，标签走 i18n，不直出英文。 */
 const NATURES = computed(() => [
@@ -94,18 +96,19 @@ async function load() {
       { page: page.value, page_size: 20, q: search.value },
       controller.signal,
     )
-    if (!alive) return
-    items.value = data.items as unknown as Clause[]
+    if (!alive || controller.signal.aborted) return
+    items.value = data.items
     total.value = data.total
   } catch (err) {
-    if (!alive) return
+    if (!alive || controller.signal.aborted) return
     error.value = failText(err)
   } finally {
-    if (alive) loading.value = false
+    if (alive && !controller.signal.aborted) loading.value = false
   }
 }
 
 function openCreate() {
+  if (busy.value) return
   saved.value = null
   form.value = emptyClause()
   error.value = ''
@@ -113,16 +116,26 @@ function openCreate() {
   showEditor.value = true
 }
 
-function openEdit(c: Clause) {
-  saved.value = c
-  form.value = payload(c)
+async function openEdit(c: ClauseBrief) {
+  if (busy.value) return
+  busy.value = true
   error.value = ''
   notice.value = ''
-  showEditor.value = true
+  try {
+    const detail = await clausesApi.get(c.id, editorController.signal)
+    if (!alive) return
+    saved.value = detail
+    form.value = payload(detail)
+    showEditor.value = true
+  } catch (err) {
+    if (alive) error.value = failText(err)
+  } finally {
+    if (alive) busy.value = false
+  }
 }
 
 async function submit() {
-  // 必填约束在界面上先拦一层：standard/clause_number/标题(中) 为空直接提示，
+  // 必填约束在界面上先拦一层，避免只收到通用请求错误。
   // 不再空表单直发、靠后端 422 兜底
   try {
     await formRef.value?.validate()
@@ -155,9 +168,15 @@ async function submit() {
 }
 
 const formRef = ref<FormInst | null>(null)
-// 必填约束在界面上先拦一层：standard/clause_number/标题(中) 为空直接提示，
+// 必填约束与后端一致：标准号、条款号、中文标题和自撰说明为空直接提示，
 // 不再空表单直发、靠后端 422 兜底。键名与 NFormItem 的 path 对齐（lodash get 语法）。
 const rules: FormRules = {
+  "self_authored_description['zh-CN']": {
+    required: true,
+    whitespace: true,
+    message: t('common.required'),
+    trigger: ['blur', 'input'],
+  },
   standard: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
   clause_number: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
   "title_i18n['zh-CN']": {
@@ -167,7 +186,8 @@ const rules: FormRules = {
   },
 }
 
-async function remove(c: Clause) {
+async function remove(c: ClauseBrief) {
+  if (busy.value) return
   busy.value = true
   error.value = ''
   notice.value = ''
@@ -192,6 +212,7 @@ function doSearch() {
 onBeforeUnmount(() => {
   alive = false
   readController?.abort()
+  editorController.abort()
 })
 
 const columns = computed(() => [
@@ -201,26 +222,26 @@ const columns = computed(() => [
     title: t('clauses.title'),
     key: 'title',
     minWidth: 240,
-    render: (row: Clause) => row.title_i18n[locale.value] ?? row.title_i18n['zh-CN'] ?? '',
+    render: (row: ClauseBrief) => row.title_i18n[locale.value] ?? row.title_i18n['zh-CN'] ?? '',
   },
   {
-    title: t('clauses.nature'),
+    title: t('clauses.natureLabel'),
     key: 'appendix_nature',
     width: 120,
-    render: (row: Clause) =>
+    render: (row: ClauseBrief) =>
       row.appendix_nature === 'NORMATIVE' ? t('clauses.normative') : t('clauses.informative'),
   },
   {
     title: t('clauses.productFallback'),
     key: 'product_fallback',
     width: 200,
-    render: (row: Clause) => row.product_fallback ?? '',
+    render: (row: ClauseBrief) => row.product_fallback ?? '',
   },
   {
     title: t('common.actions'),
     key: 'actions',
     width: 160,
-    render: (row: Clause) =>
+    render: (row: ClauseBrief) =>
       h('div', { style: 'display:flex;gap:8px' }, [
         h(NButton, { size: 'small', onClick: () => openEdit(row) }, () => t('common.edit')),
         h(
@@ -240,9 +261,12 @@ const columns = computed(() => [
   <div class="clauses-page">
     <PageHeader :title="t('page.governanceClauses')" :description="t('clauses.intro')">
       <template #actions>
-        <n-button type="primary" @click="openCreate">{{ t('clauses.create') }}</n-button>
+        <n-button type="primary" :disabled="busy" @click="openCreate">{{
+          t('clauses.create')
+        }}</n-button>
       </template>
     </PageHeader>
+    <NAlert v-if="error && !showEditor" type="error">{{ error }}</NAlert>
     <n-card :bordered="false">
       <n-space class="toolbar" align="center">
         <n-form-item
@@ -268,7 +292,7 @@ const columns = computed(() => [
         :columns="columns"
         :data="items"
         :loading="loading"
-        :row-key="(row: Clause) => row.id"
+        :row-key="(row: ClauseBrief) => row.id"
         :scroll-x="1000"
         remote
       />
@@ -304,7 +328,10 @@ const columns = computed(() => [
           <n-form-item :label="t('clauses.title') + ' (en-US)'">
             <n-input v-model:value="form.title_i18n['en-US']" />
           </n-form-item>
-          <n-form-item :label="t('clauses.description') + ' (zh-CN)'">
+          <n-form-item
+            :label="t('clauses.description') + ' (zh-CN)'"
+            path="self_authored_description['zh-CN']"
+          >
             <n-input
               v-model:value="form.self_authored_description['zh-CN']"
               type="textarea"
@@ -318,7 +345,7 @@ const columns = computed(() => [
               :rows="3"
             />
           </n-form-item>
-          <n-form-item :label="t('clauses.nature')">
+          <n-form-item :label="t('clauses.natureLabel')">
             <n-select v-model:value="form.appendix_nature" :options="NATURES" />
           </n-form-item>
           <n-form-item :label="t('clauses.productFallback')">

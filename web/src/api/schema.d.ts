@@ -6565,10 +6565,18 @@ export interface components {
     StandardClauseBrief: {
       /** Id */
       id: number
+      /** Revision */
+      revision: number
       /** Standard */
       standard: string
       /** Clause Number */
       clause_number: string
+      /** Title I18N */
+      title_i18n: {
+        [key: string]: string
+      }
+      /** Appendix Nature */
+      appendix_nature: string
       /** Product Fallback */
       product_fallback: string | null
     }
@@ -7886,6 +7894,8 @@ export interface operations {
     parameters: {
       query?: {
         q?: string
+        page?: number
+        page_size?: number
       }
       header?: never
       path?: never

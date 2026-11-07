@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type Schemas = components['schemas']
@@ -7,6 +8,12 @@ export type RuleInput = Schemas['RuleCreate']
 export type RuleTest = Schemas['RuleTestOut']
 
 export const rulesApi = {
+  all: (signal?: AbortSignal) =>
+    listPages(
+      (page, page_size) =>
+        rulesApi.list({ page, page_size, q: '' }, signal).then((result) => result.items),
+      signal,
+    ),
   list: (
     params: { page: number; page_size: number; q: string; source_kind?: string },
     signal?: AbortSignal,

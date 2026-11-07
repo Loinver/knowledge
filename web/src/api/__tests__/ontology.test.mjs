@@ -16,6 +16,7 @@ async function loadApi(t, http) {
     platform: 'node',
     format: 'esm',
     logLevel: 'silent',
+    alias: { '@': fileURLToPath(new URL('../../', import.meta.url)) },
     plugins: [
       {
         name: 'http-stub',

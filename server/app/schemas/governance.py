@@ -203,8 +203,11 @@ class StandardClauseOut(BaseModel):
 class StandardClauseBrief(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    revision: int
     standard: str
     clause_number: str
+    title_i18n: dict[str, str]
+    appendix_nature: str
     product_fallback: str | None
 
 

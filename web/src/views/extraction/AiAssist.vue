@@ -21,7 +21,7 @@ const {
 } = useAsyncData((_signal) => {
   controller?.abort()
   controller = new AbortController()
-  return ontologyApi.list({ page: 1, page_size: 200 }, controller.signal)
+  return ontologyApi.list({}, controller.signal)
 })
 /** 与 OntologyExport 一致：按当前界面语言取标签，语言缺失回退 zh-CN，再回退机读名。 */
 function pickLabel(labels: Record<string, string> | null | undefined, fallback: string): string {

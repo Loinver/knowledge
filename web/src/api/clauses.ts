@@ -1,15 +1,23 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type S = components['schemas']
 export type Clause = S['StandardClauseOut']
+export type ClauseBrief = S['StandardClauseBrief']
 export type ClauseInput = S['StandardClauseCreate']
 export type ClauseUpdate = Partial<Omit<S['StandardClauseCreate'], 'standard' | 'clause_number'>>
 
 const base = '/governance/clauses'
-const headers = (item: Clause) => ({ 'If-Match': String(item.revision) })
+const headers = (item: Pick<Clause, 'revision'>) => ({ 'If-Match': String(item.revision) })
 
 export const clausesApi = {
+  all: (signal?: AbortSignal) =>
+    listPages(
+      (page, page_size) =>
+        clausesApi.list({ page, page_size, q: '' }, signal).then((result) => result.items),
+      signal,
+    ),
   list: (params: { page: number; page_size: number; q: string }, signal?: AbortSignal) =>
     http.get<S['StandardClausePage']>(base, { params, signal }).then((r) => r.data),
   get: (id: number, signal?: AbortSignal) =>
@@ -17,5 +25,6 @@ export const clausesApi = {
   create: (payload: ClauseInput) => http.post<Clause>(base, payload).then((r) => r.data),
   update: (item: Clause, payload: ClauseUpdate) =>
     http.put<Clause>(`${base}/${item.id}`, payload, { headers: headers(item) }).then((r) => r.data),
-  remove: (item: Clause) => http.delete(`${base}/${item.id}`, { headers: headers(item) }),
+  remove: (item: Pick<Clause, 'id' | 'revision'>) =>
+    http.delete(`${base}/${item.id}`, { headers: headers(item) }),
 }

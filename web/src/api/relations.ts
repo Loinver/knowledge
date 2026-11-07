@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type S = components['schemas']
@@ -15,8 +16,18 @@ export type TypeRevision = S['TypeRevisionOut']
 export type TypeValidation = S['TypeValidationOut']
 
 export const relationsApi = {
-  list: (params?: { q?: string; page?: number; page_size?: number }, signal?: AbortSignal) =>
-    http.get<RelationTypeBrief[]>('/relations', { params, signal }).then((r) => r.data),
+  list: (params?: { q?: string; page?: number; page_size?: number }, signal?: AbortSignal) => {
+    const page = (page: number, pageSize: number) =>
+      http
+        .get<RelationTypeBrief[]>('/relations', {
+          params: { ...params, page, page_size: pageSize },
+          signal,
+        })
+        .then((r) => r.data)
+    return params?.page === undefined
+      ? listPages(page, signal)
+      : page(params.page, params.page_size ?? 50)
+  },
   /** 详情页两个页签的数据：规则 / 引用与版本（端点与基数由 get 返回）。 */
   usages: (id: number, signal?: AbortSignal) =>
     http.get<RelationTypeUsages>(`/relations/${id}/usages`, { signal }).then((r) => r.data),

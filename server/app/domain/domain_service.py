@@ -219,7 +219,7 @@ def list_domains(
         count_stmt = count_stmt.where(BusinessDomain.name.ilike(f"%{q}%"))
     total = session.scalar(count_stmt) or 0
     stmt = (
-        stmt.order_by(BusinessDomain.name)
+        stmt.order_by(BusinessDomain.name, BusinessDomain.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

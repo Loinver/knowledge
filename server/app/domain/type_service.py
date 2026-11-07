@@ -261,7 +261,7 @@ def list_entity_types(
         )
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     stmt = (
-        stmt.order_by(ModelResource.name)
+        stmt.order_by(ModelResource.name, ModelResource.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

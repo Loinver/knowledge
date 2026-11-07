@@ -957,6 +957,7 @@
     "clauseNumber": "Clause",
     "clauseNumberPlaceholder": "7.2",
     "description": "Self-authored note",
+    "natureLabel": "Appendix nature",
     "nature": {
       "NORMATIVE": "Normative",
       "INFORMATIVE": "Informative"

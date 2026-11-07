@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
 import type { components } from '@/api/schema'
 
 type S = components['schemas']
@@ -22,7 +23,16 @@ export type PreviewResponse = S['PreviewResponse']
 
 export const datasourcesApi = {
   list: (params: { q?: string } = {}, signal?: AbortSignal) =>
-    http.get<DatasourceBrief[]>('/datasources', { params, signal }).then((r) => r.data),
+    listPages(
+      (page, page_size) =>
+        http
+          .get<DatasourceBrief[]>('/datasources', {
+            params: { ...params, page, page_size },
+            signal,
+          })
+          .then((r) => r.data),
+      signal,
+    ),
   get: (id: number, signal?: AbortSignal) =>
     http.get<Datasource>(`/datasources/${id}`, { signal }).then((r) => r.data),
   create: (payload: DatasourceInput) =>

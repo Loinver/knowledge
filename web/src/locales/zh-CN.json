@@ -957,6 +957,7 @@
     "clauseNumber": "条款号",
     "clauseNumberPlaceholder": "7.2",
     "description": "自撰说明",
+    "natureLabel": "附录性质",
     "nature": {
       "NORMATIVE": "规范性（必须遵守）",
       "INFORMATIVE": "资料性（参考）"
