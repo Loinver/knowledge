@@ -53,5 +53,7 @@ export const entityTypesApi = {
   rename: (id: number, name: string) =>
     http.patch<EntityType>(`/entity-types/${id}/rename`, { name }).then((r) => r.data),
   publish: (id: number) => http.post(`/entity-types/${id}/publish`).then((r) => r.data),
+  unpublish: (id: number) =>
+    http.post<EntityType>(`/entity-types/${id}/unpublish`).then((r) => r.data),
   remove: (id: number) => http.delete(`/entity-types/${id}`).then(() => undefined),
 }

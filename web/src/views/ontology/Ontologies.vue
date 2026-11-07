@@ -14,7 +14,7 @@ import {
   NSpace,
   NSpin,
 } from 'naive-ui'
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -52,6 +52,9 @@ const mode = ref<'create' | 'edit'>('create')
 const editingId = ref<number | null>(null)
 const editingRevision = ref(0)
 const editingEditRevision = ref(0)
+const detailReady = ref(false)
+const detailLoading = ref(false)
+let editGeneration = 0
 const formData = ref({
   name: '',
   iri: '',
@@ -247,6 +250,10 @@ function emptyForm() {
 
 /** 打开抽屉即重置表单与校验态，避免上一轮报错残留。 */
 function openCreate() {
+  creating.value = false
+  editGeneration += 1
+  detailReady.value = true
+  detailLoading.value = false
   mode.value = 'create'
   editingId.value = null
   formData.value = emptyForm()
@@ -260,6 +267,9 @@ function openCreate() {
  * —— 本体建好之后标签与定义就再也改不了，与实体类型同一类缺口。
  */
 function openEdit(row: Ontology) {
+  creating.value = false
+  editGeneration += 1
+  detailReady.value = false
   mode.value = 'edit'
   editingId.value = row.id
   editingRevision.value = row.current_revision
@@ -275,24 +285,52 @@ function openEdit(row: Ontology) {
   createError.value = ''
   showCreate.value = true
   formRef.value?.restoreValidation()
-  // 列表只返回 brief，定义要取详情
-  void ontologyApi
-    .get(row.id)
-    .then((info) => {
-      if (editingId.value !== row.id) return
-      formData.value.definitionZh = info.definition_i18n?.['zh-CN'] ?? ''
-      formData.value.definitionEn = info.definition_i18n?.['en-US'] ?? ''
-    })
-    .catch(() => undefined)
+  void loadEditDetail()
 }
 
+async function loadEditDetail() {
+  const id = editingId.value
+  if (id === null) return
+  const generation = ++editGeneration
+  detailReady.value = false
+  detailLoading.value = true
+  createError.value = ''
+  try {
+    const info = await ontologyApi.get(id)
+    if (generation !== editGeneration || !showCreate.value) return
+    formData.value.definitionZh = info.definition_i18n?.['zh-CN'] ?? ''
+    formData.value.definitionEn = info.definition_i18n?.['en-US'] ?? ''
+    editingRevision.value = info.current_revision
+    editingEditRevision.value = info.edit_revision
+    detailReady.value = true
+  } catch (err) {
+    if (generation === editGeneration) createError.value = toMessage(err)
+  } finally {
+    if (generation === editGeneration) detailLoading.value = false
+  }
+}
+
+watch(
+  showCreate,
+  (show) => {
+    if (!show) editGeneration += 1
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  editGeneration += 1
+})
+
 async function handleSubmit() {
+  if (!detailReady.value || creating.value) return
+  const generation = editGeneration
   createError.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (generation !== editGeneration || !detailReady.value) return
   const f = formData.value
   const labelZh = f.labelZh.trim()
   const label: Record<string, string> = { 'zh-CN': labelZh, 'en-US': f.labelEn.trim() || labelZh }
@@ -308,6 +346,7 @@ async function handleSubmit() {
         { label_i18n: label, definition_i18n: definition, if_match: editingRevision.value },
         editingEditRevision.value,
       )
+      if (generation !== editGeneration) return
       showCreate.value = false
       notice.value = t('ontology.updated')
       await loadList()
@@ -322,15 +361,16 @@ async function handleSubmit() {
       ref_resource_ids: [],
       rule_ids: [],
     })
+    if (generation !== editGeneration) return
     showCreate.value = false
     notice.value = t('ontology.created')
     await loadList()
     // 新建后直接进设计器装配，省掉一次「再点一下」
     void router.push({ name: 'designer', query: { ontology: String(created.id) } })
   } catch (err) {
-    createError.value = toMessage(err)
+    if (generation === editGeneration) createError.value = toMessage(err)
   } finally {
-    creating.value = false
+    if (generation === editGeneration || !showCreate.value) creating.value = false
   }
 }
 
@@ -402,12 +442,21 @@ onMounted(() => void loadList())
         :title="mode === 'edit' ? t('ontology.edit') : t('ontology.create')"
         :closable="!creating"
       >
-        <NAlert v-if="createError" type="error" class="create-error">{{ createError }}</NAlert>
+        <NAlert v-if="createError" type="error" role="alert" class="create-error">{{
+          createError
+        }}</NAlert>
+        <NButton
+          v-if="mode === 'edit' && !detailReady"
+          :loading="detailLoading"
+          @click="loadEditDetail"
+        >
+          {{ t('graph.refresh') }}
+        </NButton>
         <NForm
           ref="formRef"
           :model="formData"
           :rules="rules"
-          :disabled="creating"
+          :disabled="creating || !detailReady"
           label-placement="top"
         >
           <NFormItem :label="t('common.name')" path="name">
@@ -452,7 +501,12 @@ onMounted(() => void loadList())
             <NButton :disabled="creating" @click="showCreate = false">
               {{ t('common.cancel') }}
             </NButton>
-            <NButton type="primary" :loading="creating" @click="handleSubmit">
+            <NButton
+              type="primary"
+              :loading="creating"
+              :disabled="!detailReady"
+              @click="handleSubmit"
+            >
               {{ t('common.save') }}
             </NButton>
           </div>

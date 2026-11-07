@@ -6,6 +6,7 @@ import {
   NDescriptions,
   NDescriptionsItem,
   NEmpty,
+  NPopconfirm,
   NSpace,
   NSpin,
   NTabPane,
@@ -14,7 +15,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { entityTypesApi } from '@/api/entity-types'
 import type { RelationTypeDetail, RelationTypeUsages, TypeRuleUsage } from '@/api/relations'
@@ -25,6 +26,7 @@ import { useApiError } from '@/composables/useApiError'
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const busy = ref(false)
@@ -119,7 +121,7 @@ async function loadDetail() {
   } finally {
     if (alive && generation === loadGeneration) loading.value = false
   }
-  void loadUsages(id, generation)
+  if (alive && generation === loadGeneration) void loadUsages(id, generation)
 }
 
 async function handlePublish() {
@@ -136,6 +138,21 @@ async function handlePublish() {
     if (alive && generation === loadGeneration) error.value = t('relationDetail.publishFailed')
   } finally {
     if (alive && generation === loadGeneration) busy.value = false
+  }
+}
+
+async function startRevision() {
+  if (data.value?.status !== 'PUBLISHED' || busy.value) return
+  const generation = loadGeneration
+  busy.value = true
+  error.value = ''
+  try {
+    await relationsApi.unpublish(data.value.id)
+    if (alive && generation === loadGeneration) await loadDetail()
+  } catch (err) {
+    if (alive && generation === loadGeneration) error.value = failure(err)
+  } finally {
+    if (alive) busy.value = false
   }
 }
 
@@ -182,6 +199,18 @@ onBeforeUnmount(() => {
       :description="t('relationDetail.hint')"
     >
       <template #actions>
+        <NPopconfirm v-if="data?.status === 'PUBLISHED'" @positive-click="startRevision">
+          <template #trigger
+            ><NButton :disabled="busy">{{ t('common.startRevision') }}</NButton></template
+          >
+          {{ t('common.startRevisionHint') }}
+        </NPopconfirm>
+        <NButton
+          v-if="data && isDraft"
+          :disabled="busy"
+          @click="router.push({ name: 'relation-types', query: { edit: data.id } })"
+          >{{ t('common.edit') }}</NButton
+        >
         <NButton
           v-if="data && isDraft"
           type="primary"

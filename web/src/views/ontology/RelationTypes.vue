@@ -18,7 +18,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
@@ -34,6 +34,7 @@ import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const detailsLoading = ref(false)
@@ -495,6 +496,15 @@ watch(showEdit, (open) => {
   editError.value = ''
   editFormRef.value?.restoreValidation()
 })
+
+watch(
+  () => route.query.edit,
+  (value) => {
+    const id = Number(value)
+    if (Number.isSafeInteger(id) && id > 0) void openEdit(id)
+  },
+  { immediate: true },
+)
 
 onMounted(async () => {
   await Promise.all([

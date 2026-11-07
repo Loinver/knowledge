@@ -176,7 +176,9 @@
     "viewMode": "视图模式",
     "viewTable": "表格",
     "viewCard": "卡片",
-    "noneValue": "—"
+    "noneValue": "—",
+    "startRevision": "修订下一版",
+    "startRevisionHint": "将当前资源转为草稿，编辑后需重新发布；已发布快照和下游固定版本保持不变。"
   },
   "designer": {
     "selectOntology": "选择本体",
@@ -223,7 +225,9 @@
     "zoomIn": "放大",
     "zoomLevel": "缩放 {percent}%",
     "positionValue": "{x}, {y}",
-    "aiAssist": "AI 补全建议"
+    "aiAssist": "AI 补全建议",
+    "configureRules": "装配规则",
+    "rulesHint": "选择本体使用的规则。保存后请重新校验并发布；不支持执行的规则会显示未执行。"
   },
   "entityType": {
     "list": "实体类型列表",
@@ -1411,6 +1415,28 @@
     "documentSuggestions": "文档抽取候选事实（仅审阅，不落库）",
     "extract": "开始抽取",
     "mappingTitle": "AI 映射建议"
+  },
+  "coreCheck": {
+    "title": "核心资源核对",
+    "hint": "按你填写的标准条款与资源要求核对模板内容。本结果仅覆盖所列要求，不代表完整标准符合性。",
+    "kind": "资源种类",
+    "clause": "依据条款",
+    "add": "添加要求",
+    "run": "开始核对",
+    "present": "模板 r{revision} 已包含全部所列核心资源",
+    "missing": "模板 r{revision} 存在缺失或种类不符的资源",
+    "kinds": {
+      "ENTITY": "实体类型",
+      "OBJECT_PROP": "关系类型",
+      "DATATYPE_PROP": "数据属性",
+      "ASSOC": "关联资源"
+    },
+    "states": {
+      "PRESENT": "已包含",
+      "MISSING": "缺失",
+      "KIND_MISMATCH": "种类不符",
+      "ENTERPRISE_EXTENSION": "企业扩展"
+    }
   },
   "ontologyHistory": {
     "title": "本体 r{revision} 的冻结内容",

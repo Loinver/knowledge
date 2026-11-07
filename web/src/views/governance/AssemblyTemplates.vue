@@ -24,6 +24,7 @@ import { useI18n } from 'vue-i18n'
 import type { Template, TemplateInput, TemplateOntology, TemplateResource } from '@/api/templates'
 import { templatesApi as api } from '@/api/templates'
 import PageHeader from '@/components/PageHeader.vue'
+import TemplateCoreCheck from '@/views/governance/components/TemplateCoreCheck.vue'
 
 const { t, locale } = useI18n()
 const items = ref<Template[]>([])
@@ -36,6 +37,7 @@ const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
 const notice = ref('')
+const checkingTemplate = ref<Template | null>(null)
 const editor = ref(false)
 const mode = ref<'create' | 'edit' | 'copy' | 'fromOntology'>('create')
 const saved = ref<Template | null>(null)
@@ -131,6 +133,16 @@ const columns = computed(() => [
         {},
         {
           default: () => [
+            h(
+              NButton,
+              {
+                size: 'small',
+                onClick: () => {
+                  checkingTemplate.value = row
+                },
+              },
+              { default: () => t('coreCheck.title') },
+            ),
             h(
               NButton,
               { size: 'small', disabled: busy.value, onClick: () => open('edit', row) },
@@ -319,6 +331,23 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <NDrawer
+    :show="!!checkingTemplate"
+    width="min(600px, 100vw)"
+    @update:show="
+      (value) => {
+        if (!value) checkingTemplate = null
+      }
+    "
+  >
+    <NDrawerContent :title="t('coreCheck.title')" closable>
+      <TemplateCoreCheck
+        v-if="checkingTemplate"
+        :key="checkingTemplate.id"
+        :template-id="checkingTemplate.id"
+      />
+    </NDrawerContent>
+  </NDrawer>
   <section class="templates-page">
     <PageHeader :title="t('templates.title')" :description="t('templates.intro')">
       <template #actions>

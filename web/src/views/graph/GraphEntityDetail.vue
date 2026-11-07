@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { NAlert, NButton, NDataTable, NEmpty, NSpace, NTabPane, NTabs } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -42,21 +42,34 @@ async function loadFusion() {
   const iri = data.value.detail.entity.iri
   const grId = data.value.detail.entity.graph_revision_id
   fusionController?.abort()
-  fusionController = new AbortController()
+  const controller = new AbortController()
+  fusionController = controller
   fusionLoading.value = true
   fusionError.value = ''
   try {
-    fusion.value = await graphApi.entityFusion(iri, grId, fusionController.signal)
+    const result = await graphApi.entityFusion(iri, grId, controller.signal)
+    if (!controller.signal.aborted) fusion.value = result
   } catch (err) {
-    fusionError.value = toMessage(err)
+    if (!controller.signal.aborted) fusionError.value = toMessage(err)
   } finally {
-    fusionLoading.value = false
+    if (!controller.signal.aborted) fusionLoading.value = false
   }
 }
 
-watch(activeTab, (tab) => {
-  if (tab === 'fusion' && !fusion.value && !fusionLoading.value) void loadFusion()
+watch(
+  data,
+  () => {
+    fusionController?.abort()
+    fusion.value = null
+    fusionError.value = ''
+    fusionLoading.value = false
+  },
+  { flush: 'sync' },
+)
+watch([activeTab, data], ([tab]) => {
+  if (tab === 'fusion' && data.value && !fusion.value && !fusionLoading.value) void loadFusion()
 })
+onBeforeUnmount(() => fusionController?.abort())
 
 /** 「查看证据链」跳到证据页并按三元组定位，与证据页 triple 模式共用查询参数。 */
 function openChain(item: EvidenceItem) {

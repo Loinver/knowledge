@@ -11,8 +11,9 @@ import {
   NTable,
   NTag,
 } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import { validationApi, type ValidationResultItem } from '@/api/validation'
 import PageHeader from '@/components/PageHeader.vue'
@@ -40,8 +41,11 @@ const report = useAsyncData((_signal) => {
 
 const results = ref<ValidationResultItem[]>([])
 const loadingResults = ref(false)
+let generation = 0
 
 async function loadResults() {
+  const current = generation
+  const id = reportId.value
   if (reportId.value === null) {
     results.value = []
     return
@@ -49,31 +53,50 @@ async function loadResults() {
   loadingResults.value = true
   resultsError.value = ''
   try {
-    results.value = await validationApi.getResults(reportId.value)
+    const next = await validationApi.getResults(reportId.value)
+    if (current === generation && id === reportId.value) results.value = next
   } catch (err: unknown) {
     // 按 code 走统一 i18n 码表，不把 KG.FORBIDDEN 之类的码直出到界面
-    resultsError.value = toMessage(err)
+    if (current === generation) resultsError.value = toMessage(err)
   } finally {
-    loadingResults.value = false
+    if (current === generation) loadingResults.value = false
   }
 }
 
 async function runValidation() {
   if (selectedGraphId.value === null) return
+  const current = ++generation
+  reportId.value = null
+  results.value = []
+  await report.reload()
+  if (current !== generation) return
   resultsError.value = ''
   try {
     const rep = await validationApi.validateGraph(selectedGraphId.value)
+    if (current !== generation) return
     reportId.value = rep.report_id
     report.reload()
     await loadResults()
   } catch (err: unknown) {
     // 按 code 走统一 i18n 码表，不把 KG.FORBIDDEN 之类的码直出到界面
-    resultsError.value = toMessage(err)
+    if (current === generation) resultsError.value = toMessage(err)
   }
 }
 
-watch(reportId, () => {
-  if (reportId.value !== null) loadResults()
+watch(
+  selectedGraphId,
+  () => {
+    generation += 1
+    reportId.value = null
+    results.value = []
+    resultsError.value = ''
+    loadingResults.value = false
+    void report.reload()
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  generation += 1
 })
 
 const stateTagType = (state: string) => {
@@ -154,7 +177,17 @@ const stateTagType = (state: string) => {
                   {{ t('report.states.' + item.state, item.state) }}
                 </NTag>
               </td>
-              <td class="mono">{{ item.focus_node || '-' }}</td>
+              <td class="mono">
+                <RouterLink
+                  v-if="item.focus_node"
+                  :to="{
+                    name: 'graph-browse',
+                    query: { graph: selectedGraphId, center: item.focus_node },
+                  }"
+                  >{{ item.focus_node }}</RouterLink
+                >
+                <span v-else>-</span>
+              </td>
               <td>{{ item.message || '-' }}</td>
             </tr>
           </tbody>

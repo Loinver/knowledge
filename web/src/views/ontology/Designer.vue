@@ -21,6 +21,7 @@ import type { DomainBrief, DomainMember } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
 import type { EntityType, EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
+import { type Rule, rulesApi } from '@/api/governance'
 import type { Namespace } from '@/api/namespaces'
 import { namespacesApi } from '@/api/namespaces'
 import type { CanvasPositions, Ontology, OntologyDetail, OntologyRef } from '@/api/ontology'
@@ -79,6 +80,57 @@ const validating = ref(false)
 const validationError = ref('')
 const showValidation = ref(false)
 const showAi = ref(false)
+const showRules = ref(false)
+const ruleLoading = ref(false)
+const ruleError = ref('')
+const ruleCatalog = ref<Rule[]>([])
+const selectedRules = ref<number[]>([])
+const ruleOptions = computed(() =>
+  ruleCatalog.value.map((rule) => ({
+    value: rule.id,
+    label: `${rule.identifier} · r${rule.revision}`,
+  })),
+)
+
+async function openRules() {
+  const context = selection
+  if (!context || !canEdit.value) return
+  showRules.value = true
+  ruleLoading.value = true
+  ruleError.value = ''
+  selectedRules.value = []
+  try {
+    const [catalog, attached] = await Promise.all([
+      rulesApi.all(context.controller.signal),
+      ontologyApi.rules(context.id, context.controller.signal),
+    ])
+    if (!isCurrentSelection(context)) return
+    ruleCatalog.value = catalog
+    selectedRules.value = attached.map((rule) => rule.rule_id)
+  } catch (err) {
+    if (isCurrentSelection(context)) ruleError.value = toMessage(err)
+  } finally {
+    if (isCurrentSelection(context)) ruleLoading.value = false
+  }
+}
+
+async function saveRules() {
+  if (ruleLoading.value || ruleError.value || !detail.value) return
+  const context = selection
+  const version = detail.value.current_revision
+  const ids = [...selectedRules.value]
+  const saved = await updateOntology((id, editRevision) =>
+    ontologyApi.update(
+      id,
+      {
+        if_match: version,
+        rule_ids: ids,
+      },
+      editRevision,
+    ),
+  )
+  if (saved && context && isCurrentSelection(context)) showRules.value = false
+}
 
 const canvasEl = ref<HTMLElement | null>(null)
 const worldEl = ref<HTMLElement | null>(null)
@@ -554,6 +606,11 @@ function ensurePositions() {
 async function selectOntology(id: number | null) {
   if (!alive || catalogLoading.value || catalogError.value) return false
   selection?.controller.abort()
+  validationReport.value = null
+  validationResults.value = []
+  validationError.value = ''
+  validating.value = false
+  showValidation.value = false
   selection = id === null ? undefined : { id, controller: new AbortController() }
   stopDragging()
   ontologyId.value = id
@@ -573,6 +630,11 @@ async function selectOntology(id: number | null) {
 
 async function loadOntology(context: OntologySelection) {
   if (!isCurrentSelection(context)) return false
+  showRules.value = false
+  validationReport.value = null
+  validationResults.value = []
+  validationError.value = ''
+  showValidation.value = false
   loading.value = true
   loadError.value = ''
   selectedKey.value = null
@@ -864,7 +926,9 @@ async function openCreate() {
   showCreate.value = true
 }
 async function submitCreate() {
-  if (!canEdit.value || !createNamespace.value || !createName.value.trim()) return
+  if (!canEdit.value || createLoading.value || !createNamespace.value || !createName.value.trim())
+    return
+  const context = selection
   createLoading.value = true
   createError.value = ''
   try {
@@ -874,10 +938,22 @@ async function submitCreate() {
       namespace_id: createNamespace.value,
       label_i18n: { 'zh-CN': labelZh },
     })
+    if (!alive) return
+    entityTypes.value = [
+      ...entityTypes.value.filter((item) => item.id !== created.id),
+      {
+        ...created,
+        data_prop_count: created.data_props?.length ?? 0,
+        relation_count: 0,
+        has_violation: false,
+      },
+    ]
+    if (!context || !isCurrentSelection(context)) return
     await addToCanvas(created.id)
+    if (!isCurrentSelection(context)) return
     showCreate.value = false
   } catch (err) {
-    createError.value = toMessage(err)
+    if (context && isCurrentSelection(context)) createError.value = toMessage(err)
   } finally {
     createLoading.value = false
   }
@@ -924,24 +1000,28 @@ watch(selectedKey, async (key) => {
  * 跑的就是资产层那 8 项检查，这里把四态结果直接摊在设计器里。
  */
 async function runValidation() {
+  const context = selection
   const id = ontologyId.value
-  if (id === null || validating.value) return
+  if (id === null || !context || validating.value || loading.value) return
+  const editRevision = detail.value?.edit_revision
   validating.value = true
   validationError.value = ''
+  validationReport.value = null
+  validationResults.value = []
   showValidation.value = true
   try {
     const report = await validationApi.validateOntology(id)
     const results = await validationApi.getResults(report.report_id)
-    if (!alive) return
+    if (!isCurrentSelection(context) || detail.value?.edit_revision !== editRevision) return
     validationReport.value = report
     validationResults.value = results
   } catch (err) {
-    if (!alive) return
+    if (!isCurrentSelection(context) || detail.value?.edit_revision !== editRevision) return
     validationError.value = toMessage(err)
     validationReport.value = null
     validationResults.value = []
   } finally {
-    if (alive) validating.value = false
+    if (isCurrentSelection(context)) validating.value = false
   }
 }
 
@@ -1092,6 +1172,9 @@ onBeforeUnmount(() => {
           </NButton>
         </div>
         <div class="pool-body">
+          <NButton size="small" :disabled="!canEdit" @click="openRules">{{
+            t('designer.configureRules')
+          }}</NButton>
           <div class="pool-group">
             <span>{{ t('designer.inCanvas') }}</span>
             <span class="mono pool-count">{{ canvasTotal }}</span>
@@ -1185,6 +1268,32 @@ onBeforeUnmount(() => {
         </NForm>
         <NAlert v-if="createError" type="error" class="feedback">{{ createError }}</NAlert>
       </NModal>
+
+      <NDrawer v-model:show="showRules" :width="440">
+        <NDrawerContent :title="t('designer.configureRules')" closable>
+          <p>{{ t('designer.rulesHint') }}</p>
+          <NAlert v-if="ruleError" type="error">{{ ruleError }}</NAlert>
+          <NButton v-if="ruleError" @click="openRules">{{ t('graph.refresh') }}</NButton>
+          <NSelect
+            v-model:value="selectedRules"
+            :options="ruleOptions"
+            multiple
+            filterable
+            :loading="ruleLoading"
+            :disabled="ruleLoading || !!ruleError || !canEdit"
+            :aria-label="t('designer.configureRules')"
+          />
+          <template #footer>
+            <NButton
+              type="primary"
+              :loading="working"
+              :disabled="ruleLoading || !!ruleError || !canEdit"
+              @click="saveRules"
+              >{{ t('common.save') }}</NButton
+            >
+          </template>
+        </NDrawerContent>
+      </NDrawer>
 
       <!-- 中：画布 -->
       <div ref="canvasEl" class="canvas" @wheel="onWheel">

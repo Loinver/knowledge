@@ -119,3 +119,276 @@ test('task polling never starts after unmount during initial reads', async () =>
   assert.deepEqual(clears, [])
   delete globalThis.window
 })
+
+test('ontology editing waits for detail and preserves its definition', async () => {
+  const detail = deferred(),
+    writes = []
+  const row = {
+    id: 1,
+    name: 'Ontology',
+    iri: 'https://example.org/Ontology',
+    status: 'DRAFT',
+    current_revision: 0,
+    edit_revision: 2,
+    label_i18n: { 'zh-CN': '本体' },
+  }
+  const ctx = await mount(
+    'views/ontology/Ontologies.vue',
+    {
+      '@/api/ontology': {
+        ontologyApi: {
+          list: async () => [row],
+          get: () => detail.promise,
+          update: async (...args) => {
+            writes.push(args)
+            return row
+          },
+        },
+      },
+    },
+    'openEdit,handleSubmit,formData',
+  )
+  ctx.vm.openEdit(row)
+  ctx.vm.formData.labelZh = '改名'
+  await ctx.vm.handleSubmit()
+  assert.equal(writes.length, 0)
+  detail.resolve({ ...row, definition_i18n: { 'zh-CN': '不能丢失的定义' } })
+  await settle()
+  await ctx.vm.handleSubmit()
+  assert.equal(writes[0][1].definition_i18n['zh-CN'], '不能丢失的定义')
+  ctx.stop()
+})
+
+test('entity fusion reloads for the current entity', async () => {
+  const reads = []
+  const ctx = await mount(
+    'views/graph/GraphEntityDetail.vue',
+    {
+      '@/api/graph': {
+        graphApi: {
+          detail: async (iri) => ({ entity: { iri, graph_revision_id: 1, attrs: {} } }),
+          entityEvidence: async () => ({ evidences: [] }),
+          entityFusion: async (iri) => {
+            reads.push(iri)
+            return { iri, source_rows: [{ row_key: iri }], conflicts: [] }
+          },
+        },
+      },
+    },
+    'data,fusion,activeTab,loadFusion',
+    '/entities/A',
+  )
+  ctx.vm.activeTab = 'fusion'
+  await settle()
+  await ctx.router.push('/entities/B')
+  await settle()
+  assert.equal(ctx.vm.data.detail.entity.iri, 'B')
+  assert.equal(ctx.vm.fusion.iri, 'B')
+  ctx.vm.activeTab = 'attrs'
+  await settle()
+  ctx.vm.activeTab = 'fusion'
+  await settle()
+  assert.deepEqual(reads, ['A', 'B'])
+  ctx.stop()
+})
+
+test('failed validation cannot retain another graph report', async () => {
+  const ctx = await mount(
+    'views/graph/GraphReports.vue',
+    {
+      '@/api/validation': {
+        validationApi: {
+          revisions: async () => [],
+          validateGraph: async (id) => {
+            if (id === 2) throw { code: 'KG.FORBIDDEN' }
+            return { report_id: 11 }
+          },
+          getReport: async () => ({ id: 11, summary: { pass: 1 } }),
+          getResults: async () => [{ check_code: 'A01', state: 'PASS' }],
+        },
+      },
+    },
+    'selectedGraphId,runValidation,reportId,results,resultsError',
+  )
+  ctx.vm.selectedGraphId = 1
+  await ctx.vm.runValidation()
+  await settle()
+  ctx.vm.selectedGraphId = 2
+  await ctx.vm.runValidation()
+  await settle()
+  assert.equal(ctx.vm.reportId, null)
+  assert.deepEqual(ctx.vm.results, [])
+  assert.ok(ctx.vm.resultsError)
+  ctx.stop()
+})
+
+function designerState() {
+  const resource = (id) => ({
+    id,
+    name: `Resource${id}`,
+    iri: `https://example.org/${id}`,
+    label_i18n: { 'zh-CN': `资源${id}` },
+    status: 'DRAFT',
+    current_revision: 0,
+    edit_revision: 1,
+  })
+  const refs = []
+  return {
+    refs,
+    resource,
+    stubs: {
+      '@/api/ontology': {
+        ontologyApi: {
+          list: async () => [resource(1), resource(2)],
+          get: async (id) => resource(id),
+          refs: async () => [...refs],
+          getCanvas: async () => ({ positions: {} }),
+          saveCanvas: async () => {},
+          addRef: async (id, rid) => {
+            refs.push({ id: 100 + rid, resource_id: rid })
+            return refs.at(-1)
+          },
+        },
+      },
+      '@/api/domains': { domainsApi: { list: async () => [], members: async () => [] } },
+      '@/api/entity-types': {
+        entityTypesApi: { list: async () => [], create: async () => resource(101) },
+      },
+      '@/api/relations': { relationsApi: { list: async () => [] } },
+      '@/api/namespaces': { namespacesApi: { list: async () => [{ id: 1 }] } },
+      '@/api/validation': { validationApi: {} },
+    },
+  }
+}
+
+test('designer created resources appear in the canvas catalog', async () => {
+  const state = designerState()
+  const ctx = await mount(
+    'views/ontology/Designer.vue',
+    state.stubs,
+    'submitCreate,createName,createNamespace,createLabelZh,canEdit,refs,nodes,entityTypes',
+  )
+  assert.equal(ctx.vm.canEdit, true)
+  ctx.vm.createName = 'NewType'
+  ctx.vm.createNamespace = 1
+  ctx.vm.createLabelZh = '新类型'
+  await ctx.vm.submitCreate()
+  assert.equal(ctx.vm.refs[0].resource_id, 101)
+  assert.equal(ctx.vm.nodes.length, 1)
+  assert.equal(ctx.vm.entityTypes.length, 1)
+  ctx.stop()
+})
+
+test('designer rejects old validation after selecting another ontology', async () => {
+  const state = designerState(),
+    pending = deferred()
+  state.stubs['@/api/validation'].validationApi = {
+    validateOntology: () => pending.promise,
+    getResults: async () => [{ check_code: 'A01', state: 'PASS' }],
+  }
+  const ctx = await mount(
+    'views/ontology/Designer.vue',
+    state.stubs,
+    'runValidation,selectOntology,ontologyId,validationReport,validationResults,showValidation',
+  )
+  assert.equal(ctx.vm.ontologyId, 1)
+  const validating = ctx.vm.runValidation()
+  await ctx.vm.selectOntology(2)
+  pending.resolve({ report_id: 11, ontology_id: 1, summary: { pass: 1 } })
+  await validating
+  assert.equal(ctx.vm.ontologyId, 2)
+  assert.equal(ctx.vm.validationReport, null)
+  assert.deepEqual(ctx.vm.validationResults, [])
+  assert.equal(ctx.vm.showValidation, false)
+  ctx.stop()
+})
+
+test('late designer creation cannot attach to a different ontology', async () => {
+  const state = designerState(),
+    pending = deferred(),
+    writes = []
+  state.stubs['@/api/entity-types'].entityTypesApi.create = () => pending.promise
+  state.stubs['@/api/ontology'].ontologyApi.addRef = async (...args) => writes.push(args)
+  const ctx = await mount(
+    'views/ontology/Designer.vue',
+    state.stubs,
+    'submitCreate,selectOntology,showCreate,createName,createNamespace,ontologyId',
+  )
+  ctx.vm.createName = 'NewType'
+  ctx.vm.createNamespace = 1
+  ctx.vm.showCreate = true
+  const creating = ctx.vm.submitCreate()
+  ctx.vm.showCreate = false
+  await ctx.vm.selectOntology(2)
+  pending.resolve(state.resource(101))
+  await creating
+  assert.deepEqual(writes, [])
+  ctx.stop()
+})
+
+test('entity route reuse closes old basic editors and rejects validation that finishes after navigation', async (t) => {
+  const validate = deferred()
+  const writes = []
+  const entity = (id) => ({
+    id,
+    name: `Entity${id}`,
+    label_i18n: { 'zh-CN': `Entity${id}` },
+    status: 'DRAFT',
+    current_revision: 0,
+    edit_revision: 1,
+    data_props: [],
+  })
+  const ctx = await mount(
+    'views/ontology/EntityDetail.vue',
+    {
+      '@/api/entity-types': {
+        entityTypesApi: {
+          get: async (id) => entity(id),
+          list: async () => [],
+          usages: async () => ({}),
+          update: async (...args) => {
+            writes.push(args)
+            return entity(args[0])
+          },
+        },
+      },
+    },
+    'data,openBasicEditor,saveBasic,showBasicEditor,basicFormRef,basicForm',
+    '/entities/1',
+  )
+  t.after(ctx.stop)
+  ctx.vm.openBasicEditor()
+  ctx.vm.basicForm.labelZh = 'Old edit'
+  ctx.vm.basicFormRef = { validate: () => validate.promise }
+  const saving = ctx.vm.saveBasic()
+  await ctx.router.push('/entities/2')
+  await settle()
+  validate.resolve()
+  await saving
+  assert.equal(ctx.vm.data.id, 2)
+  assert.equal(ctx.vm.showBasicEditor, false)
+  assert.deepEqual(writes, [])
+})
+
+test('core resource checks discard results after the requirements change', async (t) => {
+  const response = deferred()
+  const ctx = await mount(
+    'views/governance/components/TemplateCoreCheck.vue',
+    {
+      '@/api/clauses': {
+        clausesApi: { all: async () => [{ id: 1, standard: 'Example', clause_number: '1' }] },
+      },
+      '@/api/templates': { templatesApi: { coreCheck: () => response.promise } },
+    },
+    'requirements,check,result',
+    '/',
+    (source) => source.replace('defineProps<{ templateId: number }>()', '({ templateId: 1 })'),
+  )
+  t.after(ctx.stop)
+  ctx.vm.requirements[0] = { name: 'Person', kind: 'ENTITY', standard_clause_id: 1 }
+  const pending = ctx.vm.check()
+  ctx.vm.requirements[0].name = 'Missing'
+  response.resolve({ template_id: 1, all_core_present: true, items: [] })
+  await pending
+  assert.equal(ctx.vm.result, null)
+})

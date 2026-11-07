@@ -176,7 +176,9 @@
     "viewMode": "View mode",
     "viewTable": "Table",
     "viewCard": "Cards",
-    "noneValue": "—"
+    "noneValue": "—",
+    "startRevision": "Start next revision",
+    "startRevisionHint": "Return this resource to draft and publish again after editing. Published snapshots and pinned downstream versions remain unchanged."
   },
   "designer": {
     "selectOntology": "Select ontology",
@@ -223,7 +225,9 @@
     "zoomIn": "Zoom in",
     "zoomLevel": "Zoom {percent}%",
     "positionValue": "{x}, {y}",
-    "aiAssist": "AI suggestions"
+    "aiAssist": "AI suggestions",
+    "configureRules": "Attach rules",
+    "rulesHint": "Select the rules used by this ontology, then validate and publish. Rules without an execution engine are marked Not run."
   },
   "entityType": {
     "list": "Entity Type List",
@@ -1411,6 +1415,28 @@
     "documentSuggestions": "Document candidate facts (review only, not saved)",
     "extract": "Extract",
     "mappingTitle": "AI mapping suggestions"
+  },
+  "coreCheck": {
+    "title": "Core resource check",
+    "hint": "Check template contents against the resource requirements and clauses you specify. This covers only the listed requirements, not full standards compliance.",
+    "kind": "Resource kind",
+    "clause": "Reference clause",
+    "add": "Add requirement",
+    "run": "Check requirements",
+    "present": "Template r{revision} contains all listed core resources",
+    "missing": "Template r{revision} has missing resources or kind mismatches",
+    "kinds": {
+      "ENTITY": "Entity type",
+      "OBJECT_PROP": "Relation type",
+      "DATATYPE_PROP": "Datatype property",
+      "ASSOC": "Associative resource"
+    },
+    "states": {
+      "PRESENT": "Present",
+      "MISSING": "Missing",
+      "KIND_MISMATCH": "Kind mismatch",
+      "ENTERPRISE_EXTENSION": "Enterprise extension"
+    }
   },
   "ontologyHistory": {
     "title": "Frozen contents of ontology r{revision}",

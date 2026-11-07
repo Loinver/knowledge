@@ -6,10 +6,14 @@ export type Template = S['TemplateOut']
 export type TemplateInput = S['TemplateCreate']
 export type TemplateResource = S['TemplateResourceOption']
 export type TemplateOntology = S['OntologyBrief']
+export type CoreCheckRequest = S['CoreCheckRequest']
+export type CoreCheckResult = S['CoreCheckOut']
 
 const base = '/governance/templates'
 const headers = (item: Template) => ({ 'If-Match': String(item.revision) })
 export const templatesApi = {
+  coreCheck: (id: number, payload: CoreCheckRequest, signal?: AbortSignal) =>
+    http.post<CoreCheckResult>(`${base}/${id}/core-check`, payload, { signal }).then((r) => r.data),
   list: (params: { q: string; page: number; builtin?: boolean }, signal?: AbortSignal) =>
     http
       .get<S['TemplatePage']>(base, { params: { ...params, page_size: 20 }, signal })

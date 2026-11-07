@@ -121,6 +121,9 @@ async function loadDetail() {
   const generation = ++loadGeneration
   editorGeneration++
   showEditor.value = false
+  showBasicEditor.value = false
+  showRename.value = false
+  usages.value = null
   versionController?.abort()
   dictionaryController?.abort()
   data.value = null
@@ -141,7 +144,7 @@ async function loadDetail() {
   } finally {
     if (alive && generation === loadGeneration) loading.value = false
   }
-  void loadUsages(id, generation)
+  if (alive && generation === loadGeneration) void loadUsages(id, generation)
 }
 
 /** 三个页签的数据独立加载：取不到不影响基本信息与数据属性。 */
@@ -179,6 +182,21 @@ async function handlePublish() {
   error.value = ''
   try {
     await entityTypesApi.publish(data.value.id)
+    if (alive && generation === loadGeneration) await loadDetail()
+  } catch (err) {
+    if (alive && generation === loadGeneration) error.value = failure(err)
+  } finally {
+    if (alive) busy.value = false
+  }
+}
+
+async function startRevision() {
+  if (data.value?.status !== 'PUBLISHED' || busy.value) return
+  const generation = loadGeneration
+  busy.value = true
+  error.value = ''
+  try {
+    await entityTypesApi.unpublish(data.value.id)
     if (alive && generation === loadGeneration) await loadDetail()
   } catch (err) {
     if (alive && generation === loadGeneration) error.value = failure(err)
@@ -247,20 +265,22 @@ function collectBasicPayload(): {
 
 async function saveBasic() {
   const entity = data.value
-  if (!entity || entity.status !== 'DRAFT' || busy.value) return
+  if (!entity || entity.status !== 'DRAFT' || busy.value || !showBasicEditor.value) return
+  const generation = loadGeneration
+  const payload = collectBasicPayload()
   try {
     await basicFormRef.value?.validate()
   } catch {
     return
   }
-  const generation = loadGeneration
+  if (!alive || generation !== loadGeneration || !showBasicEditor.value) return
   busy.value = true
   basicError.value = ''
   error.value = ''
   notice.value = ''
   try {
     const result = await entityTypesApi.update(entity.id, {
-      ...collectBasicPayload(),
+      ...payload,
       if_match: entity.current_revision,
       edit_revision: entity.edit_revision,
     })
@@ -691,6 +711,12 @@ onBeforeUnmount(() => {
       :description="data?.iri"
     >
       <template #actions>
+        <NPopconfirm v-if="data?.status === 'PUBLISHED'" @positive-click="startRevision">
+          <template #trigger
+            ><NButton :disabled="busy">{{ t('common.startRevision') }}</NButton></template
+          >
+          {{ t('common.startRevisionHint') }}
+        </NPopconfirm>
         <n-button v-if="data && isDraft" :disabled="busy" @click="openBasicEditor">
           {{ t('common.edit') }}
         </n-button>

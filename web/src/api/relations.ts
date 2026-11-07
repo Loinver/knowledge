@@ -46,4 +46,6 @@ export const relationsApi = {
       .post<{ revision: number; checksum: string }>(`/relations/${id}/publish`)
       .then((r) => r.data),
   remove: (id: number) => http.delete(`/relations/${id}`).then(() => undefined),
+  unpublish: (id: number) =>
+    http.post<RelationTypeDetail>(`/relations/${id}/unpublish`).then((r) => r.data),
 }
