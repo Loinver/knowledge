@@ -1367,7 +1367,11 @@
       "candidates": "Candidate endpoints",
       "whenValue": "Discriminator value (when)",
       "addCandidate": "Add candidate",
-      "removeCandidate": "Remove"
+      "removeCandidate": "Remove",
+      "incrementalField": "Incremental watermark field",
+      "incrementalHint": "Incremental extraction supports immutable appended rows with one integer primary key and an increasing integer watermark. Map each type to one table; business-key fusion and via endpoints are unsupported. The first run initializes a full snapshot; later runs retain existing entities and evidence and recompute relations. Use a full run for updates or deletions.",
+      "copyDraft": "Copy to new draft",
+      "copiedDraft": "Mapping configuration copied. Edit the name, select a source, then preview and publish."
     },
     "preview": {
       "title": "Sample preview",

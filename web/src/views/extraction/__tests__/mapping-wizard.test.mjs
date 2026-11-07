@@ -13,7 +13,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed =
-  'mappings,selectedMappingId,selectedMapping,selectedOntologyId,selectedDatasourceId,mappingName,entityMaps,draftRevision,publishedRevision,catalog,preview,working,notice,actionError,canSaveDraft,canPublish,selectMapping,newMapping,handleSaveDraft,publishMapping,removeMapping,runCompile'
+  'mappings,selectedMappingId,selectedMapping,selectedOntologyId,selectedDatasourceId,mappingName,entityMaps,draftRevision,publishedRevision,catalog,preview,previewSignature,draftSignature,working,notice,actionError,canSaveDraft,canPublish,selectMapping,newMapping,handleSaveDraft,publishMapping,removeMapping,runCompile,copyPublishedMapping,serializeDraft'
 const renderer = createRenderer({
   createElement: () => ({}),
   createText: () => ({}),
@@ -207,6 +207,7 @@ async function mount(t, api = state()) {
   }
   await settle()
   vm.preview = { entities: [], relations: [] }
+  vm.previewSignature = vm.draftSignature()
   assert.equal(vm.canSaveDraft, true)
   assert.equal(vm.canPublish, true)
   return { vm, api, stop, text: translations.global.t }
@@ -226,6 +227,37 @@ test('saving and publishing use the saved mapping and advance only its edit toke
   assert.equal(vm.publishedRevision.mapping_id, 1)
   assert.equal(vm.selectedMapping.current_revision, 1)
   assert.equal(vm.selectedMapping.edit_revision, 3)
+})
+
+test('published copy waits for its frozen details and preserves the incremental configuration', async (t) => {
+  const { vm, api } = await mount(t)
+  const read = deferred()
+  const saved = { ...mapping(2), status: 'PUBLISHED', current_revision: 1 }
+  api.mappings.get = async () => saved
+  api.mappings.published = () => read.promise
+  const selection = vm.selectMapping(2)
+  await settle()
+  vm.copyPublishedMapping()
+  assert.equal(vm.selectedMappingId, 2)
+  assert.equal(vm.publishedRevision, null)
+  const frozen = published(2)
+  frozen.entity_maps[0].incremental_field = 'id'
+  frozen.entity_maps[0].key_fields = ['id']
+  read.resolve(frozen)
+  await selection
+  vm.copyPublishedMapping()
+  assert.equal(vm.selectedMappingId, null)
+  assert.equal(vm.mappingName, 'Mapping2Copy')
+  assert.equal(vm.selectedOntologyId, 1)
+  assert.equal(vm.publishedRevision, null)
+  assert.equal(vm.preview, null)
+  const copy = vm.serializeDraft()
+  assert.equal(copy.entity_maps[0].incremental_field, 'id')
+  assert.deepEqual(copy.entity_maps[0].key_fields, ['id'])
+  vm.entityMaps[0].field_maps[0].source_field = 'corrected'
+  assert.equal(frozen.entity_maps[0].field_maps[0].source_field, 'name2')
+  assert.equal(vm.mappings.find((item) => item.id === 2).status, 'PUBLISHED')
+  assert.deepEqual(api.writes, [])
 })
 
 test('compile followed by publish uses the edit token returned by the first save', async (t) => {
@@ -338,6 +370,7 @@ test('a current save conflict keeps local edits and prevents publishing', async 
   vm.entityMaps[0].field_maps[0].source_field = 'local_change'
   await settle()
   vm.preview = { entities: [], relations: [] }
+  vm.previewSignature = vm.draftSignature()
   api.mappings.saveDraft = async () => {
     throw conflict
   }

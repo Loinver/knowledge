@@ -392,3 +392,132 @@ test('core resource checks discard results after the requirements change', async
   await pending
   assert.equal(ctx.vm.result, null)
 })
+
+test('selecting datasource preserves saved draft bindings', async () => {
+  const map = {
+    id: 1,
+    name: 'Existing',
+    ontology_id: 1,
+    status: 'DRAFT',
+    current_revision: 0,
+    edit_revision: 0,
+  }
+  const draft = {
+    id: 10,
+    mapping_id: 1,
+    revision: 0,
+    edit_revision: 0,
+    entity_maps: [
+      {
+        entity_type: 'Employee',
+        schema: 'main',
+        table: 'employees',
+        key_fields: ['id'],
+        field_maps: [{ target_attr: 'name', source_field: 'name' }],
+      },
+    ],
+    rel_maps: [],
+  }
+  const ctx = await mount(
+    'views/extraction/MappingWizard.vue',
+    {
+      '@/api/mappings': {
+        mappingsApi: { list: async () => [map], get: async () => map, draft: async () => draft },
+      },
+      '@/api/ontology': {
+        ontologyApi: { list: async () => [{ id: 1, status: 'PUBLISHED' }], refs: async () => [] },
+      },
+      '@/api/datasources': {
+        datasourcesApi: { list: async () => [{ id: 1 }] },
+        metadataApi: { latest: async () => ({ revision: 1, catalog: { schemas: [] } }) },
+      },
+      '@/api/entity-types': { entityTypesApi: { list: async () => [] } },
+      '@/api/relations': { relationsApi: { list: async () => [] } },
+      '@/api/extraction': { extractionApi: {} },
+    },
+    'selectMapping,chooseDatasource,entityMaps,selectedDatasourceId',
+  )
+  await ctx.vm.selectMapping(1)
+  assert.equal(ctx.vm.entityMaps[0].table, 'employees')
+  assert.equal(ctx.vm.selectedDatasourceId, null)
+  await ctx.vm.chooseDatasource(1)
+  assert.equal(ctx.vm.entityMaps[0].table, 'employees')
+  assert.equal(ctx.vm.entityMaps[0].field_maps[0].source_field, 'name')
+  assert.deepEqual(ctx.vm.entityMaps[0].key_fields, ['id'])
+  ctx.stop()
+})
+
+test('late compile cannot authorize publication of an edited draft', async () => {
+  const pending = deferred(),
+    writes = []
+  const mapping = {
+    id: 1,
+    name: 'Mapping1',
+    ontology_id: 1,
+    status: 'DRAFT',
+    current_revision: 0,
+    edit_revision: 0,
+  }
+  const draft = {
+    id: 10,
+    mapping_id: 1,
+    revision: 0,
+    edit_revision: 0,
+    entity_maps: [
+      {
+        entity_type: 'Employee',
+        schema: 'main',
+        table: 'employees',
+        field_maps: [{ target_attr: 'name', source_field: 'name' }],
+        key_fields: [],
+      },
+    ],
+    rel_maps: [],
+  }
+  const ctx = await mount(
+    'views/extraction/MappingWizard.vue',
+    {
+      '@/api/mappings': {
+        mappingsApi: {
+          list: async () => [mapping],
+          get: async () => mapping,
+          draft: async () => draft,
+          saveDraft: async (id, p) => {
+            writes.push(['save', p.draft.entity_maps[0].field_maps[0].source_field])
+            return { ...draft, edit_revision: p.if_edit_match + 1 }
+          },
+          compile: () => pending.promise,
+          publish: async () => {
+            writes.push(['publish'])
+            return { ...draft, revision: 1, edit_revision: 3 }
+          },
+        },
+      },
+      '@/api/ontology': {
+        ontologyApi: {
+          list: async () => [{ id: 1, status: 'PUBLISHED', current_revision: 1 }],
+          refs: async () => [],
+        },
+      },
+      '@/api/datasources': { datasourcesApi: { list: async () => [] }, metadataApi: {} },
+      '@/api/entity-types': { entityTypesApi: { list: async () => [] } },
+      '@/api/relations': { relationsApi: { list: async () => [] } },
+      '@/api/extraction': { extractionApi: {} },
+    },
+    'selectMapping,runCompile,publishMapping,canPublish,entityMaps,catalog,selectedDatasourceId,preview',
+  )
+  await ctx.vm.selectMapping(1)
+  ctx.vm.selectedDatasourceId = 1
+  ctx.vm.catalog = { schemas: [{ schema: 'main', tables: [{ name: 'employees', columns: [] }] }] }
+  const compiling = ctx.vm.runCompile()
+  await settle()
+  ctx.vm.entityMaps[0].field_maps[0].source_field = 'unsampled_column'
+  await settle()
+  assert.equal(ctx.vm.preview, null)
+  pending.resolve({ entities: [], relations: [] })
+  await compiling
+  assert.equal(ctx.vm.canPublish, false)
+  await ctx.vm.publishMapping()
+  assert.deepEqual(writes, [['save', 'name']])
+  ctx.stop()
+})

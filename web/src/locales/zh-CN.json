@@ -1367,7 +1367,11 @@
       "candidates": "候选端点",
       "whenValue": "判别值 (when)",
       "addCandidate": "添加候选",
-      "removeCandidate": "移除"
+      "removeCandidate": "移除",
+      "incrementalField": "增量水位字段",
+      "incrementalHint": "增量仅支持不可修改的追加行、单整数主键和递增整数水位；每个类型只能映射一张表，不支持业务键融合或经由端点。首次运行全量初始化，后续保留旧实体与原始证据，关系全量重算。源记录更新或删除请使用全量抽取。",
+      "copyDraft": "复制为新草稿",
+      "copiedDraft": "已复制映射配置，请修改名称、选择数据源并重新预览发布。"
     },
     "preview": {
       "title": "样例预览",
