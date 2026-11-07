@@ -291,6 +291,8 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
     await expect(page.getByRole('button', { name: '添加成员', exact: true }).first()).toBeEnabled()
     // NSelect 的 placeholder 在 loading 态不挂在 input 上，直接点触发器更稳。
     await page.locator('.member-select .n-base-selection').click()
+    // 搜索后再选择，避免依赖虚拟下拉当前只渲染的首屏选项。
+    await page.locator('.member-select input').fill(member)
     await pickOption(page, member)
     await page.getByRole('button', { name: '添加成员', exact: true }).first().click()
     await expect(page.getByText(member).first()).toBeVisible()
