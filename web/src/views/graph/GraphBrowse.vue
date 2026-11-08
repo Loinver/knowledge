@@ -41,6 +41,7 @@ import GraphCanvas from '@/views/graph/components/GraphCanvas.vue'
 import { exportCsv, exportPng, exportSvg } from '@/views/graph/components/graphExport'
 import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 import { LAYOUTS } from '@/views/graph/components/graphLayout'
+import { relationLabels as frozenRelationLabels } from '@/views/graph/components/graphPresentation'
 import { edgeKey, entityName, mergeNeighborhoods } from '@/views/graph/components/graphWorkspace'
 import {
   hasSemanticConfig,
@@ -120,6 +121,7 @@ const selectedEdge = computed(
   () => data.value?.edges.find((edge) => edgeKey(edge) === selectedEdgeIdentity.value) ?? null,
 )
 const showEvidence = ref(false)
+const traceButton = ref<InstanceType<typeof NButton> | null>(null)
 const showSettings = ref(false)
 const showFacts = ref(false)
 const relationshipFilter = ref<string[]>([])
@@ -174,7 +176,7 @@ const selectedNode = computed(() =>
 const relationshipOptions = computed(() =>
   [...new Set(data.value?.edges.map((edge) => edge.predicate) ?? [])].map((iri) => ({
     value: iri,
-    label: shortName(iri),
+    label: relationName(iri),
   })),
 )
 function selectNode(iri: string) {
@@ -195,6 +197,15 @@ function clearSelection() {
   selectedIri.value = null
   selectedEdgeIdentity.value = null
   showEvidence.value = false
+}
+function dismissInspector() {
+  if (showEvidence.value) {
+    showEvidence.value = false
+    void nextTick(() => traceButton.value?.$el.focus({ preventScroll: true }))
+  } else {
+    canvas.value?.focusSelection()
+    clearSelection()
+  }
 }
 async function expandSelected() {
   const iri = selectedIri.value
@@ -364,6 +375,15 @@ const semanticFields = useAsyncData((signal) =>
     ? viewTemplateApi.fields(data.value.ontology_id, data.value.ontology_revision, signal)
     : Promise.resolve(null),
 )
+const relationLabels = computed(() =>
+  frozenRelationLabels(
+    data.value,
+    semanticFields.data.value,
+    locale.value,
+    t('enumDictionaries.untranslated'),
+  ),
+)
+const relationName = (iri: string) => relationLabels.value[iri] ?? shortName(iri)
 const semanticConfig = ref<SemanticConfig>({})
 const legacyTemplate = ref(false)
 const semanticContext = computed<SemanticContext>(() => ({
@@ -797,7 +817,7 @@ const centralityRows = computed(() => {
   return [...stats.entries()]
     .map(([iri, value]) => ({
       iri,
-      name: String(graph.nodes.find((node) => node.iri === iri)?.attrs.name ?? iri).slice(0, 30),
+      name: String(graph.nodes.find((node) => node.iri === iri)?.attrs.name ?? iri),
       in: value.in,
       out: value.out,
       total: value.in + value.out,
@@ -951,11 +971,7 @@ function onExport(kind: string) {
         :aria-label="t('graph.replay')"
       />
     </label>
-    <div
-      class="graph-workspace"
-      :aria-busy="loading || expanding"
-      @keydown.esc="showEvidence ? (showEvidence = false) : clearSelection()"
-    >
+    <div class="graph-workspace" :aria-busy="loading || expanding" @keydown.esc="dismissInspector">
       <main class="canvas-area">
         <p v-if="loading || expanding" class="loading-indicator" role="status">
           {{ t('common.loading') }}
@@ -967,6 +983,7 @@ function onExport(kind: string) {
           :neighborhood="!!center"
           :layout-id="layoutId"
           :semantic-context="semanticContext"
+          :relation-labels="relationLabels"
           :flagged-iris="qualityOverlay ? flaggedIris : undefined"
           :highlight-iris="highlightIris"
           :selected-iri="selectedIri"
@@ -991,12 +1008,9 @@ function onExport(kind: string) {
       >
         <div class="inspector-heading">
           <strong>{{ showEvidence ? t('page.graphEvidence') : t('graphUi.inspector') }}</strong
-          ><NButton
-            size="small"
-            quaternary
-            @click="showEvidence ? (showEvidence = false) : clearSelection()"
-            >{{ showEvidence ? t('graphUi.backObject') : t('common.close') }}</NButton
-          >
+          ><NButton size="small" quaternary @click="dismissInspector">{{
+            showEvidence ? t('graphUi.backObject') : t('common.close')
+          }}</NButton>
         </div>
         <div class="inspector-body">
           <template v-if="!showEvidence">
@@ -1026,9 +1040,9 @@ function onExport(kind: string) {
             </template>
             <template v-if="selectedEdge">
               <NTag size="small" :type="selectedEdge.kind === 'DERIVED' ? 'warning' : 'default'">{{
-                t(selectedEdge.kind === 'DERIVED' ? 'graph.derived' : 'graph.direct')
+                t(selectedEdge.kind === 'DERIVED' ? 'graph.derived' : 'graph.directRelation')
               }}</NTag>
-              <h2>{{ shortName(selectedEdge.predicate) }}</h2>
+              <h2>{{ relationName(selectedEdge.predicate) }}</h2>
               <dl class="attribute-list">
                 <dt>{{ t('graph.subject') }}</dt>
                 <dd>{{ selectedEdge.subject }}</dd>
@@ -1046,6 +1060,7 @@ function onExport(kind: string) {
               }}</NAlert>
             </template>
             <NButton
+              ref="traceButton"
               block
               :disabled="selectedEdge?.kind === 'DERIVED' || loading || !!error"
               @click="showEvidence = true"
@@ -1056,7 +1071,7 @@ function onExport(kind: string) {
             <p class="evidence-context">
               {{
                 selectedEdge
-                  ? shortName(selectedEdge.predicate)
+                  ? relationName(selectedEdge.predicate)
                   : selectedNode
                     ? entityName(selectedNode)
                     : ''
@@ -1086,11 +1101,10 @@ function onExport(kind: string) {
         t('graphUi.counts', {
           total: data.entity_total,
           loaded: data.nodes.length,
-          visible: visibleGraph?.nodes.length ?? 0,
-          edges: visibleGraph?.edges.length ?? 0,
+          visible: canvas?.displayCounts.nodes ?? 0,
+          edges: canvas?.displayCounts.edges ?? 0,
         })
-      }}</span
-      ><span>{{ t('graphUi.gestureHint') }}</span>
+      }}</span>
     </footer>
     <NDrawer v-model:show="showSettings" :width="420"
       ><NDrawerContent :title="t('graphUi.filters')" closable
@@ -1230,11 +1244,13 @@ function onExport(kind: string) {
           ><NTabPane name="direct" :tab="t('graph.directRelation')"
             ><GraphFactTable
               :items="visibleGraph.edges.filter((edge) => edge.kind === 'DIRECT')"
+              :relation-labels="relationLabels"
               :graph-revision-id="visibleGraph.graph_revision_id" /></NTabPane
           ><NTabPane name="derived" :tab="t('graph.derived')"
             ><p>{{ t('graph.derivedHint') }}</p>
             <GraphFactTable
               :items="visibleGraph.edges.filter((edge) => edge.kind === 'DERIVED')"
+              :relation-labels="relationLabels"
               :graph-revision-id="visibleGraph.graph_revision_id"
               derived /></NTabPane></NTabs></NDrawerContent
     ></NDrawer>
@@ -1529,6 +1545,7 @@ function onExport(kind: string) {
 }
 .inspector-heading {
   display: flex;
+  flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
@@ -1544,6 +1561,7 @@ function onExport(kind: string) {
 .inspector-body h2 {
   font-size: 18px;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 .object-iri,
 .evidence-context {
@@ -1559,6 +1577,8 @@ function onExport(kind: string) {
   margin: 0;
 }
 .attribute-list dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--text-secondary);
 }

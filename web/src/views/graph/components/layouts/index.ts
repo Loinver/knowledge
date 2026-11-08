@@ -990,6 +990,19 @@ function sectorPath(
 ): string {
   const point = (radius: number, angle: number) =>
     `${(cx + radius * Math.sin(angle)).toFixed(2)},${(cy - radius * Math.cos(angle)).toFixed(2)}`
+  // A full ring needs two arcs per circle: one arc with coincident endpoints has no area.
+  if (a1 - a0 >= Math.PI * 2 - 1e-6) {
+    const middle = a0 + Math.PI
+    return [
+      `M ${point(outer, a0)}`,
+      `A ${outer} ${outer} 0 1 1 ${point(outer, middle)}`,
+      `A ${outer} ${outer} 0 1 1 ${point(outer, a0)}`,
+      `L ${point(inner, a0)}`,
+      `A ${inner} ${inner} 0 1 0 ${point(inner, middle)}`,
+      `A ${inner} ${inner} 0 1 0 ${point(inner, a0)}`,
+      'Z',
+    ].join(' ')
+  }
   const largeArc = a1 - a0 > Math.PI ? 1 : 0
   return [
     `M ${point(outer, a0)}`,

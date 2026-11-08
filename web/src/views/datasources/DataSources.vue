@@ -16,7 +16,7 @@ import {
   NTag,
   useMessage,
 } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
@@ -55,6 +55,7 @@ const formError = ref('')
 const testResult = ref<TestConnectionResponse | null>(null)
 const form = ref<SourceForm>(emptyForm())
 let controller: AbortController | undefined
+let testController: AbortController | undefined
 let alive = true
 
 const kindOptions = computed(() => [
@@ -111,6 +112,18 @@ function connectionRequest() {
   }
 }
 
+function invalidateConnectionTest() {
+  testController?.abort()
+  testController = undefined
+  testing.value = false
+  testResult.value = null
+  formError.value = ''
+}
+
+// Invalidate synchronously, including A → B → A edits in the same update.
+watch(connectionRequest, invalidateConnectionTest, { flush: 'sync' })
+watch(showCreate, invalidateConnectionTest, { flush: 'sync' })
+
 function resetForm() {
   form.value = emptyForm()
   formError.value = ''
@@ -156,16 +169,23 @@ async function load() {
 }
 
 async function testConnection() {
-  if (testing.value || saving.value) return
+  if (!showCreate.value || testing.value || saving.value) return
   if (!validateForm()) return
+  const current = new AbortController()
+  testController = current
+  const isCurrent = () => alive && showCreate.value && testController === current
   testing.value = true
   testResult.value = null
   try {
-    testResult.value = await datasourcesApi.testConnection(connectionRequest())
+    const result = await datasourcesApi.testConnection(connectionRequest(), current.signal)
+    if (isCurrent()) testResult.value = result
   } catch (err) {
-    formError.value = toMessage(err)
+    if (isCurrent()) formError.value = toMessage(err)
   } finally {
-    testing.value = false
+    if (isCurrent()) {
+      testController = undefined
+      testing.value = false
+    }
   }
 }
 
@@ -259,6 +279,7 @@ onMounted(() => void load())
 onBeforeUnmount(() => {
   alive = false
   controller?.abort()
+  invalidateConnectionTest()
 })
 
 const createVisible = useDraftGuard(showCreate, () => form.value)
@@ -384,6 +405,7 @@ const editVisible = useDraftGuard(showEdit, () => editForm.value)
       v-model:show="editVisible"
       preset="card"
       class="source-modal"
+      style="width: min(640px, calc(100vw - 32px))"
       :title="t('dataAccess.sources.editTitle')"
     >
       <NForm label-placement="top">
@@ -417,6 +439,7 @@ const editVisible = useDraftGuard(showEdit, () => editForm.value)
       v-model:show="createVisible"
       preset="card"
       class="source-modal"
+      style="width: min(640px, calc(100vw - 32px))"
       :title="t('dataAccess.sources.createTitle')"
       @after-leave="resetForm"
     >
@@ -550,9 +573,6 @@ const editVisible = useDraftGuard(showEdit, () => editForm.value)
   color: var(--text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.source-modal {
-  width: min(640px, calc(100vw - 32px));
 }
 .form-grid {
   display: grid;

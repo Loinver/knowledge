@@ -18,12 +18,14 @@ defineProps<{ title: string; description?: string }>()
 <style scoped>
 .page-header {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: var(--space-4);
 }
 .titles {
+  flex: 1 1 240px;
   min-width: 0;
 }
 .titles h1 {
@@ -31,6 +33,7 @@ defineProps<{ title: string; description?: string }>()
   font-size: var(--font-h1);
   font-weight: 600;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 .titles p {
   max-width: 74ch;
@@ -42,6 +45,8 @@ defineProps<{ title: string; description?: string }>()
 .actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: var(--space-2);
   align-items: center;
 }

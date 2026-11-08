@@ -168,5 +168,11 @@ export function nodeNameLines(name: string): string[] {
     if (line === 1 && offset < chars.length) text = `${[...text].slice(0, -1).join('')}…`
     lines.push(text)
   }
+  // Keep six-character names from ending with a single isolated glyph on the second line.
+  if (lines.length === 2 && [...lines[1]!].length === 1) {
+    const first = [...lines[0]!]
+    lines[1] = first.pop()! + lines[1]
+    lines[0] = first.join('')
+  }
   return lines
 }

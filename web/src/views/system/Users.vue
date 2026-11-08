@@ -55,6 +55,7 @@ const showEdit = computed({
 })
 const editForm = ref<{ role: Role; status: UserStatus }>({ role: 'VIEWER', status: 'ACTIVE' })
 const saving = ref(false)
+const editError = ref('')
 
 // 公开注册默认关闭，管理员建号是唯一的建号入口，所以这个入口必须存在。
 const showCreate = ref(false)
@@ -187,6 +188,7 @@ function search() {
 
 function openEdit(user: AuthUser) {
   if (!auth.isAdmin) return
+  editError.value = ''
   editing.value = user
   editForm.value = { role: user.role, status: user.status }
 }
@@ -195,13 +197,14 @@ async function save() {
   if (!auth.isAdmin || saving.value) return
   if (!editing.value) return
   saving.value = true
+  editError.value = ''
   try {
     const updated = await authApi.updateUser(editing.value.id, editForm.value)
     items.value = items.value.map((item) => (item.id === updated.id ? updated : item))
     editing.value = null
     message.success(t('system.userUpdated'))
   } catch (err) {
-    error.value = toMessage(err)
+    editError.value = toMessage(err)
   } finally {
     saving.value = false
   }
@@ -389,10 +392,12 @@ onMounted(load)
       preset="card"
       :title="t('system.editUser')"
       class="edit-modal"
+      style="width: min(480px, calc(100vw - 32px))"
       :mask-closable="!saving"
       :close-on-esc="!saving"
       :closable="!saving"
     >
+      <NAlert v-if="editError" type="error" class="modal-alert">{{ editError }}</NAlert>
       <NFormItem :label="t('auth.username')">{{ editing?.username }}</NFormItem>
       <NFormItem :label="t('account.role')">
         <NSelect v-model:value="editForm.role" :options="roleOptions" />
@@ -415,6 +420,7 @@ onMounted(load)
       preset="card"
       :title="t('system.resetLinkTitle')"
       class="edit-modal"
+      style="width: min(480px, calc(100vw - 32px))"
     >
       <template v-if="resetLink">
         <NAlert type="warning" class="modal-alert">
@@ -437,6 +443,7 @@ onMounted(load)
       preset="card"
       :title="t('system.createUser')"
       class="edit-modal"
+      style="width: min(480px, calc(100vw - 32px))"
       :mask-closable="!creating"
       :close-on-esc="!creating"
       :closable="!creating"
@@ -500,9 +507,6 @@ onMounted(load)
 .pagination {
   justify-content: flex-end;
   margin-top: var(--space-4);
-}
-.edit-modal {
-  width: min(480px, 100vw);
 }
 .modal-alert {
   margin-bottom: var(--space-3);

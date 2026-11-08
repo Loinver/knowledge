@@ -58,6 +58,11 @@ export function graphPaths(
         let label: { x: number; y: number } | undefined
         const radius =
           typeof circles?.radius === 'number' ? circles.radius : circles?.radius(source)
+        const targetRadius =
+          typeof circles?.radius === 'number' ? circles.radius : circles?.radius(target)
+        // Enlarged selected nodes keep readable labels at distant zoom; their parallel
+        // curves and self-loop labels need the same spacing in screen coordinates.
+        const separation = Math.max(1, (radius ?? 42) / 42, (targetRadius ?? 42) / 42)
         const circlePoint = (node: PositionedNode, x: number, y: number) => {
           const length = Math.hypot(x - node.x, y - node.y) || 1
           return {
@@ -118,7 +123,7 @@ export function graphPaths(
           }
         }
         if (source.iri === target.iri) {
-          const bend = Math.max(90, (radius ?? 42) * 2) + index * 35
+          const bend = Math.max(90, (radius ?? 42) * 2) + index * 35 * separation
           const insetX = radius ? radius * Math.SQRT1_2 : 40
           const insetY = radius ? radius * Math.SQRT1_2 : 26
           path = `M ${source.x - insetX} ${source.y - insetY} C ${source.x - bend} ${source.y - bend}, ${source.x + bend} ${source.y - bend}, ${source.x + insetX} ${source.y - insetY}`
@@ -128,7 +133,7 @@ export function graphPaths(
           const dx = last.x - first.x
           const dy = last.y - first.y
           const length = Math.hypot(dx, dy) || 1
-          const offset = (index - (group.length - 1) / 2) * 42
+          const offset = (index - (group.length - 1) / 2) * 42 * separation
           const cx = (first.x + last.x) / 2 - (dy / length) * offset
           const cy = (first.y + last.y) / 2 + (dx / length) * offset
           const boundary = (node: typeof source) => {

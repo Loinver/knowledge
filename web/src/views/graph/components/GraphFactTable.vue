@@ -7,7 +7,12 @@ import { RouterLink } from 'vue-router'
 
 import type { GraphFact } from '@/api/graph'
 
-const props = defineProps<{ items: GraphFact[]; graphRevisionId: number; derived?: boolean }>()
+const props = defineProps<{
+  items: GraphFact[]
+  graphRevisionId: number
+  derived?: boolean
+  relationLabels?: Record<string, string>
+}>()
 const { t } = useI18n()
 const formatProps = (value: GraphFact['props']) =>
   value
@@ -23,7 +28,9 @@ const columns = computed<DataTableColumns<GraphFact>>(() => [
     ellipsis: { tooltip: true },
     render: (row: GraphFact) =>
       key === 'predicate'
-        ? row[key]
+        ? props.relationLabels?.[row[key]]
+          ? h('span', { title: row[key] }, props.relationLabels[row[key]])
+          : row[key]
         : h(
             RouterLink,
             {

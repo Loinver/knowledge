@@ -56,6 +56,20 @@ const edge = (id, subject = 'a', object_ = 'b', kind = 'DIRECT') => ({
   kind,
 })
 
+test('selected self-loop and parallel labels retain screen spacing at distant zoom', () => {
+  const nodes = [node('a', 0, 0), node('b', 2000, 0)]
+  const edges = [edge(1, 'a', 'a'), edge(2, 'a', 'a'), edge(3), edge(4, 'b', 'a')]
+  for (const scale of [0.12, 0.5, 1]) {
+    const paths = graphPaths(nodes, edges, undefined, {
+      radius: (entry) => NODE_RADIUS * (entry.iri === 'a' ? 1 / scale : 1),
+      originalNodes: nodes,
+    })
+    assert.ok(Math.abs(paths[0].label.y - paths[1].label.y) * scale >= 24)
+    assert.ok(Math.abs(paths[2].label.y - paths[3].label.y) * scale >= 20)
+    assert.equal(new Set(paths.map((path) => path.path)).size, 4)
+  }
+})
+
 test('ordinary wheel pans in pixels, lines and pages without changing zoom', () => {
   assert.deepEqual(wheelCamera(camera, wheel(3, 5), anchor, size), { ...camera, x: 28, y: -53 })
   assert.deepEqual(wheelCamera(camera, wheel(-2, 3, 1), anchor, size), { ...camera, x: 63, y: -96 })
@@ -161,6 +175,8 @@ test('distant zoom reduces ordinary labels but always retains selected labels', 
 })
 
 test('business names use at most two compact lines without splitting Unicode code points', () => {
+  assert.deepEqual(nodeNameLines('巡检一期合同'), ['巡检一期', '合同'])
+  assert.deepEqual(nodeNameLines('设备关系图谱'), ['设备关系', '图谱'])
   assert.deepEqual(nodeNameLines('北京示例科技有限公司研发中心'), ['北京示例科', '技有限公…'])
   assert.deepEqual(nodeNameLines('Short name'), ['Short name'])
   const lines = nodeNameLines('😀😀😀😀😀😀😀😀😀😀😀')

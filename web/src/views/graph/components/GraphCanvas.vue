@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { NAlert } from 'naive-ui'
-import { computed, nextTick, ref, useId } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { GraphView } from '@/api/graph'
 
 import { graphPaths } from './graphLayout'
+import { nodeAppearance } from './graphPresentation'
 import type { Camera, Point } from './graphViewport'
 import {
   centerCamera,
@@ -35,6 +36,7 @@ const props = defineProps<{
   highlightIris?: Set<string>
   selectedIri?: string | null
   selectedEdgeKey?: string | null
+  relationLabels?: Record<string, string>
 }>()
 const emit = defineEmits<{ select: [iri: string]; selectEdge: [edge: GraphEdge] }>()
 const { t } = useI18n()
@@ -68,7 +70,16 @@ const {
   getContext,
   restoreContext,
 } = useGraphViewport(scrollEl, () => props.graph, layout, layoutKey)
-defineExpose({ focus, fitView, getContext, restoreContext })
+function focusSelection() {
+  const selected = scrollEl.value?.querySelector<SVGElement>('[aria-pressed="true"]')
+  const target = selected ?? scrollEl.value
+  void nextTick(() => target?.focus({ preventScroll: true }))
+}
+const displayCounts = computed(() => ({
+  nodes: marks.value ? marks.value.filter((mark) => mark.iri).length : nodes.value.length,
+  edges: marks.value ? 0 : paths.value.filter((path) => path.path).length,
+}))
+defineExpose({ focus, focusSelection, fitView, getContext, restoreContext, displayCounts })
 
 const legendTypes = computed(() => [
   ...new Set([
@@ -77,7 +88,9 @@ const legendTypes = computed(() => [
   ]),
 ])
 const typePaint = (type: string) =>
-  `color-mix(in srgb, ${typeColor(type, legendTypes.value)}, white var(--graph-type-tint, 0%))`
+  marks.value
+    ? typeColor(type, legendTypes.value)
+    : `color-mix(in srgb, ${nodeAppearance(type).color}, white var(--graph-type-tint, 0%))`
 const nodeFlagged = (iri: string) => props.flaggedIris?.has(iri) ?? false
 const nodeHighlighted = (iri: string) => props.highlightIris?.has(iri) ?? false
 const selectedFact = computed(() =>
@@ -91,6 +104,19 @@ const importantNode = (iri: string) =>
 // Keep selected labels readable inside their circles even at distant zoom levels.
 const nodeDisplayScale = (iri: string) =>
   importantNode(iri) ? Math.max(1, 1 / camera.value.scale) : 1
+// Paint the active context last so distant nodes cannot obscure its enlarged label.
+const paintOrder = (iri: string) => (props.selectedIri === iri ? 2 : Number(importantNode(iri)))
+const paintedNodes = computed(() =>
+  [...nodes.value].sort((a, b) => paintOrder(a.iri) - paintOrder(b.iri)),
+)
+watch(paintedNodes, () => {
+  const active = typeof document === 'undefined' ? null : document.activeElement
+  if (active && scrollEl.value?.contains(active)) {
+    void nextTick(() => {
+      if (active.isConnected) (active as SVGElement | HTMLElement).focus({ preventScroll: true })
+    })
+  }
+})
 const paths = computed(() =>
   graphPaths(nodes.value, layout.value.edges ?? props.graph.edges, layout.value.edgePaths, {
     radius: (node) => NODE_RADIUS * nodeDisplayScale(node.iri),
@@ -107,11 +133,11 @@ const importantEdge = (edge: GraphEdge) =>
   edge.subject === props.selectedIri ||
   edge.object_ === props.selectedIri
 const edgeName = (edge: GraphEdge) =>
-  `${shortName(edge.predicate)}${edge.kind === 'DERIVED' ? ` · ${t('graph.derived')}` : ''}`
+  `${props.relationLabels?.[edge.predicate] ?? shortName(edge.predicate)}${edge.kind === 'DERIVED' ? ` · ${t('graph.derived')}` : ''}`
 const edgeDescription = (edge: GraphEdge) =>
   t('graph.factDescription', {
     subject: edge.subject,
-    predicate: edge.predicate,
+    predicate: `${edgeName(edge)} · ${edge.predicate}`,
     object: edge.object_,
   })
 const edgeLabelScale = (edge: GraphEdge) =>
@@ -124,16 +150,7 @@ const nodeBadgeText = (node: GraphNode) =>
     ? t('graph.entityCount', { count: node.attrs.__typeCount__ })
     : ''
 
-// Abstract type symbols are deterministic by IRI; their explanation lives in the legend.
-const typeIcon = (iri: string) => {
-  const index = [...iri].reduce((value, char) => value + char.codePointAt(0)!, 0) % 4
-  return [
-    'M-6-5H6V5H-6Z M-2-5V5 M-6-1H6',
-    'M0-7L7 0 0 7-7 0Z M-3 0H3',
-    'M-6 6V-6H6V6Z M-2-2H2V2H-2Z',
-    'M0-7V0 M-6 6V0H6V6 M-8 6H-4 M4 6H8 M-2-7H2',
-  ][index]
-}
+const typeIcon = (iri: string) => nodeAppearance(iri).icon
 const showLegend = ref(false)
 const showMinimap = ref(false)
 const legendButton = ref<HTMLButtonElement | null>(null)
@@ -248,8 +265,51 @@ function finishDrag(event?: PointerEvent, cancel = false) {
 function onNodeClick(event: MouseEvent, iri: string) {
   if (event.detail === 0 && !suppressClick) emit('select', iri)
 }
+let tabNavigation: KeyboardEvent | null = null
+function recordTabNavigation(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return
+  tabNavigation = event
+  // Native focus follows keydown within this task. Do not redirect later
+  // programmatic focus, such as returning from the inspector to its selection.
+  setTimeout(() => {
+    if (tabNavigation === event) tabNavigation = null
+  }, 0)
+}
+onMounted(() => document.addEventListener('keydown', recordTabNavigation, true))
+onBeforeUnmount(() => document.removeEventListener('keydown', recordTabNavigation, true))
+function onNodeFocus(event: FocusEvent) {
+  const previous = event.relatedTarget as Element | null
+  if (
+    !tabNavigation ||
+    (previous?.classList.contains('node') && scrollEl.value?.contains(previous))
+  )
+    return
+  const boundary = tabNavigation.shiftKey ? nodes.value.at(-1) : nodes.value[0]
+  tabNavigation = null
+  const elements = [...(scrollEl.value?.querySelectorAll<SVGElement>('.node') ?? [])]
+  elements.find((element) => element.dataset.iri === boundary?.iri)?.focus({ preventScroll: true })
+}
+function onNodeTab(event: KeyboardEvent, iri: string) {
+  const index = nodes.value.findIndex((node) => node.iri === iri)
+  const next = nodes.value[index + (event.shiftKey ? -1 : 1)]
+  const elements = [...(scrollEl.value?.querySelectorAll<SVGElement>('.node') ?? [])]
+  if (next) {
+    event.preventDefault()
+    elements.find((element) => element.dataset.iri === next.iri)?.focus({ preventScroll: true })
+  } else {
+    // Let native Tab leave the node collection from its physical boundary, even
+    // when selection has raised a different node to the last paint position.
+    const boundary = event.shiftKey ? elements[0] : elements.at(-1)
+    boundary?.focus({ preventScroll: true })
+  }
+}
 function onCanvasKey(event: KeyboardEvent) {
   if (event.key === 'Escape') {
+    // Dismiss only the active canvas interaction; keep the object's inspector open.
+    if (drag.value || showLegend.value || showMinimap.value) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
     finishDrag(undefined, true)
     spacePressed.value = false
     if (showLegend.value) closeLegend()
@@ -375,8 +435,8 @@ function onCanvasKey(event: KeyboardEvent) {
               viewBox="0 0 10 10"
               refX="9"
               refY="5"
-              markerWidth="7"
-              markerHeight="7"
+              markerWidth="5"
+              markerHeight="5"
               orient="auto-start-reverse"
             >
               <path d="M 0 0 L 10 5 L 0 10 z" :class="`arrow-${kind}`" />
@@ -511,7 +571,7 @@ function onCanvasKey(event: KeyboardEvent) {
                 </g>
               </g>
               <g
-                v-for="node in nodes"
+                v-for="node in paintedNodes"
                 :key="node.iri"
                 :transform="`translate(${node.x},${node.y})`"
                 class="node"
@@ -525,8 +585,11 @@ function onCanvasKey(event: KeyboardEvent) {
                 :aria-label="t('graph.exploreEntity', { iri: nodeName(node) })"
                 :aria-pressed="selectedIri === node.iri"
                 :data-iri="node.iri"
+                :style="{ '--node-color': typePaint(node.type_iri) }"
                 @pointerdown.stop.prevent="startDrag($event, node.iri)"
                 @click.stop="onNodeClick($event, node.iri)"
+                @focus="onNodeFocus"
+                @keydown.tab="onNodeTab($event, node.iri)"
                 @keydown.enter.prevent.stop="emit('select', node.iri)"
                 @keydown.space.prevent.stop="emit('select', node.iri)"
               >
@@ -535,18 +598,15 @@ function onCanvasKey(event: KeyboardEvent) {
                 </title>
                 <g :transform="`scale(${nodeDisplayScale(node.iri)})`">
                   <circle class="selection-ring" :r="NODE_RADIUS + 5" />
-                  <circle
-                    class="node-body"
-                    :r="NODE_RADIUS"
-                    :style="{ '--node-color': typePaint(node.type_iri) }"
-                  />
-                  <path
-                    :d="typeIcon(node.type_iri)"
-                    :transform="`translate(0,${showGraphLabel(camera.scale, importantNode(node.iri), 'node') ? -20 : 0})`"
-                    class="type-icon"
-                    :style="{ color: typePaint(node.type_iri) }"
+                  <circle class="node-body" :r="NODE_RADIUS" />
+                  <g
+                    :transform="`translate(0,${showGraphLabel(camera.scale, importantNode(node.iri), 'node') ? -17 : 0})`"
+                    class="node-icon"
                     aria-hidden="true"
-                  />
+                  >
+                    <circle r="13" class="icon-disc" />
+                    <path :d="typeIcon(node.type_iri)" class="type-icon" />
+                  </g>
                   <text
                     v-if="showGraphLabel(camera.scale, importantNode(node.iri), 'node')"
                     text-anchor="middle"
@@ -556,7 +616,7 @@ function onCanvasKey(event: KeyboardEvent) {
                       v-for="(line, index) in nodeNameLines(nodeName(node))"
                       :key="index"
                       x="0"
-                      :y="index * 15 + 7"
+                      :y="index * 15 + (nodeNameLines(nodeName(node)).length > 1 ? 9 : 13)"
                     >
                       {{ line }}
                     </tspan>
@@ -842,8 +902,8 @@ button svg {
 }
 .edge {
   fill: none;
-  stroke: var(--text-tertiary);
-  stroke-width: 1.6;
+  stroke: color-mix(in srgb, var(--text-tertiary) 62%, var(--canvas));
+  stroke-width: 1.25;
   pointer-events: none;
 }
 .edge-hit {
@@ -864,10 +924,11 @@ button svg {
 .edge-label text {
   fill: var(--text-secondary);
   stroke: var(--canvas, var(--bg-subtle));
-  stroke-width: 6;
+  stroke-width: 5;
   stroke-linejoin: round;
   paint-order: stroke;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
 }
 .edge-group.derived .edge-label text {
   fill: var(--graph-derived);
@@ -883,7 +944,7 @@ button svg {
   filter: drop-shadow(0 0 2px var(--accent));
 }
 .arrow-direct {
-  fill: var(--text-tertiary);
+  fill: color-mix(in srgb, var(--text-tertiary) 72%, var(--canvas));
 }
 .arrow-derived {
   fill: var(--graph-derived);
@@ -893,11 +954,19 @@ button svg {
 }
 .node {
   cursor: pointer;
+  outline: none;
 }
 .node-body {
-  fill: var(--bg-surface);
-  stroke: var(--node-color, var(--border-strong));
-  stroke-width: 1.5;
+  fill: color-mix(in srgb, var(--node-color) 6%, var(--bg-surface));
+  stroke: color-mix(in srgb, var(--node-color) 40%, var(--bg-surface));
+  stroke-width: 1.25;
+}
+.node-icon {
+  color: var(--node-color);
+  pointer-events: none;
+}
+.icon-disc {
+  fill: color-mix(in srgb, var(--node-color) 13%, var(--bg-surface));
 }
 .selection-ring {
   fill: none;
@@ -908,11 +977,13 @@ button svg {
 .node.highlighted .node-body,
 .node.center .node-body,
 .node:hover .node-body {
-  stroke: var(--accent);
-  stroke-width: 2.5;
+  stroke: var(--node-color);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--node-color) 11%, var(--bg-surface));
 }
 .node.selected .selection-ring {
   stroke: var(--accent);
+  stroke-width: 2;
 }
 .node.highlighted .selection-ring {
   stroke: var(--accent);
@@ -925,6 +996,7 @@ button svg {
 .node-name {
   fill: var(--text);
   font-size: 12px;
+  font-weight: 500;
   pointer-events: none;
 }
 .type-icon {

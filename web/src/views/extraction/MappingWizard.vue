@@ -3009,9 +3009,6 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .step-content,
   .wizard-heading {
-    position: sticky;
-    top: 0;
-    z-index: 3;
     padding: var(--space-3);
   }
   .form-grid,

@@ -248,7 +248,12 @@ onBeforeUnmount(() => {
       <template v-if="data">
         <NTabs type="line" animated>
           <NTabPane name="basic" :tab="t('relationDetail.basic')">
-            <NDescriptions :column="2" bordered label-placement="left">
+            <NDescriptions
+              :column="2"
+              bordered
+              label-placement="left"
+              content-style="overflow-wrap: anywhere"
+            >
               <NDescriptionsItem :label="t('common.name')">
                 <span class="mono">{{ data.name }}</span>
               </NDescriptionsItem>
@@ -284,7 +289,12 @@ onBeforeUnmount(() => {
 
           <NTabPane name="endpoints" :tab="t('relationDetail.endpoints')">
             <p class="hint">{{ t('relationDetail.endpointsHint') }}</p>
-            <NDescriptions :column="1" bordered label-placement="left">
+            <NDescriptions
+              :column="1"
+              bordered
+              label-placement="left"
+              content-style="overflow-wrap: anywhere"
+            >
               <NDescriptionsItem :label="t('relation.domain')">
                 {{ endpointName(data.domain_spec.type_id) }}
                 ·

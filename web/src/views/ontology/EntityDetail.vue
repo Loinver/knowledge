@@ -796,7 +796,7 @@ const renameVisible = useDraftGuard(showRename, () => renameValue.value)
     <n-spin :show="loading">
       <n-tabs v-if="data" type="line" animated>
         <n-tab-pane name="basic" :tab="t('entityType.basic')">
-          <n-descriptions :column="2" bordered>
+          <n-descriptions :column="2" bordered content-style="overflow-wrap: anywhere">
             <n-descriptions-item :label="t('common.name')">{{ data.name }}</n-descriptions-item>
             <n-descriptions-item :label="t('common.iri')">{{ data.iri }}</n-descriptions-item>
             <n-descriptions-item :label="t('common.status')"

@@ -1089,6 +1089,7 @@ function onNodeDown(key: string, event: MouseEvent) {
   selectNode(key)
   if (!canEdit.value) return
   event.preventDefault()
+  canvasEl.value?.focus({ preventScroll: true })
   dragging.value = {
     key,
     start: { x: event.clientX, y: event.clientY },
@@ -1105,6 +1106,7 @@ function onBackgroundDown(event: MouseEvent) {
   )
     return
   event.preventDefault()
+  canvasEl.value?.focus({ preventScroll: true })
   panning.value = { start: { x: event.clientX, y: event.clientY }, origin: { ...pan.value } }
   window.addEventListener('mousemove', onNodeMove)
   window.addEventListener('mouseup', onNodeUp)
@@ -2739,15 +2741,18 @@ onBeforeUnmount(() => {
 
 .inspect-title b {
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .inspect-iri {
   max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .inspect-kv {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 72px minmax(0, 1fr);
   gap: 7px 10px;
   margin: 0;
   font-size: var(--font-caption);

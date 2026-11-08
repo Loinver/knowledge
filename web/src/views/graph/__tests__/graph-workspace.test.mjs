@@ -31,7 +31,7 @@ const graph = (nodes = ['a'], edges = [], revision = 1) => ({
   nodes: nodes.map(node),
   edges,
 })
-async function setup(overrides = {}) {
+async function setup(overrides = {}, templateOverrides = {}) {
   return mount(
     'views/graph/GraphBrowse.vue',
     {
@@ -42,13 +42,74 @@ async function setup(overrides = {}) {
           recommendations: async () => ({ recommendations: [] }),
           ...overrides,
         },
-        viewTemplateApi: {},
+        viewTemplateApi: { list: async () => ({ items: [] }), ...templateOverrides },
       },
     },
-    'data,loading,error,reload,selectedIri,selectedEdge,selectNode,selectEdge,expandSelected,collapseSelected,branches,excludedTypes,showEvidence,evidence,pathFrom,pathTo,pathResult,findPath',
+    'data,loading,error,reload,selectedIri,selectedEdge,selectNode,selectEdge,expandSelected,collapseSelected,branches,excludedTypes,showEvidence,evidence,pathFrom,pathTo,pathResult,findPath,relationLabels,semanticFields',
     '/?graph=1',
   )
 }
+
+test('relation labels follow the current frozen version through A-B-A switches and failures', async () => {
+  const first = deferred(),
+    second = deferred()
+  const pendingSignals = []
+  let calls = 0
+  const fields = (revision, label) => ({
+    ontology_id: 1,
+    ontology_revision: revision,
+    stale: true,
+    fields: [
+      {
+        iri: 'https://example.org/model/knows',
+        name: 'knows',
+        kind: 'RELATION',
+        label_i18n: { 'en-US': label },
+      },
+    ],
+  })
+  const ctx = await setup(
+    {
+      view: async ({ graph_revision_id: revision }) => ({
+        ...graph(['a', 'b'], [edge(1, 'a', 'b')], revision),
+        ontology_id: 1,
+        ontology_revision: revision === 2 ? 2 : 1,
+        instance_namespace: `https://example.org/result-${revision}/`,
+      }),
+    },
+    {
+      fields: (_ontology, revision, signal) => {
+        calls++
+        if (calls <= 2) {
+          pendingSignals.push(signal)
+          return calls === 1 ? first.promise : second.promise
+        }
+        if (calls === 4) return Promise.reject({ code: 'KG.INTERNAL_ERROR' })
+        return Promise.resolve(fields(revision, 'Current frozen label'))
+      },
+    },
+  )
+  try {
+    await ctx.router.push('/?graph=2')
+    await settle()
+    assert.deepEqual({ ...ctx.vm.relationLabels }, {})
+    await ctx.router.push('/?graph=1')
+    await settle()
+    assert.equal(ctx.vm.relationLabels.knows, 'Current frozen label')
+    first.resolve(fields(1, 'Late A label'))
+    second.resolve(fields(2, 'Late B label'))
+    await settle()
+    assert.ok(pendingSignals.every((signal) => signal.aborted))
+    assert.equal(ctx.vm.relationLabels.knows, 'Current frozen label')
+    ctx.vm.semanticFields.reload()
+    await settle()
+    assert.deepEqual({ ...ctx.vm.relationLabels }, {})
+    assert.notEqual(ctx.vm.semanticFields.error.value, '')
+    assert.equal(ctx.vm.data.edges[0].predicate, 'knows')
+  } finally {
+    ctx.stop()
+  }
+})
 
 test('selection is local and shared branch nodes survive collapse', async () => {
   let calls = 0
