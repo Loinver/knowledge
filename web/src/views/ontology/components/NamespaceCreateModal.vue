@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import type { Namespace } from '@/api/namespaces'
 import { namespacesApi } from '@/api/namespaces'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
 
 /**
  * 登记命名空间。命名空间管理页与实体/关系类型的新建抽屉共用：
@@ -27,6 +28,7 @@ const form = ref(empty())
 const formRef = ref<FormInst | null>(null)
 const saving = ref(false)
 const error = ref('')
+const editorVisible = useDraftGuard(show, () => form.value)
 
 const rules = computed<FormRules>(() => ({
   prefix: [
@@ -50,12 +52,14 @@ function failText(err: unknown): string {
 }
 
 async function submit() {
+  if (saving.value) return
   error.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (saving.value) return
   saving.value = true
   try {
     const labels: Record<string, string> = {}
@@ -86,7 +90,7 @@ watch(show, (open) => {
 
 <template>
   <NModal
-    v-model:show="show"
+    v-model:show="editorVisible"
     preset="card"
     :title="t('namespace.create')"
     :style="{ width: 'min(480px, calc(100vw - 32px))' }"
@@ -118,7 +122,9 @@ watch(show, (open) => {
     <NAlert v-if="error" type="error" class="error">{{ error }}</NAlert>
     <template #footer>
       <div class="actions">
-        <NButton :disabled="saving" @click="show = false">{{ t('common.cancel') }}</NButton>
+        <NButton :disabled="saving" @click="editorVisible = false">{{
+          t('common.cancel')
+        }}</NButton>
         <NButton type="primary" :loading="saving" @click="submit">{{ t('common.save') }}</NButton>
       </div>
     </template>

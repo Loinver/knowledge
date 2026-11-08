@@ -3,9 +3,10 @@ import type { FormInst, FormRules } from 'naive-ui'
 import {
   NAlert,
   NButton,
-  NCard,
   NCheckbox,
   NDatePicker,
+  NDrawer,
+  NDrawerContent,
   NEmpty,
   NForm,
   NFormItem,
@@ -14,8 +15,9 @@ import {
   NSpace,
   NSpin,
   NTable,
+  NTag,
 } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -27,16 +29,22 @@ import type { Mapping } from '@/api/mappings'
 import { mappingsApi } from '@/api/mappings'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
 
 const { t, locale } = useI18n()
 const router = useRouter()
 const { toMessage } = useApiError()
 
+const auth = useAuthStore()
+const canWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
+const showCreate = ref(false)
+const cancellationRequested = ref<number[]>([])
 const tasks = ref<ExtractionTask[]>([])
 const mappings = ref<Mapping[]>([])
 const datasources = ref<DatasourceBrief[]>([])
 const loading = ref(false)
 const optionLoading = ref(false)
+const revisionLoading = ref(false)
 const taskError = ref('')
 const createError = ref('')
 const notice = ref('')
@@ -68,8 +76,15 @@ const datasourceOptions = computed(() =>
 )
 const canCreate = computed(
   () =>
-    Boolean(selectedMappingId.value && selectedDatasourceId.value && publishedRevisionId.value) &&
+    canWrite.value &&
+    Boolean(
+      namespace.value.trim() &&
+      selectedMappingId.value &&
+      selectedDatasourceId.value &&
+      publishedRevisionId.value,
+    ) &&
     !creating.value &&
+    !revisionLoading.value &&
     !optionLoading.value,
 )
 const rules = computed<FormRules>(() => ({
@@ -120,7 +135,11 @@ function progressText(task: ExtractionTask): string {
 }
 
 function canCancel(task: ExtractionTask): boolean {
-  return task.status === 'PENDING' || task.status === 'RUNNING'
+  return (
+    canWrite.value &&
+    !cancellationRequested.value.includes(task.id) &&
+    (task.status === 'PENDING' || task.status === 'RUNNING')
+  )
 }
 
 async function loadTasks(): Promise<void> {
@@ -133,6 +152,10 @@ async function loadTasks(): Promise<void> {
     const items = await extractionApi.tasks(page.value, controller.signal)
     if (controller.signal.aborted) return
     tasks.value = items
+    cancellationRequested.value = cancellationRequested.value.filter(
+      (id) =>
+        !items.some((item) => item.id === id && !['PENDING', 'RUNNING'].includes(item.status)),
+    )
   } catch (err) {
     if (!controller.signal.aborted) taskError.value = toMessage(err)
   } finally {
@@ -145,6 +168,7 @@ async function loadOptions(): Promise<void> {
   const controller = new AbortController()
   optionController = controller
   optionLoading.value = true
+  createError.value = ''
   try {
     const [mappingItems, datasourceItems] = await Promise.all([
       mappingsApi.list(controller.signal),
@@ -165,6 +189,7 @@ async function chooseMapping(value: number | null): Promise<void> {
   selectedMappingId.value = value
   publishedRevisionId.value = null
   createError.value = ''
+  revisionLoading.value = value !== null
   if (value === null) return
   try {
     const revision = await mappingsApi.published(value)
@@ -173,6 +198,8 @@ async function chooseMapping(value: number | null): Promise<void> {
     publishedRevisionId.value = revision.id
   } catch (err) {
     if (!disposed && generation === mappingGeneration) createError.value = toMessage(err)
+  } finally {
+    if (!disposed && generation === mappingGeneration) revisionLoading.value = false
   }
 }
 
@@ -196,13 +223,15 @@ async function createTask(): Promise<void> {
       incremental: incremental.value,
       run_after: runAfter.value === null ? null : new Date(runAfter.value).toISOString(),
     })
+    if (disposed) return
+    showCreate.value = false
     notice.value = t('tasks.createdNotice', { id: task.id })
     page.value = 1
     await loadTasks()
   } catch (err) {
-    createError.value = toMessage(err)
+    if (!disposed) createError.value = toMessage(err)
   } finally {
-    creating.value = false
+    if (!disposed) creating.value = false
   }
 }
 
@@ -212,24 +241,32 @@ async function cancelTask(task: ExtractionTask): Promise<void> {
   notice.value = ''
   try {
     const cancelled = await extractionApi.cancelTask(task.id)
-    notice.value = t('tasks.cancelled', { id: cancelled.id })
+    if (disposed) return
+    const complete = cancelled.status === 'CANCELLED'
+    if (!complete && ['PENDING', 'RUNNING'].includes(cancelled.status))
+      cancellationRequested.value = [...cancellationRequested.value, cancelled.id]
+    notice.value = t(complete ? 'tasks.cancelled' : 'extractionUi.cancelRequested', {
+      id: cancelled.id,
+    })
     await loadTasks()
   } catch (err) {
-    taskError.value = toMessage(err)
+    if (!disposed) taskError.value = toMessage(err)
   } finally {
-    cancellingId.value = null
+    if (!disposed) cancellingId.value = null
   }
 }
 
-function gotoRuns(): void {
-  void router.push({ name: 'extraction-runs' })
+function gotoRuns(runId: number): void {
+  void router.push({ name: 'extraction-runs', query: { run: runId } })
 }
+
+watch(page, () => void loadTasks())
 
 onMounted(async () => {
   await Promise.all([loadOptions(), loadTasks()])
   if (disposed) return
   pollTimer = window.setInterval(() => {
-    if (!document.hidden) void loadTasks()
+    if (!document.hidden && !loading.value) void loadTasks()
   }, 2000)
 })
 
@@ -246,73 +283,23 @@ onBeforeUnmount(() => {
   <section class="tasks-page">
     <PageHeader :title="t('page.extractionTasks')" :description="t('tasks.description')">
       <template #actions>
+        <NButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('tasks.createTitle')
+        }}</NButton>
         <NButton :disabled="loading" :loading="loading" @click="loadTasks">
           {{ t('graph.refresh') }}
         </NButton>
       </template>
     </PageHeader>
 
-    <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
-    <NAlert v-if="createError" type="error" role="alert">{{ createError }}</NAlert>
-    <NAlert v-if="taskError" type="error" role="alert">{{ taskError }}</NAlert>
-
-    <NCard :title="t('tasks.createTitle')" size="small">
-      <NSpin :show="optionLoading">
-        <NForm
-          ref="formRef"
-          :model="{
-            mapping: selectedMappingId,
-            datasource: selectedDatasourceId,
-            namespace,
-          }"
-          :rules="rules"
-          label-placement="top"
-          class="task-form"
-        >
-          <NFormItem :label="t('tasks.mapping')" path="mapping">
-            <NSelect
-              :value="selectedMappingId"
-              :options="mappingOptions"
-              :placeholder="t('tasks.chooseMapping')"
-              filterable
-              :disabled="optionLoading"
-              @update:value="chooseMapping"
-            />
-          </NFormItem>
-          <NFormItem :label="t('tasks.datasource')" path="datasource">
-            <NSelect
-              v-model:value="selectedDatasourceId"
-              :options="datasourceOptions"
-              :placeholder="t('tasks.chooseDatasource')"
-              filterable
-              :disabled="optionLoading"
-            />
-          </NFormItem>
-          <NFormItem :label="t('tasks.namespace')" path="namespace">
-            <NInput v-model:value="namespace" :disabled="optionLoading" />
-          </NFormItem>
-          <NFormItem :label="t('tasks.runAfter')" path="runAfter">
-            <NDatePicker
-              v-model:value="runAfter"
-              type="datetime"
-              clearable
-              class="date-input"
-              :placeholder="t('tasks.runNow')"
-            />
-          </NFormItem>
-          <NFormItem :label="t('tasks.mode')" path="incremental">
-            <NCheckbox v-model:checked="incremental" :disabled="optionLoading">
-              {{ t('tasks.incremental') }}
-            </NCheckbox>
-          </NFormItem>
-          <div class="form-actions">
-            <NButton type="primary" :disabled="!canCreate" :loading="creating" @click="createTask">
-              {{ t('tasks.create') }}
-            </NButton>
-          </div>
-        </NForm>
-      </NSpin>
-    </NCard>
+    <NAlert v-if="notice" type="info" role="status">{{ notice }}</NAlert>
+    <NAlert v-if="!canWrite" type="info">{{ t('extractionUi.viewer') }}</NAlert>
+    <NAlert v-if="taskError" type="error" role="alert"
+      >{{ taskError
+      }}<NButton :disabled="loading" @click="loadTasks">{{
+        t('extractionUi.retry')
+      }}</NButton></NAlert
+    >
 
     <NSpin :show="loading">
       <div v-if="tasks.length" class="table-scroll">
@@ -334,13 +321,36 @@ onBeforeUnmount(() => {
               <td>{{ task.id }}</td>
               <td>{{ task.mapping_revision_id }}</td>
               <td>{{ task.datasource_id }}</td>
-              <td>{{ t(`tasks.statuses.${task.status}`, task.status) }}</td>
+              <td>
+                <NTag
+                  :type="
+                    task.status === 'FAILED'
+                      ? 'error'
+                      : task.status === 'SUCCESS'
+                        ? 'success'
+                        : 'default'
+                  "
+                  >{{
+                    cancellationRequested.includes(task.id)
+                      ? t('extractionUi.cancelling')
+                      : t(`tasks.statuses.${task.status}`, task.status)
+                  }}</NTag
+                >
+                <p v-if="task.error" class="task-error">
+                  {{ t(`errors.${task.error}`, task.error) }}
+                </p>
+              </td>
               <td>{{ progressText(task) }}</td>
               <td>{{ formatTime(task.created_at) }}</td>
               <td>{{ formatTime(task.finished_at) }}</td>
               <td>
                 <NSpace size="small" :wrap="false">
-                  <NButton v-if="task.run_id" size="small" quaternary @click="gotoRuns">
+                  <NButton
+                    v-if="task.run_id"
+                    size="small"
+                    quaternary
+                    @click="gotoRuns(task.run_id!)"
+                  >
                     {{ t('tasks.viewRun') }}
                   </NButton>
                   <NButton
@@ -372,6 +382,101 @@ onBeforeUnmount(() => {
         {{ t('runs.next') }}
       </NButton>
     </NSpace>
+    <NDrawer
+      v-model:show="showCreate"
+      :width="'min(520px, 100vw)'"
+      :mask-closable="!creating"
+      :close-on-esc="!creating"
+    >
+      <NDrawerContent :title="t('tasks.createTitle')" :closable="!creating">
+        <NAlert v-if="createError" type="error" role="alert"
+          >{{ createError
+          }}<NButton
+            :disabled="!canWrite || optionLoading || creating"
+            @click="selectedMappingId ? chooseMapping(selectedMappingId) : loadOptions()"
+            >{{ t('extractionUi.retry') }}</NButton
+          ></NAlert
+        >
+        <NAlert v-if="publishedRevisionId" type="info">{{
+          t('extractionUi.taskFrozen', { revision: publishedRevisionId })
+        }}</NAlert>
+        <NEmpty
+          v-if="!optionLoading && !createError && !mappingOptions.length"
+          :description="t('extractionUi.noPublishedMappings')"
+        />
+        <NSpin :show="optionLoading">
+          <NForm
+            ref="formRef"
+            :model="{
+              mapping: selectedMappingId,
+              datasource: selectedDatasourceId,
+              namespace,
+            }"
+            :rules="rules"
+            label-placement="top"
+            class="task-form"
+          >
+            <NFormItem :label="t('tasks.mapping')" path="mapping">
+              <NSelect
+                :value="selectedMappingId"
+                :options="mappingOptions"
+                :loading="revisionLoading"
+                :placeholder="t('tasks.chooseMapping')"
+                filterable
+                :disabled="!canWrite || optionLoading || creating"
+                @update:value="chooseMapping"
+              />
+            </NFormItem>
+            <NFormItem :label="t('tasks.datasource')" path="datasource">
+              <NSelect
+                v-model:value="selectedDatasourceId"
+                :options="datasourceOptions"
+                :placeholder="t('tasks.chooseDatasource')"
+                filterable
+                :disabled="!canWrite || optionLoading || creating"
+              />
+            </NFormItem>
+            <NFormItem :label="t('tasks.namespace')" path="namespace">
+              <NInput
+                v-model:value="namespace"
+                :disabled="!canWrite || optionLoading || creating"
+              />
+            </NFormItem>
+            <NFormItem :label="t('tasks.runAfter')" path="runAfter">
+              <NDatePicker
+                v-model:value="runAfter"
+                :disabled="!canWrite || optionLoading || creating"
+                type="datetime"
+                clearable
+                class="date-input"
+                :placeholder="t('tasks.runNow')"
+              />
+            </NFormItem>
+            <NFormItem :label="t('tasks.mode')" path="incremental">
+              <NCheckbox
+                v-model:checked="incremental"
+                :disabled="!canWrite || optionLoading || creating"
+              >
+                {{ t('tasks.incremental') }}
+              </NCheckbox>
+            </NFormItem>
+            <div class="form-actions">
+              <NButton :disabled="creating" @click="showCreate = false">{{
+                t('common.cancel')
+              }}</NButton>
+              <NButton
+                type="primary"
+                :disabled="!canCreate"
+                :loading="creating"
+                @click="createTask"
+              >
+                {{ t('tasks.create') }}
+              </NButton>
+            </div>
+          </NForm>
+        </NSpin>
+      </NDrawerContent>
+    </NDrawer>
   </section>
 </template>
 
@@ -383,11 +488,12 @@ onBeforeUnmount(() => {
 .task-form {
   display: grid;
   gap: var(--space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 .form-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   grid-column: 1 / -1;
 }
 .date-input {
@@ -395,10 +501,18 @@ onBeforeUnmount(() => {
 }
 .table-scroll {
   overflow-x: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
 }
 @media (max-width: 767px) {
   .task-form {
     grid-template-columns: 1fr;
   }
+}
+.task-error {
+  max-width: 240px;
+  overflow-wrap: anywhere;
+  color: var(--s-violation);
 }
 </style>

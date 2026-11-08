@@ -9,12 +9,20 @@ import { setup } from '@css-render/vue3-ssr'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
+import { createPinia } from 'pinia'
 import { createSSRApp } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const outputDir = path.join(web, 'node_modules/.tmp')
+const escapeHtml = (text) =>
+  text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 
 test('Chinese and English locale keys stay aligned', async () => {
   const keys = (value, prefix = '') =>
@@ -80,7 +88,7 @@ async function component(name) {
 
 for (const [name, heading, action] of [
   ['GovernanceRules', 'page.governanceRules', 'rules.create'],
-  ['OntologyExport', 'export.title', 'export.download'],
+  ['OntologyExport', 'ui.exchange', 'export.download'],
   ['AssemblyTemplates', 'templates.title', 'templates.create'],
 ]) {
   test(`${name} renders both locales with real templates and no untranslated keys`, async () => {
@@ -96,12 +104,16 @@ for (const [name, heading, action] of [
       })
       await router.push('/')
       await router.isReady()
-      const app = createSSRApp(view).use(i18n).use(router)
+      const pinia = createPinia()
+      pinia.state.value.auth = {
+        user: { id: 1, role: 'EDITOR', status: 'ACTIVE', username: 'test_actor' },
+      }
+      const app = createSSRApp(view).use(i18n).use(router).use(pinia)
       setup(app)
       const html = await renderToString(app)
-      assert.ok(html.includes(i18n.global.t(heading)))
-      assert.ok(html.includes(i18n.global.t(action)))
-      assert.doesNotMatch(html, />(rules|export)\.[A-Za-z]+</)
+      assert.ok(html.includes(escapeHtml(i18n.global.t(heading))))
+      assert.ok(html.includes(escapeHtml(i18n.global.t(action))))
+      assert.doesNotMatch(html, />(rules|export|governanceUi)\.[A-Za-z]+</)
       if (locale === 'en-US') assert.doesNotMatch(html, /[\u4e00-\u9fff]/)
       if (name === 'OntologyExport') assert.match(html, /disabled/)
     }

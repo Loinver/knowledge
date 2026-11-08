@@ -8,9 +8,12 @@ import type { Namespace } from '@/api/namespaces'
 import { namespacesApi } from '@/api/namespaces'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
 
 import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
 
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 
@@ -49,12 +52,14 @@ function displayLabel(ns: Namespace): string {
 
 /** 受保护或仍被资源引用的命名空间不可删；把原因直接写在按钮提示里，而不是等后端报错。 */
 function deleteBlocker(ns: Namespace): string {
+  if (!canWrite.value) return t('ui.readonly')
   if (ns.protected) return t('namespace.protectedHint')
   if (ns.resource_count) return t('namespace.inUseHint', { count: ns.resource_count })
   return ''
 }
 
 async function remove(ns: Namespace) {
+  if (deleteBlocker(ns)) return
   actionError.value = ''
   notice.value = ''
   deletingId.value = ns.id
@@ -151,11 +156,16 @@ onBeforeUnmount(() => controller?.abort())
   <section class="page">
     <PageHeader :title="t('page.namespaces')" :description="t('namespace.description')">
       <template #actions>
-        <NButton type="primary" @click="showCreate = true">{{ t('namespace.create') }}</NButton>
+        <NButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('namespace.create')
+        }}</NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info" class="alert">{{ t('ui.readonly') }}</NAlert>
 
-    <NAlert v-if="loadError" type="error" class="alert">{{ loadError }}</NAlert>
+    <NAlert v-if="loadError" type="error" class="alert"
+      >{{ loadError }} <NButton @click="load">{{ t('ui.retry') }}</NButton></NAlert
+    >
     <NAlert v-if="actionError" type="error" class="alert" closable>{{ actionError }}</NAlert>
     <NAlert v-if="notice" type="success" class="alert" closable>{{ notice }}</NAlert>
 
@@ -171,7 +181,7 @@ onBeforeUnmount(() => controller?.abort())
           <template #empty>
             <NEmpty :description="t('namespace.empty')">
               <template #extra>
-                <NButton size="small" @click="showCreate = true">
+                <NButton size="small" :disabled="!canWrite" @click="showCreate = true">
                   {{ t('namespace.create') }}
                 </NButton>
               </template>

@@ -27,7 +27,11 @@ import type { RelationTypeBrief } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
 
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 
@@ -75,6 +79,7 @@ let alive = true
 const pendingWrites = new Map<number, Promise<unknown>>()
 const canEdit = computed(
   () =>
+    canWrite.value &&
     !!selected.value &&
     !loading.value &&
     !listError.value &&
@@ -419,6 +424,7 @@ watch(showCreate, (open) => {
 })
 
 async function handleCreate() {
+  if (!canWrite.value) return
   if (!alive || creating.value) return
   createError.value = ''
   try {
@@ -502,15 +508,21 @@ onBeforeUnmount(() => {
   listController?.abort()
   selection?.controller.abort()
 })
+
+const createVisible = useDraftGuard(showCreate, () => formData.value)
+const basicVisible = useDraftGuard(showBasicEditor, () => basicForm.value)
 </script>
 
 <template>
   <section class="page">
     <PageHeader :title="t('page.domains')" :description="t('domain.description')">
       <template #actions>
-        <NButton type="primary" @click="showCreate = true">{{ t('common.create') }}</NButton>
+        <NButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('common.create')
+        }}</NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info" class="alert">{{ t('ui.readonly') }}</NAlert>
 
     <NAlert v-if="listError" type="error" role="alert">
       {{ listError }}
@@ -679,7 +691,7 @@ onBeforeUnmount(() => {
 
     <!-- 基本信息编辑。机读名与 IRI 是业务域的身份，只读展示。 -->
     <NDrawer
-      v-model:show="showBasicEditor"
+      v-model:show="basicVisible"
       :width="480"
       :mask-closable="!working"
       :close-on-esc="!working"
@@ -731,7 +743,7 @@ onBeforeUnmount(() => {
         </NForm>
         <template #footer>
           <NSpace justify="end">
-            <NButton :disabled="working" @click="showBasicEditor = false">
+            <NButton :disabled="working" @click="basicVisible = false">
               {{ t('common.cancel') }}
             </NButton>
             <NButton type="primary" :loading="working" @click="saveBasic">
@@ -743,7 +755,7 @@ onBeforeUnmount(() => {
     </NDrawer>
 
     <NDrawer
-      v-model:show="showCreate"
+      v-model:show="createVisible"
       :width="480"
       :mask-closable="!creating"
       :close-on-esc="!creating"
@@ -781,7 +793,7 @@ onBeforeUnmount(() => {
         <NAlert v-if="createError" type="error" class="action-error">{{ createError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
-            <NButton :disabled="creating" @click="showCreate = false">
+            <NButton :disabled="creating" @click="createVisible = false">
               {{ t('common.cancel') }}
             </NButton>
             <NButton type="primary" :loading="creating" @click="handleCreate">

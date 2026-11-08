@@ -7,10 +7,12 @@ import { clausesApi } from '@/api/clauses'
 import { type CoreCheckRequest, type CoreCheckResult, templatesApi } from '@/api/templates'
 import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
+import { useGovernanceAccess } from '@/views/governance/composables/useGovernanceAccess'
 
 const props = defineProps<{ templateId: number }>()
 const { t } = useI18n()
 const { toMessage } = useApiError()
+const { canWrite } = useGovernanceAccess()
 type Requirement = CoreCheckRequest['requirements'][number]
 const requirements = ref<
   Array<Omit<Requirement, 'standard_clause_id'> & { standard_clause_id: number | null }>
@@ -50,7 +52,7 @@ const canCheck = computed(
     requirements.value.every((item) => item.name.trim() && item.standard_clause_id),
 )
 async function check() {
-  if (!canCheck.value || loading.value) return
+  if (!canWrite.value || !canCheck.value || loading.value || clauses.error.value) return
   const current = ++generation
   loading.value = true
   error.value = ''
@@ -78,6 +80,7 @@ async function check() {
 
 <template>
   <NSpace vertical>
+    <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.checkReadOnly') }}</NAlert>
     <NAlert type="info">{{ t('coreCheck.hint') }}</NAlert>
     <NAlert v-if="clauses.error.value || error" type="error">{{
       clauses.error.value || error
@@ -86,29 +89,40 @@ async function check() {
     <NSpace v-for="(item, index) in requirements" :key="index" vertical>
       <NInput
         v-model:value="item.name"
+        :disabled="!canWrite || loading"
         :input-props="{ 'aria-label': t('common.name') }"
         :placeholder="t('common.name')"
       />
-      <NSelect v-model:value="item.kind" :options="kinds" :aria-label="t('coreCheck.kind')" />
+      <NSelect
+        v-model:value="item.kind"
+        :disabled="!canWrite || loading"
+        :options="kinds"
+        :aria-label="t('coreCheck.kind')"
+      />
       <NSelect
         v-model:value="item.standard_clause_id"
+        :disabled="!canWrite || loading"
         :options="options"
         filterable
         :loading="clauses.loading.value"
         :aria-label="t('coreCheck.clause')"
         :placeholder="t('coreCheck.clause')"
       />
-      <NButton :disabled="requirements.length === 1" @click="requirements.splice(index, 1)">{{
-        t('common.delete')
-      }}</NButton>
+      <NButton
+        :disabled="!canWrite || loading || requirements.length === 1"
+        @click="requirements.splice(index, 1)"
+        >{{ t('common.delete') }}</NButton
+      >
     </NSpace>
     <NSpace>
-      <NButton @click="requirements.push({ name: '', kind: 'ENTITY', standard_clause_id: null })">{{
-        t('coreCheck.add')
-      }}</NButton>
+      <NButton
+        :disabled="!canWrite || loading"
+        @click="requirements.push({ name: '', kind: 'ENTITY', standard_clause_id: null })"
+        >{{ t('coreCheck.add') }}</NButton
+      >
       <NButton
         type="primary"
-        :disabled="!canCheck || !!clauses.error.value"
+        :disabled="!canWrite || !canCheck || clauses.loading.value || !!clauses.error.value"
         :loading="loading"
         @click="check"
         >{{ t('coreCheck.run') }}</NButton

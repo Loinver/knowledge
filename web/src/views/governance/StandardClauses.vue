@@ -24,9 +24,12 @@ import type { Clause, ClauseBrief, ClauseInput } from '@/api/clauses'
 import { clausesApi } from '@/api/clauses'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useGovernanceAccess } from '@/views/governance/composables/useGovernanceAccess'
 
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
+const { canWrite } = useGovernanceAccess()
 const items = ref<ClauseBrief[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -41,6 +44,13 @@ const form = ref<ClauseInput>(emptyClause())
 let readController: AbortController | undefined
 let alive = true
 const editorController = new AbortController()
+const editorVisible = useDraftGuard(
+  showEditor,
+  () =>
+    JSON.stringify(form.value) !==
+    JSON.stringify(saved.value ? payload(saved.value) : emptyClause()),
+  () => canWrite.value,
+)
 
 /** 附录性质是枚举码，标签走 i18n，不直出英文。 */
 const NATURES = computed(() => [
@@ -91,6 +101,7 @@ async function load() {
   readController = controller
   loading.value = true
   error.value = ''
+  items.value = []
   try {
     const data = await clausesApi.list(
       { page: page.value, page_size: 20, q: search.value },
@@ -108,7 +119,7 @@ async function load() {
 }
 
 function openCreate() {
-  if (busy.value) return
+  if (!canWrite.value || busy.value) return
   saved.value = null
   form.value = emptyClause()
   error.value = ''
@@ -135,14 +146,20 @@ async function openEdit(c: ClauseBrief) {
 }
 
 async function submit() {
+  if (!canWrite.value || busy.value) return
+  busy.value = true
   // 必填约束在界面上先拦一层，避免只收到通用请求错误。
   // 不再空表单直发、靠后端 422 兜底
   try {
     await formRef.value?.validate()
   } catch {
+    busy.value = false
     return
   }
-  busy.value = true
+  if (!canWrite.value || !alive) {
+    busy.value = false
+    return
+  }
   error.value = ''
   notice.value = ''
   try {
@@ -152,11 +169,13 @@ async function submit() {
       delete (rest as Partial<ClauseInput>).clause_number
       const updated = await clausesApi.update(saved.value, rest)
       saved.value = updated
+      form.value = payload(updated)
       notice.value = t('clauses.saved')
       await load()
     } else {
       const created = await clausesApi.create(form.value)
       saved.value = created
+      form.value = payload(created)
       notice.value = t('clauses.saved')
       await load()
     }
@@ -187,7 +206,7 @@ const rules: FormRules = {
 }
 
 async function remove(c: ClauseBrief) {
-  if (busy.value) return
+  if (!canWrite.value || busy.value) return
   busy.value = true
   error.value = ''
   notice.value = ''
@@ -243,12 +262,19 @@ const columns = computed(() => [
     width: 160,
     render: (row: ClauseBrief) =>
       h('div', { style: 'display:flex;gap:8px' }, [
-        h(NButton, { size: 'small', onClick: () => openEdit(row) }, () => t('common.edit')),
+        h(NButton, { size: 'small', disabled: busy.value, onClick: () => openEdit(row) }, () =>
+          t(canWrite.value ? 'common.edit' : 'governanceUi.details'),
+        ),
         h(
           NPopconfirm,
-          { onPositiveClick: () => remove(row) },
+          { disabled: busy.value || !canWrite.value, onPositiveClick: () => remove(row) },
           {
-            trigger: () => h(NButton, { size: 'small', type: 'error' }, () => t('common.delete')),
+            trigger: () =>
+              h(
+                NButton,
+                { size: 'small', type: 'error', disabled: busy.value || !canWrite.value },
+                () => t('common.delete'),
+              ),
             default: () => t('clauses.deleteConfirm'),
           },
         ),
@@ -261,12 +287,17 @@ const columns = computed(() => [
   <div class="clauses-page">
     <PageHeader :title="t('page.governanceClauses')" :description="t('clauses.intro')">
       <template #actions>
-        <n-button type="primary" :disabled="busy" @click="openCreate">{{
+        <n-button type="primary" :disabled="busy || !canWrite" @click="openCreate">{{
           t('clauses.create')
         }}</n-button>
       </template>
     </PageHeader>
-    <NAlert v-if="error && !showEditor" type="error">{{ error }}</NAlert>
+    <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.readOnly') }}</NAlert>
+    <NAlert v-if="error && !showEditor" type="error" role="alert"
+      >{{ error }}
+      <NButton size="small" @click="load">{{ t('governanceUi.retry') }}</NButton>
+    </NAlert>
+    <NAlert v-if="notice && !showEditor" type="success" role="status">{{ notice }}</NAlert>
     <n-card :bordered="false">
       <n-space class="toolbar" align="center">
         <n-form-item
@@ -286,9 +317,10 @@ const columns = computed(() => [
         </n-form-item>
         <n-button @click="doSearch">{{ t('common.search') }}</n-button>
       </n-space>
-      <n-empty v-if="!loading && items.length === 0" :description="t('clauses.empty')" />
+      <p v-if="loading" role="status">{{ t('common.loading') }}</p>
+      <n-empty v-else-if="!error && items.length === 0" :description="t('clauses.empty')" />
       <n-data-table
-        v-else
+        v-else-if="!error"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -297,7 +329,7 @@ const columns = computed(() => [
         remote
       />
       <n-pagination
-        v-if="total > 0"
+        v-if="!loading && !error && total > 0"
         v-model:page="page"
         :item-count="total"
         :page-size="20"
@@ -305,23 +337,42 @@ const columns = computed(() => [
       />
     </n-card>
 
-    <n-drawer v-model:show="showEditor" :width="560">
-      <n-drawer-content :title="saved ? t('clauses.edit') : t('clauses.create')" closable>
-        <n-form ref="formRef" :model="form" :rules="rules">
-          <n-form-item :label="t('clauses.standard')" path="standard">
-            <n-input
-              v-model:value="form.standard"
-              :disabled="!!saved"
-              :placeholder="t('clauses.standardPlaceholder')"
-            />
+    <n-drawer
+      v-model:show="editorVisible"
+      width="min(760px, 100vw)"
+      :mask-closable="!busy"
+      :close-on-esc="!busy"
+    >
+      <n-drawer-content :title="saved ? t('clauses.edit') : t('clauses.create')" :closable="!busy">
+        <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.readOnly') }}</NAlert>
+        <n-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          :disabled="busy || !canWrite"
+          label-placement="top"
+        >
+          <h3 class="section-title">{{ t('governanceUi.clauseIdentity') }}</h3>
+          <div class="form-grid">
+            <n-form-item :label="t('clauses.standard')" path="standard">
+              <n-input
+                v-model:value="form.standard"
+                :disabled="!!saved || busy || !canWrite"
+                :placeholder="t('clauses.standardPlaceholder')"
+              />
+            </n-form-item>
+            <n-form-item :label="t('clauses.clauseNumber')" path="clause_number">
+              <n-input
+                v-model:value="form.clause_number"
+                :disabled="!!saved || busy || !canWrite"
+                :placeholder="t('clauses.clauseNumberPlaceholder')"
+              />
+            </n-form-item>
+          </div>
+          <n-form-item :label="t('clauses.natureLabel')">
+            <n-select v-model:value="form.appendix_nature" :options="NATURES" />
           </n-form-item>
-          <n-form-item :label="t('clauses.clauseNumber')" path="clause_number">
-            <n-input
-              v-model:value="form.clause_number"
-              :disabled="!!saved"
-              :placeholder="t('clauses.clauseNumberPlaceholder')"
-            />
-          </n-form-item>
+          <h3 class="section-title">{{ t('governanceUi.clauseMeaning') }}</h3>
           <n-form-item :label="t('clauses.title') + ' (zh-CN)'" path="title_i18n['zh-CN']">
             <n-input v-model:value="form.title_i18n['zh-CN']" />
           </n-form-item>
@@ -345,21 +396,22 @@ const columns = computed(() => [
               :rows="3"
             />
           </n-form-item>
-          <n-form-item :label="t('clauses.natureLabel')">
-            <n-select v-model:value="form.appendix_nature" :options="NATURES" />
-          </n-form-item>
-          <n-form-item :label="t('clauses.productFallback')">
-            <n-input v-model:value="form.product_fallback" />
-          </n-form-item>
-          <n-form-item :label="t('clauses.dateLexicon')">
-            <n-input v-model:value="form.date_lexicon" />
-          </n-form-item>
-          <n-form-item :label="t('clauses.disambiguation')">
-            <n-input v-model:value="form.clause_disambiguation" type="textarea" :rows="2" />
-          </n-form-item>
-          <n-form-item :label="t('clauses.exampleDomain')">
-            <n-input v-model:value="form.example_domain" />
-          </n-form-item>
+          <details class="terminology">
+            <summary>{{ t('governanceUi.clauseTerminology') }}</summary>
+            <p>{{ t('governanceUi.clauseTerminologyHint') }}</p>
+            <n-form-item :label="t('clauses.productFallback')">
+              <n-input v-model:value="form.product_fallback" />
+            </n-form-item>
+            <n-form-item :label="t('clauses.dateLexicon')">
+              <n-input v-model:value="form.date_lexicon" />
+            </n-form-item>
+            <n-form-item :label="t('clauses.disambiguation')">
+              <n-input v-model:value="form.clause_disambiguation" type="textarea" :rows="2" />
+            </n-form-item>
+            <n-form-item :label="t('clauses.exampleDomain')">
+              <n-input v-model:value="form.example_domain" />
+            </n-form-item>
+          </details>
         </n-form>
         <n-space v-if="notice" align="center">
           <n-tag type="success">{{ notice }}</n-tag>
@@ -369,10 +421,16 @@ const columns = computed(() => [
         </n-space>
         <template #footer>
           <n-space>
-            <n-button :loading="busy" type="primary" @click="submit">{{
-              t('common.save')
+            <n-button
+              :loading="busy"
+              :disabled="busy || !canWrite"
+              type="primary"
+              @click="submit"
+              >{{ t('common.save') }}</n-button
+            >
+            <n-button :disabled="busy" @click="editorVisible = false">{{
+              t('common.cancel')
             }}</n-button>
-            <n-button @click="showEditor = false">{{ t('common.cancel') }}</n-button>
           </n-space>
         </template>
       </n-drawer-content>
@@ -387,5 +445,41 @@ const columns = computed(() => [
 }
 .clauses-page .toolbar {
   margin-bottom: 16px;
+}
+.clauses-page :deep(.n-card),
+.terminology {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+}
+.section-title {
+  font-size: 15px;
+  border-left: 3px solid var(--pri);
+  padding-left: 12px;
+  margin: 20px 0 16px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+.terminology {
+  padding: 16px;
+}
+.terminology summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.terminology p {
+  color: var(--text-secondary);
+}
+.terminology summary:focus-visible {
+  outline: 2px solid var(--pri);
+  outline-offset: 4px;
+}
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

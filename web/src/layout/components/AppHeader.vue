@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import AppIcon from '@/components/AppIcon.vue'
+import QuickSearch from '@/layout/components/QuickSearch.vue'
 import UserDropdown from '@/layout/components/UserDropdown.vue'
 import { useNavigation } from '@/layout/useNavigation'
 import { useLocaleStore } from '@/stores/locale'
@@ -38,6 +39,7 @@ const { breadcrumb } = useNavigation()
       </NBreadcrumb>
     </div>
     <div class="right">
+      <QuickSearch />
       <NButton
         quaternary
         :aria-label="t('layout.switchLocale')"

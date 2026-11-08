@@ -153,6 +153,7 @@ async function publishEntityType(page: Page, name: string): Promise<void> {
   // 卡片视图的卡片可访问名含机读名（cell-sub），按子串匹配。
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page.getByRole('button', { name: name }).first().click()
+  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
   await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
   const typeId = Number(/entity-types\/(\d+)/.exec(page.url())![1])
   await addDataProperty(page, typeId, 'Name', '名称')
@@ -243,6 +244,8 @@ with sqlite3.connect(sys.argv[1]) as db:
   await page.keyboard.press('Escape')
   await saveOverlay(page)
   await page.getByRole('button', { name: '自动布局' }).click()
+  await page.getByRole('button', { name: '保存布局', exact: true }).click()
+  await expect(page.getByRole('button', { name: '保存布局', exact: true })).toBeDisabled()
   await page.screenshot({ path: testInfo.outputPath('designer.png'), fullPage: true })
   await page.getByRole('button', { name: '发布', exact: true }).click()
   await expect(page.locator('.toolbar')).toContainText('已发布')
@@ -307,10 +310,11 @@ with sqlite3.connect(sys.argv[1]) as db:
   await page.getByRole('button', { name: '启动抽取' }).click()
   await expect(page.getByText(/运行编号 #/)).toBeVisible()
   await page.goto('/graph')
-  await expect(page.locator('.canvas-panel')).toBeVisible()
+  await expect(page.locator('.canvas-area')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('graph.png'), fullPage: true })
   const originalGraph = await checkCompanyAttribute(page, 'Audit Company')
   await page.goto('/graph')
+  await page.getByRole('button', { name: '事实表', exact: true }).click()
   await page.getByRole('link', { name: '追溯证据', exact: true }).first().click()
   await expect(page).toHaveURL(/graph\/evidence/)
   await expect(page.getByText('hr_employee', { exact: true }).first()).toBeVisible()
@@ -349,6 +353,11 @@ with sqlite3.connect(sys.argv[1]) as db:
     .filter({ hasText: `图谱 #${originalGraph} ·` })
   await older.getByRole('button', { name: '设为当前' }).click()
   await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByRole('link', { name: '实体实例', exact: true })).toHaveAttribute(
+    'href',
+    `/graph/entities?graph=${originalGraph}`,
+  )
+  await page.getByRole('button', { name: '历史图谱版本' }).click()
   await expect(older).toContainText('当前版本')
   await page.screenshot({ path: testInfo.outputPath('history.png'), fullPage: true })
   await page.goto('/graph')
@@ -399,6 +408,7 @@ with sqlite3.connect(sys.argv[1]) as db:
   await page.goto('/ontology/entity-types')
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page.getByRole('button', { name: 'AuditCompany' }).first().click()
+  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
   await page.getByRole('button', { name: '修订下一版' }).click()
   await page.getByRole('button', { name: '确认', exact: true }).click()
   await page.getByRole('button', { name: '编辑', exact: true }).first().click()
@@ -429,6 +439,7 @@ with sqlite3.connect(sys.argv[1]) as db:
   await page.screenshot({ path: testInfo.outputPath('frozen-contents.png'), fullPage: true })
 
   await page.goto('/graph?layout=org_tree')
+  await page.getByRole('button', { name: '筛选与视图', exact: true }).click()
   await page.getByText('视图语义配置', { exact: true }).click()
   await page.getByLabel('层级关系', { exact: true }).click()
   await pickOption(page, '审计任职 · https://example.org/audit#AuditWorksFor')
@@ -438,16 +449,20 @@ with sqlite3.connect(sys.argv[1]) as db:
   await page.getByRole('button', { name: '保存当前视图', exact: true }).click()
   await expect(page).toHaveURL(/template=\d+/)
   await page.reload()
+  await page.getByRole('button', { name: '筛选与视图', exact: true }).click()
   await page.getByText('视图语义配置', { exact: true }).click()
   await expect(page.getByLabel('层级关系', { exact: true })).toContainText('审计任职')
   await expect(page.locator('.canvas-scroll .node')).toHaveCount(2)
   await expect(page.locator('.canvas-scroll .edge')).toHaveCount(1)
+  await overlay(page).locator('.n-drawer-header__close').click()
   await page.screenshot({ path: testInfo.outputPath('semantic-hierarchy.png'), fullPage: true })
   await page.locator('.canvas-scroll').screenshot({
     path: testInfo.outputPath('semantic-hierarchy-canvas.png'),
   })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.locator('.mobile-backdrop').click({ position: { x: 350, y: 300 } })
+  await expect(page.locator('.app-sider')).toHaveClass(/n-layout-sider--collapsed/)
+  await page.getByRole('button', { name: '筛选与视图', exact: true }).click()
+  await page.getByText('视图语义配置', { exact: true }).click()
   await expect(page.getByLabel('层级关系', { exact: true })).toBeVisible()
   await page.screenshot({
     path: testInfo.outputPath('semantic-hierarchy-mobile.png'),

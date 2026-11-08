@@ -1,27 +1,44 @@
 <script setup lang="ts">
-import { NAlert, NButton, NSpace } from 'naive-ui'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { NAlert } from 'naive-ui'
+import { computed, nextTick, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { GraphView } from '@/api/graph'
 
 import { graphPaths } from './graphLayout'
+import type { Camera, Point } from './graphViewport'
+import {
+  centerCamera,
+  dragPosition,
+  isDrag,
+  MAX_SCALE,
+  MIN_SCALE,
+  NODE_RADIUS,
+  nodeNameLines,
+  showGraphLabel,
+  wheelCamera,
+  zoomAt,
+} from './graphViewport'
+import { entityName } from './graphWorkspace'
 import { resolveLayout, typeColor } from './layouts/index.ts'
 import type { SemanticContext } from './layouts/semanticView'
+import { useGraphViewport } from './useGraphViewport'
 
+type GraphEdge = GraphView['edges'][number]
+type GraphNode = GraphView['nodes'][number]
 const props = defineProps<{
   graph: GraphView
   neighborhood: boolean
   layoutId?: string | null
   semanticContext?: SemanticContext
-  /** 质量叠加（G-28）：被隔离/违规命中的实体 IRI，节点叠加红色标记。 */
   flaggedIris?: Set<string>
-  /** G-12 路径查询结果高亮。 */
   highlightIris?: Set<string>
+  selectedIri?: string | null
+  selectedEdgeKey?: string | null
 }>()
-const emit = defineEmits<{ select: [iri: string] }>()
+const emit = defineEmits<{ select: [iri: string]; selectEdge: [edge: GraphEdge] }>()
 const { t } = useI18n()
-const zoom = ref(1)
+const id = useId()
 const shortName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
 const layout = computed(() =>
   resolveLayout(props.layoutId, props.neighborhood).compute(
@@ -29,151 +46,332 @@ const layout = computed(() =>
     props.semanticContext ?? { config: {}, fields: [] },
   ),
 )
-const marks = computed(() => layout.value.marks ?? null)
-const legendTypes = computed(() => layout.value.groups.map((group) => group.type))
-const paths = computed(() =>
-  graphPaths(layout.value.nodes, layout.value.edges ?? props.graph.edges, layout.value.edgePaths),
-)
-const isSchema = computed(() => ['schema', 'sankey', 'chord'].includes(props.layoutId ?? ''))
-const edgeLabel = (edge: { props?: Record<string, unknown> | null; kind: string }) => {
-  if (!edge.props) return ''
-  const short = (value: unknown) => {
-    const text = String(value)
-    return /^https?:\/\//.test(text) ? shortName(text) || text : text
-  }
-  const parts = Object.entries(edge.props)
-    .filter(([key]) => key !== '__typeCount__')
-    .map(([key, value]) => `${key}=${short(value)}`)
-  return parts.slice(0, 2).join(' ')
-}
+const layoutKey = () =>
+  JSON.stringify([
+    resolveLayout(props.layoutId, props.neighborhood).id,
+    Object.entries(props.semanticContext?.config ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+    props.semanticContext?.legacy ?? false,
+  ])
+const scrollEl = ref<HTMLElement | null>(null)
+const {
+  camera,
+  previousCamera,
+  size,
+  positions,
+  nodes,
+  marks,
+  bounds,
+  viewport,
+  focus,
+  fitView,
+  restoreView,
+  getContext,
+  restoreContext,
+} = useGraphViewport(scrollEl, () => props.graph, layout, layoutKey)
+defineExpose({ focus, fitView, getContext, restoreContext })
+
+const legendTypes = computed(() => [
+  ...new Set([
+    ...layout.value.groups.map((group) => group.type),
+    ...props.graph.nodes.map((node) => node.type_iri),
+  ]),
+])
+const typePaint = (type: string) =>
+  `color-mix(in srgb, ${typeColor(type, legendTypes.value)}, white var(--graph-type-tint, 0%))`
 const nodeFlagged = (iri: string) => props.flaggedIris?.has(iri) ?? false
 const nodeHighlighted = (iri: string) => props.highlightIris?.has(iri) ?? false
-const nodeBadgeText = (node: GraphView['nodes'][number]) => {
-  const count = node.attrs.__typeCount__
-  return typeof count === 'number' ? t('graph.entityCount', { count }) : ''
+const selectedFact = computed(() =>
+  props.graph.edges.find((edge) => `${edge.kind}:${edge.id}` === props.selectedEdgeKey),
+)
+const importantNode = (iri: string) =>
+  props.selectedIri === iri ||
+  nodeHighlighted(iri) ||
+  selectedFact.value?.subject === iri ||
+  selectedFact.value?.object_ === iri
+// Keep selected labels readable inside their circles even at distant zoom levels.
+const nodeDisplayScale = (iri: string) =>
+  importantNode(iri) ? Math.max(1, 1 / camera.value.scale) : 1
+const paths = computed(() =>
+  graphPaths(nodes.value, layout.value.edges ?? props.graph.edges, layout.value.edgePaths, {
+    radius: (node) => NODE_RADIUS * nodeDisplayScale(node.iri),
+    originalNodes: layout.value.nodes,
+  }).filter((edge) => edge.path),
+)
+const edgeKey = (edge: GraphEdge) => `${edge.kind}:${edge.id}`
+const edgeSelected = (edge: GraphEdge) => edgeKey(edge) === props.selectedEdgeKey
+const edgeHighlighted = (edge: GraphEdge) =>
+  nodeHighlighted(edge.subject) && nodeHighlighted(edge.object_)
+const importantEdge = (edge: GraphEdge) =>
+  edgeSelected(edge) ||
+  edgeHighlighted(edge) ||
+  edge.subject === props.selectedIri ||
+  edge.object_ === props.selectedIri
+const edgeName = (edge: GraphEdge) =>
+  `${shortName(edge.predicate)}${edge.kind === 'DERIVED' ? ` · ${t('graph.derived')}` : ''}`
+const edgeDescription = (edge: GraphEdge) =>
+  t('graph.factDescription', {
+    subject: edge.subject,
+    predicate: edge.predicate,
+    object: edge.object_,
+  })
+const edgeLabelScale = (edge: GraphEdge) =>
+  importantEdge(edge) ? Math.max(1, 1 / camera.value.scale) : 1
+const nodeName = (node: GraphNode) => entityName(node) || shortName(node.iri)
+const nodeTitle = (node: GraphNode) =>
+  `${nodeName(node)} · ${node.iri}${nodeFlagged(node.iri) ? ` · ${t('graph.qualityFlagged')}` : ''}`
+const nodeBadgeText = (node: GraphNode) =>
+  typeof node.attrs.__typeCount__ === 'number'
+    ? t('graph.entityCount', { count: node.attrs.__typeCount__ })
+    : ''
+
+// Abstract type symbols are deterministic by IRI; their explanation lives in the legend.
+const typeIcon = (iri: string) => {
+  const index = [...iri].reduce((value, char) => value + char.codePointAt(0)!, 0) % 4
+  return [
+    'M-6-5H6V5H-6Z M-2-5V5 M-6-1H6',
+    'M0-7L7 0 0 7-7 0Z M-3 0H3',
+    'M-6 6V-6H6V6Z M-2-2H2V2H-2Z',
+    'M0-7V0 M-6 6V0H6V6 M-8 6H-4 M4 6H8 M-2-7H2',
+  ][index]
+}
+const showLegend = ref(false)
+const showMinimap = ref(false)
+const legendButton = ref<HTMLButtonElement | null>(null)
+const minimapButton = ref<HTMLButtonElement | null>(null)
+function closeLegend() {
+  showLegend.value = false
+  void nextTick(() => legendButton.value?.focus())
+}
+function closeMinimap() {
+  showMinimap.value = false
+  void nextTick(() => minimapButton.value?.focus())
+}
+const minimapBox = computed(
+  () => `${bounds.value.x} ${bounds.value.y} ${bounds.value.width} ${bounds.value.height}`,
+)
+const minimapDots = computed(() =>
+  marks.value
+    ? marks.value.map((mark) => ({
+        id: mark.id,
+        x: mark.x + mark.offsetX,
+        y: mark.y + mark.offsetY,
+        fill: mark.fill,
+      }))
+    : nodes.value.map((node) => ({
+        id: node.iri,
+        x: node.x,
+        y: node.y,
+        fill: typePaint(node.type_iri),
+      })),
+)
+function onMinimapClick(event: MouseEvent) {
+  const el = event.currentTarget as SVGSVGElement
+  const matrix = el.getScreenCTM()
+  if (!matrix) return
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+  camera.value = centerCamera(camera.value, point, size.value)
+}
+function zoom(factor: number) {
+  camera.value = zoomAt(
+    camera.value,
+    { x: size.value.width / 2, y: size.value.height / 2 },
+    camera.value.scale * factor,
+  )
+}
+function onWheel(event: WheelEvent) {
+  const rect = scrollEl.value!.getBoundingClientRect()
+  camera.value = wheelCamera(
+    camera.value,
+    event,
+    { x: event.clientX - rect.left, y: event.clientY - rect.top },
+    size.value,
+  )
 }
 
-// ===== 小地图（G-01～G-32 通用交互）=====
-// 画布本身是可滚动的 SVG（无拖拽平移），小地图因此提供两件事：
-// 全图缩略 + 当前视口矩形；点击缩略图把视口居中到该点。
-const scrollEl = ref<HTMLElement | null>(null)
-const viewport = ref({ x: 0, y: 0, w: 0, h: 0 })
-/** 缩略图上限：太大就失去"一眼看全"的意义，也拖慢重绘。 */
-const MINIMAP_W = 200
-const MINIMAP_H = 140
-/** 超过这个数量只画一部分点，避免万级节点时缩略图成为瓶颈。 */
-const MINIMAP_DOTS = 1500
-
-const minimapScale = computed(() =>
-  Math.min(
-    MINIMAP_W / Math.max(1, layout.value.width),
-    MINIMAP_H / Math.max(1, layout.value.height),
-    1,
-  ),
-)
-
-const minimapDots = computed(() => {
-  const marks = layout.value.marks
-  const source =
-    layout.value.nodes.length > 0
-      ? layout.value.nodes.map((node) => ({
-          id: node.iri,
-          x: node.x,
-          y: node.y,
-          fill: typeColor(node.type_iri, legendTypes.value),
-        }))
-      : (marks ?? []).map((mark) => ({
-          id: mark.id,
-          x: mark.x,
-          y: mark.y,
-          fill: mark.fill,
-        }))
-  const step = Math.max(1, Math.ceil(source.length / MINIMAP_DOTS))
-  return source.filter((_, index) => index % step === 0)
-})
-
-function syncViewport() {
-  const el = scrollEl.value
-  if (!el) return
-  viewport.value = {
-    x: el.scrollLeft / zoom.value,
-    y: el.scrollTop / zoom.value,
-    w: el.clientWidth / zoom.value,
-    h: el.clientHeight / zoom.value,
+type Drag = {
+  pointerId: number
+  start: Point
+  camera: Camera
+  iri?: string
+  origin?: Point
+  moved: boolean
+}
+const drag = ref<Drag | null>(null)
+const spacePressed = ref(false)
+let suppressClick = false
+function startDrag(event: PointerEvent, iri?: string) {
+  if (event.button !== 0 || !event.isPrimary || !scrollEl.value || drag.value) return
+  if (showLegend.value) showLegend.value = false
+  const nodeIri = spacePressed.value ? undefined : iri
+  suppressClick = false
+  drag.value = {
+    pointerId: event.pointerId,
+    start: { x: event.clientX, y: event.clientY },
+    camera: { ...camera.value },
+    iri: nodeIri,
+    origin: nodeIri ? { ...positions.value[nodeIri]! } : undefined,
+    moved: false,
+  }
+  scrollEl.value.setPointerCapture(event.pointerId)
+  ;(event.currentTarget as HTMLElement | SVGElement).focus({ preventScroll: true })
+}
+function moveDrag(event: PointerEvent) {
+  const current = drag.value
+  if (!current || event.pointerId !== current.pointerId) return
+  const point = { x: event.clientX, y: event.clientY }
+  current.moved ||= isDrag(current.start, point)
+  if (!current.moved) return
+  if (current.iri && current.origin) {
+    positions.value = {
+      ...positions.value,
+      [current.iri]: dragPosition(current.origin, current.start, point, current.camera.scale),
+    }
+  } else {
+    camera.value = { ...current.camera, ...dragPosition(current.camera, current.start, point, 1) }
   }
 }
-
-function onMinimapClick(event: MouseEvent) {
-  const el = scrollEl.value
-  if (!el) return
-  const rect = (event.currentTarget as SVGSVGElement).getBoundingClientRect()
-  const x = (event.clientX - rect.left) / minimapScale.value
-  const y = (event.clientY - rect.top) / minimapScale.value
-  el.scrollTo({
-    left: x * zoom.value - el.clientWidth / 2,
-    top: y * zoom.value - el.clientHeight / 2,
-  })
-  syncViewport()
+function finishDrag(event?: PointerEvent, cancel = false) {
+  const current = drag.value
+  if (!current || (event && event.pointerId !== current.pointerId)) return
+  if (cancel) {
+    if (current.iri && current.origin)
+      positions.value = { ...positions.value, [current.iri]: current.origin }
+    else camera.value = current.camera
+  }
+  suppressClick = current.moved || cancel
+  drag.value = null
+  if (scrollEl.value?.hasPointerCapture(current.pointerId))
+    scrollEl.value.releasePointerCapture(current.pointerId)
+  // Pointer capture retargets click to the viewport, so dispatch node selection here.
+  if (!cancel && !current.moved && current.iri) emit('select', current.iri)
 }
-
-watch([() => layout.value.width, () => layout.value.height, zoom], () => {
-  void nextTick(syncViewport)
-})
-onMounted(() => {
-  void nextTick(syncViewport)
-  window.addEventListener('resize', syncViewport)
-})
-onBeforeUnmount(() => window.removeEventListener('resize', syncViewport))
+function onNodeClick(event: MouseEvent, iri: string) {
+  if (event.detail === 0 && !suppressClick) emit('select', iri)
+}
+function onCanvasKey(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    finishDrag(undefined, true)
+    spacePressed.value = false
+    if (showLegend.value) closeLegend()
+    else if (showMinimap.value) closeMinimap()
+    return
+  }
+  if (event.target !== scrollEl.value && !(event.target as Element).classList.contains('minimap'))
+    return
+  if (event.key === ' ') {
+    event.preventDefault()
+    spacePressed.value = true
+    return
+  }
+  const shifts: Record<string, Point> = {
+    ArrowLeft: { x: 48, y: 0 },
+    ArrowRight: { x: -48, y: 0 },
+    ArrowUp: { x: 0, y: 48 },
+    ArrowDown: { x: 0, y: -48 },
+  }
+  if (shifts[event.key]) {
+    event.preventDefault()
+    camera.value = {
+      ...camera.value,
+      x: camera.value.x + shifts[event.key]!.x,
+      y: camera.value.y + shifts[event.key]!.y,
+    }
+  } else if (['+', '=', '-', 'Home'].includes(event.key)) {
+    event.preventDefault()
+    if (event.key === 'Home') fitView()
+    else zoom(event.key === '-' ? 1 / 1.2 : 1.2)
+  }
+}
 </script>
 
 <template>
-  <div class="canvas-panel">
+  <div
+    class="canvas-panel"
+    @keydown="onCanvasKey"
+    @keyup.space="spacePressed = false"
+    @focusout="spacePressed = false"
+  >
     <NAlert v-for="notice in layout.notices ?? []" :key="notice.key" type="warning">
       {{ t(`semanticView.${notice.key}`, { count: notice.count ?? 0 }) }}
     </NAlert>
-    <NSpace align="center">
-      <NButton
-        :disabled="zoom <= 0.4"
-        :aria-label="t('graph.zoomOut')"
-        @click="zoom = Math.max(0.4, zoom - 0.2)"
-        >{{ t('graph.zoomOut') }}</NButton
-      >
-      <NButton
-        :disabled="zoom >= 2"
-        :aria-label="t('graph.zoomIn')"
-        @click="zoom = Math.min(2, zoom + 0.2)"
-        >{{ t('graph.zoomIn') }}</NButton
-      >
-      <NButton @click="zoom = 1">{{ t('graph.resetZoom') }}</NButton>
-      <span class="legend direct">{{ t('graph.directRelation') }}</span>
-      <span class="legend derived">{{ t('graph.derived') }}</span>
-      <span v-if="flaggedIris?.size" class="legend flagged">{{ t('graph.qualityOverlay') }}</span>
-    </NSpace>
-    <p class="hint">{{ t('graph.canvasHint') }}</p>
-    <div v-if="marks && legendTypes.length" class="mark-legend" role="list">
-      <span v-for="type in legendTypes" :key="type" class="legend-item" role="listitem">
-        <i class="chip" :style="{ background: typeColor(type, legendTypes) }" />
-        {{ shortName(type) }}
-      </span>
-    </div>
     <div class="canvas-frame">
+      <div class="canvas-toolbar" role="toolbar" :aria-label="t('graphUi.canvasTools')">
+        <button
+          type="button"
+          :disabled="camera.scale <= MIN_SCALE"
+          :aria-label="t('graph.zoomOut')"
+          :title="t('graph.zoomOut')"
+          @click="zoom(1 / 1.2)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 8H13" />
+          </svg>
+        </button>
+        <output class="zoom-value" :aria-label="t('graphUi.zoomLevel')"
+          >{{ Math.round(camera.scale * 100) }}{{ t('graphUi.percent') }}</output
+        >
+        <button
+          type="button"
+          :disabled="camera.scale >= MAX_SCALE"
+          :aria-label="t('graph.zoomIn')"
+          :title="t('graph.zoomIn')"
+          @click="zoom(1.2)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 8H13 M8 3V13" />
+          </svg>
+        </button>
+        <span class="tool-divider" aria-hidden="true" />
+        <button type="button" @click="fitView">{{ t('graphUi.fitView') }}</button>
+        <button type="button" :disabled="!previousCamera" @click="restoreView">
+          {{ t('graphUi.restoreView') }}
+        </button>
+        <button
+          ref="legendButton"
+          type="button"
+          :aria-expanded="showLegend"
+          :aria-controls="`${id}-legend`"
+          @click="showLegend = !showLegend"
+        >
+          {{ t('graphUi.legend') }}
+        </button>
+        <button
+          ref="minimapButton"
+          type="button"
+          :aria-expanded="showMinimap"
+          :aria-controls="`${id}-minimap`"
+          @click="showMinimap = !showMinimap"
+        >
+          {{ t('graphUi.minimap') }}
+        </button>
+      </div>
       <div
         ref="scrollEl"
         class="canvas-scroll"
+        :class="{ dragging: drag?.moved }"
         tabindex="0"
+        role="region"
         :aria-label="t('page.graphBrowse')"
-        @scroll.passive="syncViewport"
+        :aria-describedby="`${id}-help`"
+        @wheel.prevent="onWheel"
+        @pointerdown.prevent="startDrag($event)"
+        @pointermove="moveDrag"
+        @pointerup="finishDrag($event)"
+        @pointercancel="finishDrag($event, true)"
+        @lostpointercapture="finishDrag($event, true)"
       >
         <svg
-          :width="layout.width * zoom"
-          :height="layout.height * zoom"
-          :viewBox="`0 0 ${layout.width} ${layout.height}`"
+          :width="size.width"
+          :height="size.height"
+          :viewBox="`0 0 ${size.width} ${size.height}`"
           role="group"
           :aria-label="t('page.graphBrowse')"
         >
           <defs>
             <marker
-              id="graph-direct-arrow"
+              v-for="kind in ['direct', 'derived', 'selected']"
+              :id="`${id}-${kind}-arrow`"
+              :key="kind"
               viewBox="0 0 10 10"
               refX="9"
               refY="5"
@@ -181,368 +379,622 @@ onBeforeUnmount(() => window.removeEventListener('resize', syncViewport))
               markerHeight="7"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-direct" />
-            </marker>
-            <marker
-              id="graph-derived-arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-derived" />
+              <path d="M 0 0 L 10 5 L 0 10 z" :class="`arrow-${kind}`" />
             </marker>
           </defs>
-          <text
-            v-for="group in layout.groups"
-            :key="group.type"
-            x="35"
-            :y="group.y"
-            class="group-label"
+          <g
+            :transform="`translate(${camera.x},${camera.y}) scale(${camera.scale})`"
+            class="graph-scene"
           >
-            {{ shortName(group.type) }}
-          </text>
-          <text
-            v-for="title in layout.titles ?? []"
-            :key="title.id"
-            :x="title.x"
-            :y="title.y"
-            :text-anchor="title.anchor ?? 'middle'"
-            class="layout-title"
-          >
-            {{ title.text }}
-          </text>
-          <template v-if="marks">
-            <g v-for="mark in marks" :key="mark.id">
-              <path
-                v-if="mark.kind === 'sector'"
-                :d="mark.path"
-                class="mark"
-                :fill="mark.fill"
-                role="button"
-                :tabindex="mark.iri ? 0 : -1"
-                :aria-label="mark.iri ?? mark.label"
-                @click="mark.iri && emit('select', mark.iri)"
-                @keydown.enter.prevent="mark.iri && emit('select', mark.iri)"
-              >
-                <title>{{ mark.label }}{{ mark.sublabel ? ` · ${mark.sublabel}` : '' }}</title>
-              </path>
-              <rect
-                v-else-if="mark.kind === 'rect'"
-                :x="mark.x - (mark.w ?? 0) / 2"
-                :y="mark.y - (mark.h ?? 0) / 2"
-                :width="mark.w"
-                :height="mark.h"
-                class="mark"
-                :fill="mark.fill"
-                role="button"
-                :tabindex="mark.iri ? 0 : -1"
-                :aria-label="mark.iri ?? mark.label"
-                @click="mark.iri && emit('select', mark.iri)"
-                @keydown.enter.prevent="mark.iri && emit('select', mark.iri)"
-              >
-                <title>{{ mark.label }}{{ mark.sublabel ? ` · ${mark.sublabel}` : '' }}</title>
-              </rect>
-              <circle
-                v-else
-                :cx="mark.x"
-                :cy="mark.y"
-                :r="mark.r"
-                class="mark"
-                :fill="mark.fill"
-                role="button"
-                :tabindex="mark.iri ? 0 : -1"
-                :aria-label="mark.iri ?? mark.label"
-                @click="mark.iri && emit('select', mark.iri)"
-                @keydown.enter.prevent="mark.iri && emit('select', mark.iri)"
-              >
-                <title>{{ mark.label }}{{ mark.sublabel ? ` · ${mark.sublabel}` : '' }}</title>
-              </circle>
+            <text
+              v-for="title in layout.titles ?? []"
+              :key="title.id"
+              :x="title.x"
+              :y="title.y"
+              :text-anchor="title.anchor ?? 'middle'"
+              class="layout-title"
+            >
+              {{ title.text }}
+            </text>
+            <template v-if="marks">
               <text
-                v-if="mark.label"
-                :x="mark.x"
-                :y="mark.labelY ?? mark.y"
-                text-anchor="middle"
-                class="mark-label"
+                v-for="group in layout.groups"
+                :key="group.type"
+                x="35"
+                :y="group.y"
+                class="group-label"
               >
-                {{ mark.label }}
+                {{ shortName(group.type) }}
               </text>
-              <text
-                v-if="mark.sublabel"
-                :x="mark.x"
-                :y="(mark.labelY ?? mark.y) + 14"
-                text-anchor="middle"
-                class="mark-sublabel"
+              <g
+                v-for="mark in marks"
+                :key="mark.id"
+                class="mark-group"
+                :class="{
+                  selected: selectedIri === mark.iri,
+                  highlighted: mark.iri && nodeHighlighted(mark.iri),
+                }"
+                :transform="`translate(${mark.offsetX},${mark.offsetY})`"
+                :role="mark.iri ? 'button' : undefined"
+                :tabindex="mark.iri ? 0 : undefined"
+                :aria-label="mark.label ?? mark.iri"
+                :aria-pressed="mark.iri ? selectedIri === mark.iri : undefined"
+                @pointerdown.stop
+                @click.stop="mark.iri && emit('select', mark.iri)"
+                @keydown.enter.prevent.stop="mark.iri && emit('select', mark.iri)"
+                @keydown.space.prevent.stop="mark.iri && emit('select', mark.iri)"
               >
-                {{ mark.sublabel }}
-              </text>
-            </g>
-          </template>
-          <template v-else>
-            <g v-for="edge in paths" :key="edge.key" class="edge-group">
-              <path
-                v-if="edge.path"
-                :d="edge.path"
-                class="edge"
-                :class="{ derived: edge.kind === 'DERIVED' }"
-                :marker-end="
-                  edge.kind === 'DERIVED' ? 'url(#graph-derived-arrow)' : 'url(#graph-direct-arrow)'
-                "
+                <title>{{ mark.label }}{{ mark.sublabel ? ` · ${mark.sublabel}` : '' }}</title>
+                <path v-if="mark.kind === 'sector'" :d="mark.path" class="mark" :fill="mark.fill" />
+                <rect
+                  v-else-if="mark.kind === 'rect'"
+                  :x="mark.x - (mark.w ?? 0) / 2"
+                  :y="mark.y - (mark.h ?? 0) / 2"
+                  :width="mark.w"
+                  :height="mark.h"
+                  class="mark"
+                  :fill="mark.fill"
+                />
+                <circle
+                  v-else
+                  :cx="mark.x"
+                  :cy="mark.y"
+                  :r="mark.r"
+                  class="mark"
+                  :fill="mark.fill"
+                />
+                <text
+                  v-if="
+                    mark.label && showGraphLabel(camera.scale, selectedIri === mark.iri, 'node')
+                  "
+                  :x="mark.x"
+                  :y="mark.labelY ?? mark.y"
+                  text-anchor="middle"
+                  class="mark-label"
+                >
+                  {{ mark.label }}
+                </text>
+                <text
+                  v-if="mark.sublabel && camera.scale >= 0.65"
+                  :x="mark.x"
+                  :y="(mark.labelY ?? mark.y) + 14"
+                  text-anchor="middle"
+                  class="mark-sublabel"
+                >
+                  {{ mark.sublabel }}
+                </text>
+                <g
+                  v-if="mark.iri && nodeFlagged(mark.iri)"
+                  :transform="`translate(${mark.x + 12},${mark.y - 12})`"
+                  class="quality-flag"
+                  role="img"
+                  :aria-label="t('graph.qualityFlagged')"
+                >
+                  <circle r="8" />
+                  <path d="M0-4V1 M0 3V4" />
+                </g>
+              </g>
+            </template>
+            <template v-else>
+              <g
+                v-for="edge in paths"
+                :key="edge.key"
+                class="edge-group"
+                :class="{
+                  derived: edge.kind === 'DERIVED',
+                  selected: edgeSelected(edge),
+                  highlighted: edgeHighlighted(edge),
+                }"
+                role="button"
+                tabindex="0"
+                :aria-label="edgeDescription(edge)"
+                :aria-pressed="edgeSelected(edge)"
+                :data-edge-key="edgeKey(edge)"
+                @pointerdown.stop
+                @click.stop="emit('selectEdge', edge)"
+                @keydown.enter.prevent.stop="emit('selectEdge', edge)"
+                @keydown.space.prevent.stop="emit('selectEdge', edge)"
+              >
+                <title>{{ edgeDescription(edge) }}</title>
+                <path :d="edge.path" class="edge-hit" vector-effect="non-scaling-stroke" />
+                <path
+                  :d="edge.path"
+                  class="edge"
+                  :marker-end="`url(#${id}-${edgeSelected(edge) ? 'selected' : edge.kind.toLowerCase()}-arrow)`"
+                />
+                <g
+                  v-if="edge.label && showGraphLabel(camera.scale, importantEdge(edge), 'edge')"
+                  :transform="`translate(${edge.label.x},${edge.label.y}) scale(${edgeLabelScale(edge)})`"
+                  class="edge-label"
+                >
+                  <text text-anchor="middle" dy="-4">{{ edgeName(edge) }}</text>
+                </g>
+              </g>
+              <g
+                v-for="node in nodes"
+                :key="node.iri"
+                :transform="`translate(${node.x},${node.y})`"
+                class="node"
+                :class="{
+                  center: neighborhood && node.distance === 0,
+                  highlighted: nodeHighlighted(node.iri),
+                  selected: selectedIri === node.iri,
+                }"
+                tabindex="0"
+                role="button"
+                :aria-label="t('graph.exploreEntity', { iri: nodeName(node) })"
+                :aria-pressed="selectedIri === node.iri"
+                :data-iri="node.iri"
+                @pointerdown.stop.prevent="startDrag($event, node.iri)"
+                @click.stop="onNodeClick($event, node.iri)"
+                @keydown.enter.prevent.stop="emit('select', node.iri)"
+                @keydown.space.prevent.stop="emit('select', node.iri)"
               >
                 <title>
-                  {{
-                    t('graph.factDescription', {
-                      subject: edge.subject,
-                      predicate: edge.predicate,
-                      object: edge.object_,
-                    })
-                  }}
+                  {{ nodeTitle(node) }}{{ nodeBadgeText(node) ? ` · ${nodeBadgeText(node)}` : '' }}
                 </title>
-              </path>
-              <text
-                v-if="edge.path && edgeLabel(edge)"
-                :x="edge.label?.x"
-                :y="(edge.label?.y ?? 0) - 4"
-                text-anchor="middle"
-                class="edge-props"
-                :class="{ derived: edge.kind === 'DERIVED' }"
-              >
-                {{ edgeLabel(edge) }}
-              </text>
-            </g>
-            <g
-              v-for="node in layout.nodes"
-              :key="node.iri"
-              :transform="`translate(${node.x},${node.y})`"
-              class="node"
-              :class="{
-                center: neighborhood && node.distance === 0,
-                highlighted: nodeHighlighted(node.iri),
-              }"
-              tabindex="0"
-              role="button"
-              :aria-label="t('graph.exploreEntity', { iri: node.iri })"
-              @click="emit('select', node.iri)"
-              @keydown.enter.prevent="emit('select', node.iri)"
-              @keydown.space.prevent="emit('select', node.iri)"
-            >
-              <title>{{ node.iri }}</title>
-              <rect x="-80" y="-26" width="160" height="52" rx="8" />
-              <text y="-3" text-anchor="middle">
-                {{ String(node.attrs.name ?? node.row_key).slice(0, 18) }}
-              </text>
-              <text y="16" text-anchor="middle" class="node-type">
-                {{ isSchema ? nodeBadgeText(node) : shortName(node.type_iri).slice(0, 22) }}
-              </text>
-              <circle
-                v-if="nodeFlagged(node.iri)"
-                cx="70"
-                cy="-18"
-                r="8"
-                class="quality-flag"
-                role="img"
-                :aria-label="t('graph.qualityFlagged')"
-              >
-                <title>{{ t('graph.qualityFlagged') }}</title>
-              </circle>
-            </g>
-          </template>
+                <g :transform="`scale(${nodeDisplayScale(node.iri)})`">
+                  <circle class="selection-ring" :r="NODE_RADIUS + 5" />
+                  <circle
+                    class="node-body"
+                    :r="NODE_RADIUS"
+                    :style="{ '--node-color': typePaint(node.type_iri) }"
+                  />
+                  <path
+                    :d="typeIcon(node.type_iri)"
+                    :transform="`translate(0,${showGraphLabel(camera.scale, importantNode(node.iri), 'node') ? -20 : 0})`"
+                    class="type-icon"
+                    :style="{ color: typePaint(node.type_iri) }"
+                    aria-hidden="true"
+                  />
+                  <text
+                    v-if="showGraphLabel(camera.scale, importantNode(node.iri), 'node')"
+                    text-anchor="middle"
+                    class="node-name"
+                  >
+                    <tspan
+                      v-for="(line, index) in nodeNameLines(nodeName(node))"
+                      :key="index"
+                      x="0"
+                      :y="index * 15 + 7"
+                    >
+                      {{ line }}
+                    </tspan>
+                  </text>
+                  <g
+                    v-if="nodeFlagged(node.iri)"
+                    transform="translate(32,-30)"
+                    class="quality-flag"
+                    role="img"
+                    :aria-label="t('graph.qualityFlagged')"
+                  >
+                    <circle r="9" />
+                    <path d="M0-5V1 M0 3V5" />
+                  </g>
+                </g>
+              </g>
+            </template>
+          </g>
         </svg>
       </div>
-      <svg
-        v-if="minimapDots.length"
-        class="minimap"
-        :width="layout.width * minimapScale"
-        :height="layout.height * minimapScale"
-        :viewBox="`0 0 ${layout.width} ${layout.height}`"
-        role="img"
-        :aria-label="t('graph.minimap')"
-        @click="onMinimapClick"
+      <section
+        v-if="showLegend"
+        :id="`${id}-legend`"
+        class="legend-panel"
+        :aria-label="t('graphUi.legend')"
+        @keydown.esc.stop.prevent="closeLegend"
       >
-        <rect class="minimap-bg" x="0" y="0" :width="layout.width" :height="layout.height" />
-        <rect
-          v-for="dot in minimapDots"
-          :key="dot.id"
-          :x="dot.x - 3"
-          :y="dot.y - 3"
-          width="6"
-          height="6"
-          :fill="dot.fill"
-          opacity="0.75"
-        />
-        <rect
-          class="minimap-viewport"
-          :x="viewport.x"
-          :y="viewport.y"
-          :width="viewport.w"
-          :height="viewport.h"
-          vector-effect="non-scaling-stroke"
-        />
-      </svg>
+        <div class="panel-heading">
+          <strong>{{ t('graphUi.legend') }}</strong
+          ><button type="button" @click="closeLegend">{{ t('graphUi.closePanel') }}</button>
+        </div>
+        <span class="legend direct">{{ t('graph.directRelation') }}</span>
+        <span class="legend derived">{{ t('graph.derived') }}</span>
+        <span class="legend selected">{{ t('graphUi.selected') }}</span>
+        <span class="legend flagged">{{ t('graph.qualityFlagged') }}</span>
+        <span v-for="type in legendTypes" :key="type" class="legend-type"
+          ><svg width="20" height="20" viewBox="-10 -10 20 20" aria-hidden="true">
+            <path :d="typeIcon(type)" class="type-icon" :style="{ color: typePaint(type) }" /></svg
+          >{{ shortName(type) }}</span
+        >
+      </section>
+      <section
+        v-if="showMinimap"
+        :id="`${id}-minimap`"
+        class="minimap-panel"
+        :aria-label="t('graph.minimap')"
+        @keydown.esc.stop.prevent="closeMinimap"
+      >
+        <div class="panel-heading">
+          <span>{{ t('graphUi.loadedMap') }}</span
+          ><button type="button" @click="closeMinimap">{{ t('graphUi.closePanel') }}</button>
+        </div>
+        <svg
+          class="minimap"
+          width="180"
+          height="110"
+          :viewBox="minimapBox"
+          tabindex="0"
+          role="group"
+          :aria-label="t('graphUi.minimapHelp')"
+          @click="onMinimapClick"
+        >
+          <rect
+            :x="bounds.x"
+            :y="bounds.y"
+            :width="bounds.width"
+            :height="bounds.height"
+            class="minimap-bg"
+          />
+          <circle
+            v-for="dot in minimapDots"
+            :key="dot.id"
+            :cx="dot.x"
+            :cy="dot.y"
+            :r="Math.max(4, bounds.width / 140)"
+            :fill="dot.fill"
+          />
+          <rect
+            class="minimap-viewport"
+            :x="viewport.x"
+            :y="viewport.y"
+            :width="viewport.width"
+            :height="viewport.height"
+            vector-effect="non-scaling-stroke"
+          />
+        </svg>
+      </section>
+      <p :id="`${id}-help`" class="canvas-help">{{ t('graphUi.canvasHelp') }}</p>
     </div>
   </div>
 </template>
 
 <style scoped>
 .canvas-panel {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
 }
 .canvas-frame {
   position: relative;
+  flex: 1;
   min-width: 0;
-}
-.minimap {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  background: var(--bg);
+  min-height: 360px;
+  overflow: hidden;
+  background: var(--canvas, var(--bg-subtle));
   border: 1px solid var(--border);
-  border-radius: var(--radius-large);
-  cursor: crosshair;
-  opacity: 0.94;
-}
-.minimap-bg {
-  fill: var(--bg-subtle);
-}
-.minimap-viewport {
-  fill: none;
-  stroke: var(--pri);
-  stroke-width: 2;
+  border-radius: var(--r-lg);
 }
 .canvas-scroll {
-  overflow: auto;
-  max-height: 600px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.canvas-scroll > svg {
+  display: block;
+}
+.canvas-scroll.dragging,
+.canvas-scroll.dragging .node {
+  cursor: grabbing;
+}
+.canvas-toolbar {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  width: fit-content;
+  max-width: calc(100% - 20px);
+  padding: 4px;
+  background: var(--bg-surface);
   border: 1px solid var(--border);
-  background: var(--bg-subtle);
-  border-radius: var(--radius-large);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
 }
-.hint {
-  margin: 0;
-  color: var(--text-secondary);
-}
-.legend {
+button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 3px 8px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+button:hover,
+button[aria-expanded='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+button:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+button svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+.tool-divider {
+  height: 18px;
+  width: 1px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.zoom-value {
+  min-width: 40px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.canvas-help {
+  position: absolute;
+  pointer-events: none;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.legend-panel,
+.minimap-panel {
+  position: absolute;
+  z-index: 3;
+  padding: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+}
+.legend-panel {
+  top: 60px;
+  left: 10px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 110px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.panel-heading strong {
+  font-weight: 500;
+  color: var(--text);
+}
+.panel-heading button {
+  min-height: 24px;
+  padding: 2px 5px;
+}
+.legend,
+.legend-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .legend::before {
   content: '';
-  width: 30px;
+  width: 24px;
   border-top: 2px solid var(--text-secondary);
 }
 .legend.derived::before {
   border-top: 2px dashed var(--graph-derived);
 }
+.legend.selected::before {
+  width: 15px;
+  height: 15px;
+  border: 3px double var(--accent);
+  border-radius: 50%;
+}
 .legend.flagged::before {
-  border-top: 2px dotted var(--danger, #d03050);
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--danger);
+  border-radius: 50%;
+}
+.minimap-panel {
+  right: 10px;
+  bottom: 32px;
+}
+.minimap {
+  display: block;
+  cursor: crosshair;
+}
+.minimap-bg {
+  fill: var(--bg-subtle);
+}
+.minimap-viewport {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.edge-group {
+  cursor: pointer;
 }
 .edge {
   fill: none;
-  stroke: var(--text-secondary);
-  stroke-width: 1.5;
+  stroke: var(--text-tertiary);
+  stroke-width: 1.6;
+  pointer-events: none;
 }
-.edge.derived {
+.edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+}
+.edge-group.derived .edge {
   stroke: var(--graph-derived);
   stroke-dasharray: 7 5;
 }
-.edge-props {
-  fill: var(--text-secondary);
-  font-size: 11px;
-  paint-order: stroke;
-  stroke: var(--bg-subtle);
-  stroke-width: 3px;
+.edge-group.selected .edge,
+.edge-group.highlighted .edge {
+  stroke: var(--accent);
+  stroke-width: 3;
 }
-.edge-props.derived {
+.edge-label text {
+  fill: var(--text-secondary);
+  stroke: var(--canvas, var(--bg-subtle));
+  stroke-width: 6;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  font-size: 12px;
+}
+.edge-group.derived .edge-label text {
   fill: var(--graph-derived);
 }
+.edge-group.selected .edge-label text {
+  fill: var(--accent);
+  stroke: var(--bg-active);
+  stroke-width: 9;
+  font-weight: 600;
+}
+.edge-group:focus-visible .edge {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 2px var(--accent));
+}
 .arrow-direct {
-  fill: var(--text-secondary);
+  fill: var(--text-tertiary);
 }
 .arrow-derived {
   fill: var(--graph-derived);
 }
+.arrow-selected {
+  fill: var(--accent);
+}
 .node {
   cursor: pointer;
 }
-.node rect {
-  fill: var(--bg);
-  stroke: var(--border-strong);
+.node-body {
+  fill: var(--bg-surface);
+  stroke: var(--node-color, var(--border-strong));
   stroke-width: 1.5;
 }
-.node:hover rect,
-.node:focus rect,
-.node.center rect {
-  stroke: var(--pri);
-  stroke-width: 3;
+.selection-ring {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 2;
 }
-.node text {
+.node.selected .node-body,
+.node.highlighted .node-body,
+.node.center .node-body,
+.node:hover .node-body {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.node.selected .selection-ring {
+  stroke: var(--accent);
+}
+.node.highlighted .selection-ring {
+  stroke: var(--accent);
+  stroke-dasharray: 3 3;
+}
+.node:focus-visible .selection-ring {
+  stroke: var(--text);
+  stroke-dasharray: 2 3;
+}
+.node-name {
   fill: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   pointer-events: none;
 }
-.node .node-type {
-  fill: var(--text-secondary);
-  font-size: 11px;
+.type-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
-.quality-flag {
-  fill: var(--danger, #d03050);
+.quality-flag circle {
+  fill: var(--danger);
+  stroke: var(--bg-surface);
+  stroke-width: 2;
 }
-.node.highlighted rect {
-  stroke: var(--info, #2080f0);
-  stroke-width: 3;
+.quality-flag path {
+  stroke: var(--on-accent, #fff);
+  stroke-width: 2;
+  fill: none;
 }
-.group-label {
-  fill: var(--text-secondary);
-  font-size: 15px;
-  font-weight: 600;
-}
+.group-label,
 .layout-title {
   fill: var(--text-secondary);
   font-size: 12px;
   pointer-events: none;
 }
 .mark {
-  cursor: pointer;
-  fill-opacity: 0.72;
-  stroke: var(--bg);
+  fill-opacity: 0.8;
+  stroke: var(--bg-surface);
   stroke-width: 1;
 }
-.mark:hover,
-.mark:focus {
-  fill-opacity: 1;
-  stroke: var(--pri);
-  stroke-width: 2;
+.mark-group[role='button'] {
+  cursor: pointer;
 }
-.mark-label {
-  fill: #f8fafc;
-  font-size: 11px;
+.mark-group.selected .mark,
+.mark-group.highlighted .mark,
+.mark-group:focus-visible .mark {
+  fill-opacity: 1;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.mark-group.selected .mark {
+  stroke-dasharray: 5 2;
+}
+.mark-label,
+.mark-sublabel {
+  fill: var(--text);
+  font-size: 12px;
+  stroke: var(--bg-surface);
+  stroke-width: 2;
+  paint-order: stroke;
   pointer-events: none;
 }
 .mark-sublabel {
-  fill: #e2e8f0;
   font-size: 10px;
-  pointer-events: none;
 }
-.mark-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--font-caption);
-  color: var(--text-secondary);
-}
-.legend-item .chip {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
+@media (max-width: 640px) {
+  .canvas-help {
+    max-width: 65%;
+    font-size: 11px;
+  }
+  .minimap-panel {
+    right: 6px;
+    bottom: 48px;
+  }
+  .canvas-toolbar {
+    gap: 0;
+  }
+  button {
+    padding: 3px 6px;
+  }
 }
 </style>

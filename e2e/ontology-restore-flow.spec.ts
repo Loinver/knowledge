@@ -121,12 +121,20 @@ test('UI export, restore into an independent database, and semantic reexport', a
     })
     await loginAsAdmin(destination)
     await destination.goto('/governance/export')
+    await destination
+      .locator('.exchange-tabs > .n-tabs-nav .n-tabs-tab')
+      .filter({ hasText: '预检与导入' })
+      .click()
     await destination.locator('#ontology-restore-file').setInputFiles(sourcePath)
     await destination.getByRole('button', { name: '预览导入', exact: true }).click()
     const apply = destination.getByRole('button', { name: '导入为本地新本体', exact: true })
     await expect(apply).toBeEnabled()
     await apply.click()
     await expect(destination.getByText(/已创建本体 #\d+，本地版本 r1/)).toBeVisible()
+    await destination
+      .locator('.exchange-tabs > .n-tabs-nav .n-tabs-tab')
+      .filter({ hasText: '冻结版本与导出' })
+      .click()
     const frozen = destination.locator('.n-card').filter({ hasText: '本体 r1 的冻结内容' })
     await frozen.getByRole('button', { name: '迁移人员 · r1', exact: true }).click()
     await expect(frozen).toContainText('https://example.org/transfer#TransferPerson/Name')
@@ -150,7 +158,11 @@ test('UI export, restore into an independent database, and semantic reexport', a
       fullPage: true,
     })
     await destination.setViewportSize({ width: 390, height: 844 })
-    await destination.locator('.mobile-backdrop').click({ position: { x: 350, y: 300 } })
+    await expect(destination.locator('.app-sider')).toHaveClass(/n-layout-sider--collapsed/)
+    await destination
+      .locator('.exchange-tabs > .n-tabs-nav .n-tabs-tab')
+      .filter({ hasText: '预检与导入' })
+      .click()
     await apply.scrollIntoViewIfNeeded()
     await destination.screenshot({
       path: testInfo.outputPath('restore-mobile.png'),

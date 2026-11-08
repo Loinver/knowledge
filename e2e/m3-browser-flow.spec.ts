@@ -280,6 +280,7 @@ async function createTaskThroughUI(
 ): Promise<number> {
   await page.goto('/extraction/tasks')
   await expect(page.getByRole('heading', { name: '抽取任务', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '新建抽取任务', exact: true }).click()
   await page.locator('.task-form .n-base-selection').nth(0).click()
   await page.getByText(mappingName, { exact: true }).click()
   await page.locator('.task-form .n-base-selection').nth(1).click()
@@ -319,8 +320,16 @@ async function chooseMappingAndRunThroughUI(page: Page, mappingName: string): Pr
   await page.getByText('E2E 样例源 · sqlite', { exact: true }).click()
   await expect(page.locator('.catalog-summary')).toContainText('17')
 
+  // 切换到已登记的映射前，明确确认放弃刚填写的临时草稿。
+  const discard = page.waitForEvent('dialog')
+  const confirmDiscard = discard.then(async (dialog) => {
+    expect(dialog.type()).toBe('confirm')
+    expect(dialog.message()).toBe('尚有未保存修改，确定放弃并离开？')
+    await dialog.accept()
+  })
   await page.locator('.mapping-picker .n-base-selection').click()
   await page.getByText(mappingName + ' · 草稿', { exact: true }).click()
+  await confirmDiscard
   await expect(page.locator('.wizard-step.active')).toContainText('映射设计')
   await page.locator('.wizard-footer').getByRole('button', { name: '保存并预览' }).click()
   await expect(page.getByText('当前样例没有发现字段错误。')).toBeVisible()
@@ -390,29 +399,25 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   )
   await page.reload()
 
-  const workflowLabels = [
-    '实体类型',
-    '关系类型',
-    '业务域',
-    '本体',
-    '本体建模',
-    '规则',
-    '知识抽取',
-    '知识图谱',
-    '知识追溯',
-  ]
+  const workflowLabels = ['本体建模', '数据源', '映射配置', '抽取运行', '图谱浏览', '追溯与治理']
   await expect(page.locator('.pipe-name')).toHaveText(workflowLabels)
-  await expect(page.locator('.pipe-action')).toHaveCount(3)
+  await expect(page.locator('.pipe-action')).toHaveCount(1)
+  const stats = await getData<Record<string, number>>(request, '/dashboard/stats')
+  await expect(page.locator('.pipe-count')).toHaveText(
+    ['ontologies', 'datasources', 'mappings', 'runs', 'result_set_count'].map((key) =>
+      String(stats[key]),
+    ),
+  )
+  await expect(page.locator('.pipeline').getByRole('progressbar')).toHaveCount(0)
   const sider = page.locator('.app-sider')
   const menuLabels = await sider.locator('.n-menu-item-content-header').allTextContents()
   expect(menuLabels).toEqual([
     '工作台',
-    '语义资源',
-    '本体管理',
+    '本体与资源',
     '数据接入',
-    '知识抽取',
-    '知识图谱',
-    '标准治理',
+    '映射与抽取',
+    '图谱与追溯',
+    '治理与版本',
   ])
   await expect(sider.getByText('系统管理', { exact: true })).toHaveCount(0)
 
@@ -420,10 +425,10 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await sider.getByText('数据源', { exact: true }).click()
   await expect(page).toHaveURL(/\/datasources$/)
   await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['数据接入', '数据源'])
-  await sider.getByText('知识图谱', { exact: true }).click()
+  await sider.getByText('图谱与追溯', { exact: true }).click()
   await sider.getByText('知识追溯', { exact: true }).click()
   await expect(page).toHaveURL(/\/graph\/evidence$/)
-  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['知识图谱', '知识追溯'])
+  await expect(page.locator('.n-breadcrumb-item__link')).toHaveText(['图谱与追溯', '知识追溯'])
   await page.goBack()
   await expect(page).toHaveURL(/\/datasources$/)
   const selectedMenu = sider.locator('.n-menu-item-content--selected:visible')
@@ -432,15 +437,12 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await page.locator('.brand').click()
   await page.getByRole('button', { name: '切换语言', exact: true }).click()
   await expect(page.locator('.pipe-name')).toHaveText([
-    'Entity Types',
-    'Relation Types',
-    'Business Domains',
-    'Ontology',
-    'Ontology Modeling',
-    'Rules',
-    'Knowledge Extraction',
-    'Knowledge Graph',
-    'Knowledge Tracing',
+    'Ontology modeling',
+    'Data Sources',
+    'Mapping configuration',
+    'Extraction Runs',
+    'Graph Browser',
+    'Evidence & governance',
   ])
   await page.getByRole('button', { name: 'Switch language', exact: true }).click()
   await expect(page.locator('.pipe-name')).toHaveText(workflowLabels)
@@ -631,6 +633,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   const linkedFact = firstTriples.find((fact) => fact.subject !== fact.object_)
   expect(linkedFact, 'sample data contains at least one cross-entity fact').toBeTruthy()
   await page.goto('/graph?graph=' + firstGraph!.id + '&layout=org_tree')
+  await page.getByRole('button', { name: '筛选与视图', exact: true }).click()
   await page.getByText('视图语义配置', { exact: true }).click()
   await page.getByLabel('层级关系', { exact: true }).click()
   await page
@@ -638,7 +641,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
     .filter({ hasText: '就职于 · https://example.org/e2e/E2EWorksFor' })
     .click()
   await expect(page.locator('svg .node').first()).toBeVisible()
-  await expect(page.getByText('形态', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('形态', { exact: true })).toBeVisible()
   await expect(page.getByText('推荐形态：')).toBeVisible()
   await page.goto('/graph?graph=' + firstGraph!.id + '&layout=force')
   await expect(page.locator('svg .node').first()).toBeVisible()
@@ -653,6 +656,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await pathDrawer.locator('.n-drawer-header__close').click()
 
   // 版本差异抽屉（G-24）：firstGraph vs partial
+  await page.getByRole('button', { name: '筛选与视图', exact: true }).click()
   await page.getByRole('button', { name: '版本差异' }).click()
   const diffDrawer = page.locator('.n-drawer').filter({ hasText: '基准结果集' })
   await diffDrawer.getByRole('textbox', { name: '基准结果集' }).fill(String(firstGraph!.id))
@@ -663,15 +667,39 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   await expect(diffDrawer.getByText(/实体 \+\d+\/−\d+，修改 \d+；事实 \+\d+\/−\d+/)).toBeVisible()
   await diffDrawer.locator('.n-drawer-header__close').click()
 
-  // 质量叠加（G-28）：PARTIAL 结果集的隔离命中节点带标记
+  // 质量叠加（G-28）：当前接口不提供节点完整来源键，不能按 row_key 猜测异常节点。
+  // 保留真实隔离数量和来源证据检查；精确节点标记待完整来源契约支持。
   await page.goto('/graph?graph=' + partial.graph_revision.id)
+  await page.getByRole('button', { name: '筛选与视图', exact: true }).click()
   await page.getByText('质量叠加').click()
-  await expect(page.locator('svg .quality-flag').first()).toBeVisible()
+  await expect(page.getByRole('alert').filter({ hasText: '节点缺少完整来源标识' })).toHaveText(
+    `本次运行有 ${partial.run.counts.quarantine_count} 条隔离记录。节点缺少完整来源标识，暂不按行键猜测异常对象；请从来源证据核实。`,
+  )
+  await expect(page.locator('svg .node').first()).toBeVisible()
+  await expect(page.locator('svg .quality-flag')).toHaveCount(0)
 
   // 导出菜单存在且可选
   await page.getByRole('button', { name: '导出' }).click()
   await expect(page.getByText('导出节点 CSV')).toBeVisible()
   await page.keyboard.press('Escape')
+
+  const quarantinedEmployee = firstEntities.find(
+    (entity) => entity.type_iri.endsWith('/E2EEmployee') && entity.row_key === '8001',
+  )
+  expect(quarantinedEmployee, 'invalid hire_date belongs to employee source row 8001').toBeTruthy()
+  await page.goto(
+    '/graph/evidence?mode=entity&graph=' +
+      partial.graph_revision.id +
+      '&iri=' +
+      encodeURIComponent(quarantinedEmployee!.iri),
+  )
+  await expect(page.getByRole('alert').filter({ hasText: '该来源行存在隔离记录' })).toBeVisible()
+  const quarantinedEvidence = page
+    .locator('tr')
+    .filter({ has: page.getByRole('cell', { name: 'hr_employee', exact: true }) })
+    .filter({ has: page.getByRole('cell', { name: '8001', exact: true }) })
+    .filter({ has: page.getByRole('cell', { name: String(partial.run.id), exact: true }) })
+  await expect(quarantinedEvidence.getByText('存在隔离问题', { exact: true }).first()).toBeVisible()
 
   // 证据冻结链（G-26）：事实 → 来源行 → 运行 → 冻结版本
   await page.goto(
@@ -798,7 +826,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
         )
         if (route.pageHeader) await expect(page.locator('.page-header')).toBeVisible()
         if (route.path === '/') {
-          await expect(page.locator('.pipe-step')).toHaveCount(9)
+          await expect(page.locator('.pipe-step')).toHaveCount(6)
           const backdrop = page.locator('.mobile-backdrop')
           if (viewport.width < 767 && (await backdrop.isVisible())) {
             await page.screenshot({

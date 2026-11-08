@@ -14,10 +14,11 @@ import {
   NSelect,
   NSpace,
   NSpin,
+  NTag,
 } from 'naive-ui'
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { DomainBrief } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
@@ -27,17 +28,22 @@ import type { Namespace } from '@/api/namespaces'
 import { namespacesApi } from '@/api/namespaces'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
 
 import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
 
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const router = useRouter()
+const route = useRoute()
+const auth = useAuthStore()
+const canWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
 
 const loading = ref(false)
 const items = ref<EntityTypeBrief[]>([])
 const loadError = ref('')
-const searchQuery = ref('')
+const searchQuery = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const showCreate = ref(false)
 const namespaces = ref<Namespace[]>([])
 const domains = ref<DomainBrief[]>([])
@@ -48,11 +54,49 @@ const removingId = ref<number | null>(null)
 const notice = ref('')
 
 /** 空串表示「全部」。统计条本身即筛选入口，不额外占一行控件。 */
-const statusFilter = ref<ResourceStatus | ''>('')
+const statusFilter = ref<ResourceStatus | ''>(
+  ['DRAFT', 'PUBLISHED', 'ARCHIVED'].includes(String(route.query.status))
+    ? (route.query.status as ResourceStatus)
+    : '',
+)
 /** 第四张卡：只看最近一次资产层校验里判为违反的类型。 */
-const violationOnly = ref(false)
-const domainFilter = ref<number | null>(null)
-const view = ref<'table' | 'card'>('table')
+const violationOnly = ref(route.query.violation === '1')
+const domainFilter = ref<number | null>(Number(route.query.domain) || null)
+const view = ref<'table' | 'card'>(route.query.view === 'card' ? 'card' : 'table')
+const page = ref(Math.max(1, Number(route.query.page) || 1))
+const selected = computed(() => items.value.find((item) => item.id === Number(route.query.preview)))
+const showPreview = computed({
+  get: () => Boolean(selected.value),
+  set: (open: boolean) => {
+    if (!open) void router.replace({ query: { ...route.query, preview: undefined } })
+  },
+})
+let listController: AbortController | undefined
+onUnmounted(() => listController?.abort())
+watch([searchQuery, statusFilter, violationOnly, domainFilter, view, page], () => {
+  void router.replace({
+    query: {
+      ...route.query,
+      q: searchQuery.value || undefined,
+      status: statusFilter.value || undefined,
+      violation: violationOnly.value ? '1' : undefined,
+      domain: domainFilter.value || undefined,
+      view: view.value === 'card' ? 'card' : undefined,
+      page: page.value > 1 ? page.value : undefined,
+    },
+  })
+})
+function preview(id: number) {
+  void router.replace({ query: { ...route.query, preview: id } })
+}
+function clearFilters() {
+  searchQuery.value = ''
+  statusFilter.value = ''
+  violationOnly.value = false
+  domainFilter.value = null
+  page.value = 1
+  void loadList()
+}
 
 /** 统计条点击即筛选：三个状态卡与「校验违反」互斥，统一在这里收口。 */
 function selectAllStatuses() {
@@ -116,7 +160,7 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
     render(row) {
       const label = displayLabel(row)
       return h('div', { class: 'cell-name' }, [
-        h('span', { class: 'cell-primary' }, label),
+        h('button', { type: 'button', class: 'name-link', onClick: () => preview(row.id) }, label),
         label === row.name ? null : h('span', { class: 'cell-sub mono' }, row.name),
       ])
     },
@@ -176,7 +220,7 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
         h(
           NButton,
           { size: 'small', quaternary: true, onClick: () => goToDetail(row.id) },
-          { default: () => t('common.edit') },
+          { default: () => t('ui.view') },
         ),
         canDelete(row)
           ? h(
@@ -204,7 +248,7 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
 ])
 
 function canDelete(row: EntityTypeBrief): boolean {
-  return row.status === 'DRAFT' && row.current_revision === 0
+  return canWrite.value && row.status === 'DRAFT' && row.current_revision === 0
 }
 
 function renderStatus(status: ResourceStatus) {
@@ -251,23 +295,31 @@ function onNamespaceCreated(ns: Namespace) {
 }
 
 function goToDetail(id: number) {
-  void router.push({ name: 'entity-detail', params: { id } })
+  void router.push({ name: 'entity-detail', params: { id }, query: route.query })
 }
 
 async function loadList() {
+  listController?.abort()
+  const controller = new AbortController()
+  listController = controller
   loading.value = true
   loadError.value = ''
   try {
-    items.value = await entityTypesApi.list({
-      q: searchQuery.value,
-      domain_id: domainFilter.value ?? undefined,
-    })
+    const next = await entityTypesApi.list(
+      {
+        q: searchQuery.value,
+        domain_id: domainFilter.value ?? undefined,
+      },
+      controller.signal,
+    )
+    if (!controller.signal.aborted) items.value = next
   } catch (err) {
+    if (controller.signal.aborted) return
     // 加载失败静默清空会让用户以为「没有数据」；至少给出可见的错误提示
     items.value = []
     loadError.value = toMessage(err)
   } finally {
-    loading.value = false
+    if (!controller.signal.aborted) loading.value = false
   }
 }
 
@@ -313,6 +365,7 @@ async function loadNamespaces() {
 }
 
 async function handleCreate() {
+  if (!canWrite.value || creating.value) return
   createError.value = ''
   try {
     await formRef.value?.validate()
@@ -354,15 +407,20 @@ onMounted(async () => {
 })
 
 watch(domainFilter, () => void loadList())
+
+const createVisible = useDraftGuard(showCreate, () => formData.value)
 </script>
 
 <template>
   <section class="page">
     <PageHeader :title="t('page.entityTypes')" :description="t('entityType.description')">
       <template #actions>
-        <NButton type="primary" @click="showCreate = true">{{ t('common.create') }}</NButton>
+        <NButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('common.create')
+        }}</NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info" class="list-error">{{ t('ui.readonly') }}</NAlert>
 
     <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
 
@@ -374,7 +432,7 @@ watch(domainFilter, () => void loadList())
         :class="{ active: statusFilter === '' && !violationOnly }"
         @click="selectAllStatuses"
       >
-        <span class="stat-value mono">{{ stats?.total ?? 0 }}</span>
+        <span class="stat-value mono">{{ stats?.total ?? '—' }}</span>
         <span class="stat-label">{{ t('entityType.total') }}</span>
       </button>
       <button
@@ -389,7 +447,7 @@ watch(domainFilter, () => void loadList())
           class="stat-value mono"
           :style="{ color: statusFilter === s ? STATUS_VAR[s] : undefined }"
         >
-          {{ s === 'PUBLISHED' ? (stats?.published ?? 0) : (stats?.draft ?? 0) }}
+          {{ s === 'PUBLISHED' ? (stats?.published ?? '—') : (stats?.draft ?? '—') }}
         </span>
         <span class="stat-label">
           {{ s === 'DRAFT' ? t('entityType.draftUnpublished') : t(`resourceStatus.${s}`) }}
@@ -406,7 +464,7 @@ watch(domainFilter, () => void loadList())
           class="stat-value mono"
           :style="{ color: stats?.violation ? 'var(--s-violation)' : undefined }"
         >
-          {{ stats?.violation ?? 0 }}
+          {{ stats?.violation ?? '—' }}
         </span>
         <span class="stat-label">{{ t('entityType.violation') }}</span>
       </button>
@@ -444,6 +502,7 @@ watch(domainFilter, () => void loadList())
         />
       </NFormItem>
       <span class="spacer" />
+      <NButton quaternary @click="clearFilters">{{ t('ui.clearFilters') }}</NButton>
       <div class="seg" role="group" :aria-label="t('common.viewMode')">
         <button type="button" :class="{ on: view === 'table' }" @click="view = 'table'">
           {{ t('common.viewTable') }}
@@ -454,19 +513,32 @@ watch(domainFilter, () => void loadList())
       </div>
     </div>
 
-    <NSpin :show="loading">
-      <NAlert v-if="loadError" type="error" class="list-error">{{ loadError }}</NAlert>
-      <div v-if="view === 'table'" class="card">
+    <NSpin :show="loading" :aria-busy="loading" :description="t('ui.loading')">
+      <NAlert v-if="loadError" type="error" class="list-error" role="alert">
+        {{ loadError }}
+        <NButton :disabled="loading" @click="loadList">{{ t('ui.retry') }}</NButton>
+      </NAlert>
+      <div v-else-if="view === 'table'" class="card">
         <NDataTable
           :columns="columns"
           :data="filtered"
           :bordered="false"
-          :pagination="{ pageSize: 20 }"
+          :pagination="{ page, pageSize: 20, onChange: (value: number) => (page = value) }"
           :scroll-x="1150"
           :row-key="(row: EntityTypeBrief) => row.id"
         >
           <template #empty>
-            <NEmpty :description="t('common.empty')" />
+            <NEmpty
+              v-if="!loading"
+              :description="
+                t(
+                  searchQuery || statusFilter || domainFilter || violationOnly
+                    ? 'ui.emptyFiltered'
+                    : 'ui.emptyStart',
+                )
+              "
+            />
+            <span v-else role="status">{{ t('ui.loading') }}</span>
           </template>
         </NDataTable>
       </div>
@@ -478,7 +550,7 @@ watch(domainFilter, () => void loadList())
           :key="row.id"
           type="button"
           class="type-card"
-          @click="goToDetail(row.id)"
+          @click="preview(row.id)"
         >
           <span class="type-head">
             <i class="type-dot" :style="{ background: STATUS_VAR[row.status] }" />
@@ -496,11 +568,44 @@ watch(domainFilter, () => void loadList())
       </div>
 
       <div v-else class="card empty-card">
-        <NEmpty :description="t('common.empty')" />
+        <NEmpty v-if="!loading" :description="t('ui.emptyFiltered')" />
       </div>
     </NSpin>
 
-    <NDrawer v-model:show="showCreate" :width="460">
+    <NDrawer
+      v-model:show="showPreview"
+      :width="360"
+      :show-mask="false"
+      :block-scroll="false"
+      :trap-focus="false"
+    >
+      <NDrawerContent v-if="selected" :title="displayLabel(selected)" closable>
+        <div class="object-context">
+          <NTag>{{ t(`resourceStatus.${selected.status}`) }}</NTag>
+          <span class="mono">{{ `v${selected.current_revision}` }}</span>
+        </div>
+        <NAlert type="info">{{
+          t(selected.status === 'PUBLISHED' ? 'ui.frozen' : 'ui.working')
+        }}</NAlert>
+        <dl class="preview-meta">
+          <dt>{{ t('common.name') }}</dt>
+          <dd>{{ selected.name }}</dd>
+          <dt>{{ t('common.iri') }}</dt>
+          <dd class="mono">{{ selected.iri }}</dd>
+          <dt>{{ t('entityType.propCount') }}</dt>
+          <dd>{{ selected.data_prop_count ?? '—' }}</dd>
+          <dt>{{ t('entityType.relationCount') }}</dt>
+          <dd>{{ selected.relation_count ?? '—' }}</dd>
+        </dl>
+        <template #footer
+          ><NButton type="primary" @click="goToDetail(selected.id)">{{
+            t('ui.view')
+          }}</NButton></template
+        >
+      </NDrawerContent>
+    </NDrawer>
+
+    <NDrawer v-model:show="createVisible" :width="460">
       <NDrawerContent :title="t('entityType.create')" closable>
         <NForm ref="formRef" :model="formData" :rules="rules" label-placement="top">
           <NFormItem :label="t('common.name')" path="name">
@@ -528,7 +633,7 @@ watch(domainFilter, () => void loadList())
         <NAlert v-if="createError" type="error" class="create-error">{{ createError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
-            <NButton @click="showCreate = false">{{ t('common.cancel') }}</NButton>
+            <NButton @click="createVisible = false">{{ t('common.cancel') }}</NButton>
             <NButton type="primary" :loading="creating" @click="handleCreate">
               {{ t('common.save') }}
             </NButton>
@@ -555,8 +660,9 @@ watch(domainFilter, () => void loadList())
 
 .stat {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
   padding: 11px 14px;
   font: inherit;
   color: inherit;
@@ -598,6 +704,7 @@ watch(domainFilter, () => void loadList())
 /* ── 工具条 ─────────────────────────────────────────────── */
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
   margin-bottom: var(--space-3);
@@ -661,6 +768,30 @@ watch(domainFilter, () => void loadList())
 
 :deep(.cell-primary) {
   font-weight: 500;
+}
+
+:deep(.name-link) {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+
+.preview-meta {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+.preview-meta dt {
+  color: var(--text-secondary);
+}
+.preview-meta dd {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
 }
 
 :deep(.cell-sub) {

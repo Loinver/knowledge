@@ -11,9 +11,11 @@ import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
 import { createRenderer, createSSRApp, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
-const exposed = 'page,data,error,loading,reload,downloading,downloadError,download,formatTime'
+const exposed =
+  'page,data,error,loading,reload,downloading,downloadError,download,formatTime,openSummary,report,selectedId,showSummary,reportLoading,reportError,runStatus'
 const renderer = createRenderer({
   createElement: () => ({}),
   createText: () => ({}),
@@ -104,7 +106,11 @@ async function i18n(locale = 'en-US') {
 
 async function mount(t, api) {
   const view = await compileView(api)
-  const app = renderer.createApp({ ...view.component, render: () => null }).use(await i18n())
+  const router = createRouter({ history: createMemoryHistory(), routes: [] })
+  const app = renderer
+    .createApp({ ...view.component, render: () => null })
+    .use(await i18n())
+    .use(router)
   const vm = app.mount({})
   t.after(() => {
     app.unmount()
@@ -246,7 +252,9 @@ test('real template renders bilingual report explanation and page controls', asy
   try {
     for (const locale of ['zh-CN', 'en-US']) {
       const translator = await i18n(locale)
-      const app = createSSRApp(view.component).use(translator)
+      const app = createSSRApp(view.component)
+        .use(translator)
+        .use(createRouter({ history: createMemoryHistory(), routes: [] }))
       setup(app)
       const html = await renderToString(app)
       for (const key of ['page.extractionRuns', 'runs.exportNote', 'runs.previous', 'runs.next']) {
@@ -303,4 +311,47 @@ test('export API produces a JSON file without turning error envelopes into blobs
     throw { code: 'KG.RESOURCE_NOT_FOUND' }
   }
   await assert.rejects(extractionApi.exportRun(999, signal), { code: 'KG.RESOURCE_NOT_FOUND' })
+})
+
+test('run summary cancels prior reads and ignores late responses for another run', async (t) => {
+  const requests = []
+  const { vm } = await mount(t, {
+    list: async () => [],
+    exportRun: (id, signal) => {
+      const request = { id, signal, ...deferred() }
+      requests.push(request)
+      return request.promise
+    },
+  })
+  const first = vm.openSummary(1)
+  const second = vm.openSummary(2)
+  assert.equal(requests[0].signal.aborted, true)
+  requests[1].resolve(
+    new Blob([
+      JSON.stringify({ run_id: 2, status: 'PARTIAL', finished_at: '2026-11-07T00:00:00Z' }),
+    ]),
+  )
+  await second
+  requests[0].resolve(new Blob([JSON.stringify({ run_id: 1, status: 'SUCCESS' })]))
+  await first
+  assert.equal(vm.report.run_id, 2)
+  assert.equal(vm.runStatus, 'PARTIAL')
+  assert.equal(vm.reportLoading, false)
+})
+
+test('unfinished run never presents SUCCESS and closing the drawer rejects late report updates', async (t) => {
+  const response = deferred()
+  const { vm } = await mount(t, { list: async () => [], exportRun: () => response.promise })
+  const pending = vm.openSummary(3, { id: 3, status: 'SUCCESS', finished_at: null })
+  assert.equal(vm.runStatus, 'UNFINISHED')
+  vm.showSummary = false
+  await settle()
+  response.resolve(
+    new Blob([
+      JSON.stringify({ run_id: 3, status: 'SUCCESS', finished_at: '2026-11-07T00:00:00Z' }),
+    ]),
+  )
+  await pending
+  assert.equal(vm.report, null)
+  assert.equal(vm.runStatus, 'UNFINISHED')
 })

@@ -9,13 +9,14 @@ import { setup } from '@css-render/vue3-ssr'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
+import { createPinia } from 'pinia'
 import { createRenderer, createSSRApp, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed = {
-  Namespaces: 'items,loading,loadError,actionError,notice,load,remove,deleteBlocker',
+  Namespaces: 'auth,items,loading,loadError,actionError,notice,load,remove,deleteBlocker',
   'components/NamespaceCreateModal': 'form,saving,error,submit',
   EntityTypes: 'namespaces,formData,onNamespaceCreated',
 }
@@ -146,8 +147,10 @@ async function mount(t, name, api = state(), props = {}) {
   const app = renderer
     .createApp({ ...view.component, render: () => null }, props)
     .use(translations)
+    .use(createPinia())
     .use(createTestRouter())
   const vm = app.mount({})
+  if (vm.auth) vm.auth.user = { id: 1, role: 'EDITOR' }
   let stopped = false
   const stop = () => {
     if (!stopped) app.unmount()
@@ -291,7 +294,10 @@ test('namespace page renders both locales with a registration entry', async () =
   try {
     for (const locale of ['zh-CN', 'en-US']) {
       const translations = await i18n(locale)
-      const app = createSSRApp(view.component).use(translations).use(createTestRouter())
+      const app = createSSRApp(view.component)
+        .use(translations)
+        .use(createPinia())
+        .use(createTestRouter())
       setup(app)
       const html = await renderToString(app)
       for (const key of ['page.namespaces', 'namespace.description', 'namespace.create']) {

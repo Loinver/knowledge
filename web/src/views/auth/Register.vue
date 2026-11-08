@@ -25,16 +25,21 @@ const error = ref('')
  */
 const registrationEnabled = ref<boolean | null>(null)
 const passwordMin = ref(8)
+const configError = ref('')
 
-onMounted(async () => {
+async function loadConfig() {
+  registrationEnabled.value = null
+  configError.value = ''
   try {
     const config = await authApi.config()
     registrationEnabled.value = config.registration_enabled
     passwordMin.value = config.password_min_length
-  } catch {
+  } catch (cause) {
     registrationEnabled.value = false
+    configError.value = toMessage(cause)
   }
-})
+}
+onMounted(loadConfig)
 
 const rules = computed<FormRules>(() => ({
   username: [
@@ -63,12 +68,14 @@ const rules = computed<FormRules>(() => ({
 }))
 
 async function submit() {
+  if (auth.loading || !registrationEnabled.value) return
   error.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (auth.loading) return
   try {
     await auth.register({
       username: model.value.username,
@@ -84,8 +91,11 @@ async function submit() {
 
 <template>
   <div v-if="registrationEnabled === false" class="closed">
-    <AuthHeading :title="t('auth.registerTitle')" :subtitle="t('auth.registerSubtitle')" />
-    <NAlert type="warning" role="alert" class="form-alert">
+    <AuthHeading :title="t('auth.registerTitle')" />
+    <NAlert v-if="configError" type="error" class="form-alert"
+      >{{ configError }} <NButton @click="loadConfig">{{ t('ui.retry') }}</NButton></NAlert
+    >
+    <NAlert v-else type="warning" role="alert" class="form-alert">
       {{ t('auth.registrationClosed') }}
     </NAlert>
     <div class="form-links">
@@ -143,6 +153,10 @@ async function submit() {
       <RouterLink :to="{ name: 'login' }">{{ t('auth.toLogin') }}</RouterLink>
     </div>
   </NForm>
+  <div v-else>
+    <AuthHeading :title="t('auth.registerTitle')" />
+    <p role="status">{{ t('common.loading') }}</p>
+  </div>
 </template>
 
 <style scoped>

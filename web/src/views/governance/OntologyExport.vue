@@ -1,5 +1,17 @@
 <script setup lang="ts">
-import { NAlert, NButton, NCard, NForm, NFormItem, NInputNumber, NSelect, NSpace } from 'naive-ui'
+import {
+  NAlert,
+  NButton,
+  NCard,
+  NEmpty,
+  NForm,
+  NFormItem,
+  NInputNumber,
+  NSelect,
+  NSpace,
+  NTabPane,
+  NTabs,
+} from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -13,6 +25,7 @@ import OntologyRestore from '@/views/governance/components/OntologyRestore.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const activeTab = ref('export')
 const ontologies = ref<Ontology[]>([])
 const selectedId = ref<number | null>(null)
 const revision = ref<number | null>(null)
@@ -51,6 +64,7 @@ function resetSelection() {
 }
 
 async function load() {
+  if (loading.value) return
   loading.value = true
   error.value = ''
   try {
@@ -60,7 +74,7 @@ async function load() {
       items.push(...data)
       if (data.length < 200) break
     }
-    ontologies.value = items
+    if (!controller.signal.aborted) ontologies.value = items
   } catch (err) {
     if (!controller.signal.aborted) error.value = t('rules.requestFailed', { code: errorCode(err) })
   } finally {
@@ -73,10 +87,23 @@ function errorCode(err: unknown) {
 }
 
 async function download() {
-  if (!selected.value || downloading.value) return
+  if (
+    !selected.value ||
+    selected.value.current_revision < 1 ||
+    downloading.value ||
+    loading.value ||
+    error.value
+  )
+    return
   const ontology = selected.value
   const selectedFormat = format.value
   const selectedRevision = revision.value ?? ontology.current_revision
+  if (
+    !Number.isSafeInteger(selectedRevision) ||
+    selectedRevision < 1 ||
+    selectedRevision > ontology.current_revision
+  )
+    return
   downloading.value = true
   error.value = ''
   success.value = false
@@ -117,55 +144,69 @@ onBeforeUnmount(() => controller.abort())
 
 <template>
   <section class="export-page">
-    <PageHeader :title="t('export.title')" :description="t('export.intro')" />
-    <NAlert v-if="error" type="error" role="alert">{{ error }}</NAlert>
-    <NAlert v-if="success" type="success" role="status">{{ t('export.downloaded') }}</NAlert>
-    <NCard>
-      <NForm label-placement="top" :disabled="downloading">
-        <NFormItem :label="t('export.ontology')">
-          <NSelect
-            v-model:value="selectedId"
-            :options="options"
-            :loading="loading"
-            filterable
-            :placeholder="t('export.selectOntology')"
-            @update:value="resetSelection"
-          />
-        </NFormItem>
-        <NFormItem :label="t('export.revision')">
-          <NInputNumber
-            v-model:value="revision"
-            :min="1"
-            :max="selected?.current_revision || undefined"
-            :precision="0"
-            clearable
-            :placeholder="t('export.latest')"
-          />
-        </NFormItem>
-        <NFormItem :label="t('export.format')"
-          ><NSelect v-model:value="format" :options="formats"
-        /></NFormItem>
-        <NAlert type="info">{{ t('export.snapshotHint') }}</NAlert>
-        <NSpace class="actions">
-          <NButton
-            type="primary"
-            :disabled="!selected || loading"
-            :loading="downloading"
-            @click="download"
-            >{{ t('export.download') }}</NButton
-          >
-          <NButton :disabled="downloading" :loading="loading" @click="load">{{
-            t('graph.refresh')
-          }}</NButton>
-        </NSpace>
-      </NForm>
-    </NCard>
-    <OntologyHistory
-      v-if="selected && (revision ?? selected.current_revision) > 0"
-      :ontology-id="selected.id"
-      :revision="revision ?? selected.current_revision"
-    />
-    <OntologyRestore @restored="restored" />
+    <PageHeader :title="t('ui.exchange')" :description="t('governanceUi.exchangeIntro')" />
+    <NTabs v-model:value="activeTab" type="line" class="exchange-tabs">
+      <NTabPane name="export" :tab="t('governanceUi.exportTab')" display-directive="show">
+        <NAlert v-if="error" type="error" role="alert"
+          >{{ error }}
+          <NButton @click="load">{{ t('governanceUi.retry') }}</NButton>
+        </NAlert>
+        <NAlert v-if="success" type="success" role="status">{{ t('export.downloaded') }}</NAlert>
+        <p v-if="loading" role="status">{{ t('common.loading') }}</p>
+        <NEmpty
+          v-else-if="!error && !ontologies.length"
+          :description="t('governanceUi.noOntologies')"
+        />
+        <NCard>
+          <NForm label-placement="top" :disabled="downloading || loading">
+            <NFormItem :label="t('export.ontology')">
+              <NSelect
+                v-model:value="selectedId"
+                :options="options"
+                :loading="loading"
+                filterable
+                :placeholder="t('export.selectOntology')"
+                @update:value="resetSelection"
+              />
+            </NFormItem>
+            <NFormItem :label="t('export.revision')">
+              <NInputNumber
+                v-model:value="revision"
+                :min="1"
+                :max="selected?.current_revision || undefined"
+                :precision="0"
+                clearable
+                :placeholder="t('export.latest')"
+              />
+            </NFormItem>
+            <NFormItem :label="t('export.format')"
+              ><NSelect v-model:value="format" :options="formats"
+            /></NFormItem>
+            <NAlert type="info">{{ t('export.snapshotHint') }}</NAlert>
+            <NSpace class="actions">
+              <NButton
+                type="primary"
+                :disabled="!selected || !selected.current_revision || loading || !!error"
+                :loading="downloading"
+                @click="download"
+                >{{ t('export.download') }}</NButton
+              >
+              <NButton :disabled="downloading" :loading="loading" @click="load">{{
+                t('graph.refresh')
+              }}</NButton>
+            </NSpace>
+          </NForm>
+        </NCard>
+        <OntologyHistory
+          v-if="!loading && !error && selected && (revision ?? selected.current_revision) > 0"
+          :ontology-id="selected.id"
+          :revision="revision ?? selected.current_revision"
+        />
+      </NTabPane>
+      <NTabPane name="import" :tab="t('governanceUi.importTab')" display-directive="show">
+        <OntologyRestore @restored="restored" />
+      </NTabPane>
+    </NTabs>
   </section>
 </template>
 
@@ -173,7 +214,17 @@ onBeforeUnmount(() => controller.abort())
 .export-page {
   display: grid;
   gap: 16px;
-  max-width: 880px;
+  min-width: 0;
+}
+.exchange-tabs {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+  padding: 12px 20px 20px;
+}
+.exchange-tabs :deep(.n-tab-pane) {
+  display: grid;
+  gap: 16px;
 }
 h2,
 p {

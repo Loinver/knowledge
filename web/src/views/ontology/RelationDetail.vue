@@ -15,14 +15,17 @@ import {
 } from 'naive-ui'
 import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { entityTypesApi } from '@/api/entity-types'
 import type { RelationTypeDetail, RelationTypeUsages, TypeRuleUsage } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
 
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
@@ -36,12 +39,13 @@ const data = ref<RelationTypeDetail | null>(null)
 /** 规则 / 引用与版本：一次请求取全，两个页签共用。 */
 const usages = ref<RelationTypeUsages | null>(null)
 const usagesLoading = ref(false)
+const usagesError = ref('')
 /** 端点 type_id → 类型标签，把端点显示成名字而不是裸 id。 */
 const typeLabels = ref<Record<number, string>>({})
 let loadGeneration = 0
 let alive = true
 
-const isDraft = computed(() => data.value?.status === 'DRAFT')
+const isDraft = computed(() => data.value?.status === 'DRAFT' && canWrite.value)
 
 function localized(labels: Record<string, string> | null | undefined) {
   return labels?.[locale.value]?.trim() || t('enumDictionaries.untranslated')
@@ -89,12 +93,15 @@ async function loadTypeLabels() {
 
 async function loadUsages(id: number, generation: number) {
   usagesLoading.value = true
+  usagesError.value = ''
   try {
     const result = await relationsApi.usages(id)
     if (alive && generation === loadGeneration) usages.value = result
-  } catch {
-    // 页签数据失败不影响基本信息；保持空态即可，不覆盖整页错误。
-    if (alive && generation === loadGeneration) usages.value = null
+  } catch (cause) {
+    if (alive && generation === loadGeneration) {
+      usages.value = null
+      usagesError.value = toMessage(cause)
+    }
   } finally {
     if (alive && generation === loadGeneration) usagesLoading.value = false
   }
@@ -142,7 +149,7 @@ async function handlePublish() {
 }
 
 async function startRevision() {
-  if (data.value?.status !== 'PUBLISHED' || busy.value) return
+  if (!canWrite.value || data.value?.status !== 'PUBLISHED' || busy.value) return
   const generation = loadGeneration
   busy.value = true
   error.value = ''
@@ -199,16 +206,21 @@ onBeforeUnmount(() => {
       :description="t('relationDetail.hint')"
     >
       <template #actions>
+        <RouterLink :to="{ name: 'relation-types', query: route.query }">{{
+          t('ui.backList')
+        }}</RouterLink>
         <NPopconfirm v-if="data?.status === 'PUBLISHED'" @positive-click="startRevision">
           <template #trigger
-            ><NButton :disabled="busy">{{ t('common.startRevision') }}</NButton></template
+            ><NButton :disabled="busy || !canWrite">{{
+              t('common.startRevision')
+            }}</NButton></template
           >
           {{ t('common.startRevisionHint') }}
         </NPopconfirm>
         <NButton
           v-if="data && isDraft"
           :disabled="busy"
-          @click="router.push({ name: 'relation-types', query: { edit: data.id } })"
+          @click="router.push({ name: 'relation-types', query: { ...route.query, edit: data.id } })"
           >{{ t('common.edit') }}</NButton
         >
         <NButton
@@ -222,10 +234,16 @@ onBeforeUnmount(() => {
         </NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info" class="alert">{{ t('ui.readonly') }}</NAlert>
 
-    <NAlert v-if="error" type="error" role="alert" class="alert">{{ error }}</NAlert>
+    <NAlert v-if="error" type="error" role="alert" class="alert"
+      >{{ error }} <NButton @click="loadDetail">{{ t('ui.retry') }}</NButton></NAlert
+    >
     <NAlert v-if="notice" type="success" role="status" class="alert">{{ notice }}</NAlert>
 
+    <NAlert v-if="data?.status === 'PUBLISHED'" type="info" class="alert">{{
+      t('ui.frozen')
+    }}</NAlert>
     <NSpin :show="loading">
       <template v-if="data">
         <NTabs type="line" animated>
@@ -310,7 +328,12 @@ onBeforeUnmount(() => {
           </NTabPane>
 
           <NTabPane name="rules" :tab="t('relationDetail.rules')">
+            <NAlert v-if="usagesError" type="warning">
+              {{ usagesError }}
+              <NButton @click="loadUsages(data.id, loadGeneration)">{{ t('ui.retry') }}</NButton>
+            </NAlert>
             <NDataTable
+              v-else
               :columns="ruleColumns"
               :data="usages?.rules ?? []"
               :row-key="(row: TypeRuleUsage) => row.id"
@@ -322,7 +345,13 @@ onBeforeUnmount(() => {
           </NTabPane>
 
           <NTabPane name="references" :tab="t('relationDetail.references')">
-            <NSpin :show="usagesLoading">
+            <NAlert v-if="usagesError" type="warning"
+              >{{ usagesError }}
+              <NButton @click="loadUsages(data.id, loadGeneration)">{{
+                t('ui.retry')
+              }}</NButton></NAlert
+            >
+            <NSpin v-else :show="usagesLoading">
               <section class="section">
                 <h3 class="section-title">{{ t('relationDetail.referencedBy') }}</h3>
                 <div v-if="usages?.domains?.length" class="ref-group">

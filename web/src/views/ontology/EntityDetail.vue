@@ -25,7 +25,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import type {
   DataTypeProp,
@@ -40,10 +40,14 @@ import type { EnumDictionary } from '@/api/enum-dictionaries'
 import { enumDictionariesApi } from '@/api/enum-dictionaries'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
 
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
+const auth = useAuthStore()
+const canWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
 const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -176,7 +180,7 @@ async function loadTypeLabels() {
 }
 
 async function handlePublish() {
-  if (!data.value || data.value.status !== 'DRAFT' || busy.value) return
+  if (!canWrite.value || !data.value || data.value.status !== 'DRAFT' || busy.value) return
   const generation = loadGeneration
   busy.value = true
   error.value = ''
@@ -191,7 +195,7 @@ async function handlePublish() {
 }
 
 async function startRevision() {
-  if (data.value?.status !== 'PUBLISHED' || busy.value) return
+  if (!canWrite.value || data.value?.status !== 'PUBLISHED' || busy.value) return
   const generation = loadGeneration
   busy.value = true
   error.value = ''
@@ -209,13 +213,13 @@ const showRename = ref(false)
 const renameValue = ref('')
 
 function openRename() {
-  if (!data.value || data.value.status !== 'DRAFT' || busy.value) return
+  if (!canWrite.value || !data.value || data.value.status !== 'DRAFT' || busy.value) return
   renameValue.value = ''
   showRename.value = true
 }
 
 async function submitRename() {
-  if (!data.value || !renameValue.value.trim() || busy.value) return
+  if (!canWrite.value || !data.value || !renameValue.value.trim() || busy.value) return
   const generation = loadGeneration
   busy.value = true
   error.value = ''
@@ -236,7 +240,7 @@ async function submitRename() {
  * 打开基本信息编辑抽屉。只允许在草稿态编辑——已发布/已归档的资源是冻结快照。
  */
 function openBasicEditor() {
-  if (!data.value || data.value.status !== 'DRAFT' || busy.value) return
+  if (!canWrite.value || !data.value || data.value.status !== 'DRAFT' || busy.value) return
   basicForm.value = {
     labelZh: data.value.label_i18n?.['zh-CN'] ?? '',
     labelEn: data.value.label_i18n?.['en-US'] ?? '',
@@ -265,7 +269,14 @@ function collectBasicPayload(): {
 
 async function saveBasic() {
   const entity = data.value
-  if (!entity || entity.status !== 'DRAFT' || busy.value || !showBasicEditor.value) return
+  if (
+    !canWrite.value ||
+    !entity ||
+    entity.status !== 'DRAFT' ||
+    busy.value ||
+    !showBasicEditor.value
+  )
+    return
   const generation = loadGeneration
   const payload = collectBasicPayload()
   try {
@@ -273,7 +284,14 @@ async function saveBasic() {
   } catch {
     return
   }
-  if (!alive || generation !== loadGeneration || !showBasicEditor.value) return
+  if (
+    !canWrite.value ||
+    busy.value ||
+    !alive ||
+    generation !== loadGeneration ||
+    !showBasicEditor.value
+  )
+    return
   busy.value = true
   basicError.value = ''
   error.value = ''
@@ -349,7 +367,7 @@ function changeDatatype(value: string) {
 }
 
 function openProperty(prop?: DataTypeProp) {
-  if (data.value?.status !== 'DRAFT' || busy.value) return
+  if (!canWrite.value || data.value?.status !== 'DRAFT' || busy.value) return
   editorGeneration++
   editingName.value = prop?.name ?? null
   form.value = prop
@@ -405,7 +423,7 @@ function propertyInput(prop: DataTypeProp): DataTypePropInput {
 
 async function saveProperties(props: DataTypePropInput[], editor = false) {
   const entity = data.value
-  if (!entity || entity.status !== 'DRAFT' || busy.value) return
+  if (!canWrite.value || !entity || entity.status !== 'DRAFT' || busy.value) return
   const generation = loadGeneration
   const edit = editorGeneration
   busy.value = true
@@ -481,7 +499,7 @@ function removeProperty(prop: DataTypeProp) {
   void saveProperties(props)
 }
 
-const isDraft = computed(() => data.value?.status === 'DRAFT')
+const isDraft = computed(() => canWrite.value && data.value?.status === 'DRAFT')
 const selectedVersion = computed(() =>
   versions.value.find((item) => item.revision === form.value.enum_dict_revision),
 )
@@ -702,6 +720,9 @@ onBeforeUnmount(() => {
   dictionaryController?.abort()
   versionController?.abort()
 })
+const basicVisible = useDraftGuard(showBasicEditor, () => basicForm.value)
+const propertyVisible = useDraftGuard(showEditor, () => form.value)
+const renameVisible = useDraftGuard(showRename, () => renameValue.value)
 </script>
 
 <template>
@@ -713,7 +734,9 @@ onBeforeUnmount(() => {
       <template #actions>
         <NPopconfirm v-if="data?.status === 'PUBLISHED'" @positive-click="startRevision">
           <template #trigger
-            ><NButton :disabled="busy">{{ t('common.startRevision') }}</NButton></template
+            ><NButton :disabled="busy || !canWrite">{{
+              t('common.startRevision')
+            }}</NButton></template
           >
           {{ t('common.startRevisionHint') }}
         </NPopconfirm>
@@ -734,8 +757,19 @@ onBeforeUnmount(() => {
         </n-button>
       </template>
     </PageHeader>
+    <div class="object-context">
+      <RouterLink :to="{ name: 'entity-types', query: route.query }">{{
+        t('ui.backList')
+      }}</RouterLink>
+      <n-tag v-if="data">{{ t(`resourceStatus.${data.status}`) }}</n-tag>
+      <span v-if="data" class="mono">{{ `v${data.current_revision}` }}</span>
+    </div>
+    <n-alert v-if="!canWrite" type="info" class="feedback">{{ t('ui.readonly') }}</n-alert>
+    <n-alert v-else-if="data?.status === 'PUBLISHED'" type="info" class="feedback">{{
+      t('ui.frozen')
+    }}</n-alert>
     <n-modal
-      v-model:show="showRename"
+      v-model:show="renameVisible"
       preset="dialog"
       :title="t('entityType.renameTitle')"
       :positive-text="t('common.save')"
@@ -800,7 +834,7 @@ onBeforeUnmount(() => {
           </section>
         </n-tab-pane>
         <n-tab-pane name="dataProps" :tab="t('entityType.dataProps')">
-          <n-alert v-if="!isDraft" type="info" class="feedback">{{
+          <n-alert v-if="data.status !== 'DRAFT'" type="info" class="feedback">{{
             t('entityProps.readOnly')
           }}</n-alert>
           <n-space class="toolbar" justify="space-between" align="center">
@@ -911,12 +945,7 @@ onBeforeUnmount(() => {
     </n-spin>
     <!-- 基本信息编辑。机读名是资源身份、IRI 由它推导，两者只读；其余字段走
          EntityTypeUpdate，只送 label/definition，不动 data_props。 -->
-    <n-drawer
-      v-model:show="showBasicEditor"
-      :width="520"
-      :mask-closable="!busy"
-      :close-on-esc="!busy"
-    >
+    <n-drawer v-model:show="basicVisible" :width="520" :mask-closable="!busy" :close-on-esc="!busy">
       <n-drawer-content :title="t('entityType.edit')" :closable="!busy">
         <n-alert v-if="basicError" type="error" class="feedback">{{ basicError }}</n-alert>
         <n-form
@@ -953,7 +982,7 @@ onBeforeUnmount(() => {
         </n-form>
         <template #footer>
           <n-space justify="end">
-            <n-button :disabled="busy" @click="showBasicEditor = false">
+            <n-button :disabled="busy" @click="basicVisible = false">
               {{ t('common.cancel') }}
             </n-button>
             <n-button type="primary" :loading="busy" @click="saveBasic">
@@ -964,11 +993,11 @@ onBeforeUnmount(() => {
       </n-drawer-content>
     </n-drawer>
     <n-drawer
-      :show="showEditor"
+      :show="propertyVisible"
       :width="600"
       :mask-closable="!busy"
       :close-on-esc="!busy"
-      @update:show="showEditor = $event"
+      @update:show="propertyVisible = $event"
     >
       <n-drawer-content
         :title="editingName ? t('entityProps.edit') : t('entityType.addProp')"
@@ -1115,7 +1144,7 @@ onBeforeUnmount(() => {
               @click="submitProperty"
               >{{ t('common.save') }}</n-button
             >
-            <n-button :disabled="busy" @click="showEditor = false">{{
+            <n-button :disabled="busy" @click="propertyVisible = false">{{
               t('common.cancel')
             }}</n-button>
           </n-space></template

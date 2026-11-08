@@ -44,12 +44,14 @@ const rules = computed<FormRules>(() => ({
 }))
 
 async function submit() {
+  if (auth.loading) return
   error.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (auth.loading) return
   try {
     await auth.login({ account: model.value.account, password: model.value.password })
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''

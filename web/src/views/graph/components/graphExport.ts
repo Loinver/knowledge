@@ -6,6 +6,57 @@
 export function serializeSvg(svg: SVGSVGElement): string {
   const clone = svg.cloneNode(true) as SVGSVGElement
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  // Scoped styles and theme variables live outside the downloaded document.
+  // Resolve paint/text styles while attached; preserve SVG geometry attributes.
+  const properties = [
+    'fill',
+    'fill-opacity',
+    'fill-rule',
+    'stroke',
+    'stroke-width',
+    'stroke-opacity',
+    'stroke-dasharray',
+    'stroke-dashoffset',
+    'stroke-linecap',
+    'stroke-linejoin',
+    'font-family',
+    'font-size',
+    'font-weight',
+    'font-style',
+    'letter-spacing',
+    'text-anchor',
+    'dominant-baseline',
+    'paint-order',
+    'opacity',
+    'visibility',
+    'display',
+    'vector-effect',
+    'marker-start',
+    'marker-mid',
+    'marker-end',
+  ]
+  const sourceNodes = [svg, ...svg.querySelectorAll<SVGElement>('*')]
+  const cloneNodes = [clone, ...clone.querySelectorAll<SVGElement>('*')]
+  sourceNodes.forEach((source, index) => {
+    const styles = getComputedStyle(source)
+    for (const property of properties) {
+      const value = styles.getPropertyValue(property)
+      // Computed marker URLs may contain the app URL. Keep references local.
+      cloneNodes[index]!.style.setProperty(
+        property,
+        value.replace(/url\(["']?[^)"']*#([^)"']+)["']?\)/g, 'url(#$1)'),
+      )
+    }
+  })
+  let background: Element | null = svg
+  while (background) {
+    const color = getComputedStyle(background).backgroundColor
+    if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') {
+      clone.style.backgroundColor = color
+      break
+    }
+    background = background.parentElement
+  }
   return new XMLSerializer().serializeToString(clone)
 }
 

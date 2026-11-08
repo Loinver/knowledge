@@ -6,6 +6,7 @@ import {
   NDataTable,
   NDrawer,
   NDrawerContent,
+  NEmpty,
   NForm,
   NFormItem,
   NInput,
@@ -24,9 +25,12 @@ import { useI18n } from 'vue-i18n'
 import type { Template, TemplateInput, TemplateOntology, TemplateResource } from '@/api/templates'
 import { templatesApi as api } from '@/api/templates'
 import PageHeader from '@/components/PageHeader.vue'
+import { useDraftGuard } from '@/composables/useDraftGuard'
 import TemplateCoreCheck from '@/views/governance/components/TemplateCoreCheck.vue'
+import { useGovernanceAccess } from '@/views/governance/composables/useGovernanceAccess'
 
 const { t, locale } = useI18n()
+const { canWrite } = useGovernanceAccess()
 const items = ref<Template[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -50,6 +54,9 @@ const ontologyId = ref<number | null>(null)
 const ontologyRevision = ref<number | null>(null)
 const instanceTemplate = ref<Template | null>(null)
 const instantiateVisible = ref(false)
+const instanceStep = ref<'preview' | 'configure'>('preview')
+const catalogLoading = ref(false)
+const catalogError = ref('')
 const instance = ref({ name: '', iri: '', labelZh: '', labelEn: '' })
 const controller = new AbortController()
 let listController: AbortController | undefined
@@ -79,11 +86,36 @@ function label(item: { name: string; label_i18n?: Record<string, string> | null 
   )
 }
 const readonly = computed(() => mode.value === 'edit' && saved.value?.builtin)
+const editorVisible = useDraftGuard(
+  editor,
+  () =>
+    JSON.stringify(form.value) !== JSON.stringify(saved.value ? input(saved.value) : empty()) ||
+    (mode.value === 'fromOntology' &&
+      (ontologyId.value !== null || ontologyRevision.value !== null)),
+  () => canWrite.value && !readonly.value,
+)
+const instanceVisible = useDraftGuard(
+  instantiateVisible,
+  () => instance.value,
+  () => canWrite.value && instanceStep.value === 'configure',
+)
 const resourcesEditable = computed(
-  () => !readonly.value && mode.value !== 'copy' && mode.value !== 'fromOntology',
+  () => canWrite.value && !readonly.value && mode.value !== 'copy' && mode.value !== 'fromOntology',
+)
+const missingInstanceResources = computed(
+  () =>
+    instanceTemplate.value?.resources.some(
+      (entry) =>
+        !catalog.value.some(
+          (resource) =>
+            resource.resource_id === entry.resource_id &&
+            resource.revisions.includes(entry.pinned_revision),
+        ),
+    ) ?? false,
 )
 const canSave = computed(
   () =>
+    canWrite.value &&
     !readonly.value &&
     form.value.name.trim() &&
     form.value.label_i18n['zh-CN']?.trim() &&
@@ -137,6 +169,8 @@ const columns = computed(() => [
               NButton,
               {
                 size: 'small',
+                disabled: busy.value || !canWrite.value,
+                title: !canWrite.value ? t('governanceUi.checkReadOnly') : undefined,
                 onClick: () => {
                   checkingTemplate.value = row
                 },
@@ -150,13 +184,17 @@ const columns = computed(() => [
             ),
             h(
               NButton,
-              { size: 'small', disabled: busy.value, onClick: () => open('copy', row) },
+              {
+                size: 'small',
+                disabled: busy.value || !canWrite.value,
+                onClick: () => open('copy', row),
+              },
               { default: () => t('templates.copy') },
             ),
             h(
               NButton,
               { size: 'small', disabled: busy.value, onClick: () => prepareInstance(row) },
-              { default: () => t('templates.instantiate') },
+              { default: () => t('governanceUi.previewTemplate') },
             ),
           ],
         },
@@ -188,6 +226,8 @@ async function load() {
   const request = new AbortController()
   listController = request
   loading.value = true
+  error.value = ''
+  items.value = []
   try {
     const result = await api.list(
       {
@@ -208,6 +248,7 @@ async function load() {
   }
 }
 async function open(next: typeof mode.value, item?: Template) {
+  if (next !== 'edit' && !canWrite.value) return
   await run(async () => {
     const latest = item ? await api.get(item.id) : null
     if (controller.signal.aborted) return
@@ -221,7 +262,13 @@ async function open(next: typeof mode.value, item?: Template) {
   })
 }
 function addResource() {
-  if (resourceId.value === null || resourceRevision.value === null) return
+  if (
+    !resourcesEditable.value ||
+    busy.value ||
+    resourceId.value === null ||
+    resourceRevision.value === null
+  )
+    return
   form.value.resources = [
     ...(form.value.resources || []),
     { resource_id: resourceId.value, pinned_revision: resourceRevision.value },
@@ -260,7 +307,8 @@ async function save() {
   })
 }
 async function remove() {
-  if (!saved.value) return
+  if (!canWrite.value || !saved.value || saved.value.builtin || saved.value.reference_count > 0)
+    return
   const item = saved.value
   await run(async () => {
     await api.remove(item)
@@ -275,12 +323,36 @@ async function prepareInstance(item: Template) {
     const latest = await api.get(item.id)
     if (controller.signal.aborted) return
     instanceTemplate.value = latest
+    instanceStep.value = 'preview'
     instance.value = { name: '', iri: '', labelZh: '', labelEn: '' }
     instantiateVisible.value = true
   })
 }
+function configureInstance() {
+  if (
+    !canWrite.value ||
+    busy.value ||
+    catalogLoading.value ||
+    catalogError.value ||
+    missingInstanceResources.value ||
+    !instanceTemplate.value
+  )
+    return
+  instanceStep.value = 'configure'
+}
 async function instantiate() {
-  if (!instanceTemplate.value) return
+  if (
+    !canWrite.value ||
+    instanceStep.value !== 'configure' ||
+    !instanceTemplate.value ||
+    catalogLoading.value ||
+    catalogError.value ||
+    missingInstanceResources.value ||
+    !instance.value.name.trim() ||
+    !instance.value.iri.trim() ||
+    !instance.value.labelZh.trim()
+  )
+    return
   const item = instanceTemplate.value
   await run(async () => {
     const created = await api.instantiate(item, {
@@ -312,18 +384,25 @@ watch([page, search, filter], load, { immediate: true })
 watch([search, filter], () => {
   page.value = 1
 })
-onMounted(async () => {
+async function loadCatalog() {
+  if (catalogLoading.value) return
+  catalogLoading.value = true
+  catalogError.value = ''
   try {
     const [resources, options] = await Promise.all([
       api.resources(controller.signal),
       api.ontologies(controller.signal),
     ])
+    if (controller.signal.aborted) return
     catalog.value = resources
     ontologies.value = options
   } catch (err) {
-    if (!controller.signal.aborted) error.value = message(err)
+    if (!controller.signal.aborted) catalogError.value = message(err)
+  } finally {
+    if (!controller.signal.aborted) catalogLoading.value = false
   }
-})
+}
+onMounted(loadCatalog)
 onBeforeUnmount(() => {
   controller.abort()
   listController?.abort()
@@ -351,17 +430,23 @@ onBeforeUnmount(() => {
   <section class="templates-page">
     <PageHeader :title="t('templates.title')" :description="t('templates.intro')">
       <template #actions>
-        <NButton :disabled="busy" @click="open('fromOntology')">{{
+        <NButton :disabled="busy || !canWrite" @click="open('fromOntology')">{{
           t('templates.fromOntology')
         }}</NButton>
-        <NButton type="primary" :disabled="busy" @click="open('create')">{{
+        <NButton type="primary" :disabled="busy || !canWrite" @click="open('create')">{{
           t('templates.create')
         }}</NButton>
       </template>
     </PageHeader>
-    <NAlert v-if="error && !editor && !instantiateVisible" type="error" role="alert">{{
-      error
-    }}</NAlert>
+    <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.readOnly') }}</NAlert>
+    <NAlert v-if="error && !editor && !instantiateVisible" type="error" role="alert"
+      >{{ error }}
+      <NButton size="small" @click="load">{{ t('governanceUi.retry') }}</NButton>
+    </NAlert>
+    <NAlert v-if="catalogError" type="error" role="alert"
+      >{{ catalogError }}
+      <NButton size="small" @click="loadCatalog">{{ t('governanceUi.retry') }}</NButton>
+    </NAlert>
     <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
     <NCard size="small"
       ><NSpace class="filters" align="center"
@@ -387,24 +472,31 @@ onBeforeUnmount(() => {
             clearable
             style="width: 180px" /></NFormItem
         ><NButton :loading="loading" @click="load">{{ t('graph.refresh') }}</NButton></NSpace
-      ><NDataTable
+      >
+      <p v-if="loading" role="status">{{ t('common.loading') }}</p>
+      <NDataTable
+        v-else-if="!error"
         :data="items"
         :columns="columns"
         :loading="loading"
-        :scroll-x="1000" /><NPagination
-        v-if="total > 20"
+        :scroll-x="1000"
+        ><template #empty
+          ><NEmpty :description="t('governanceUi.templatesEmpty')" /></template></NDataTable
+      ><NPagination
+        v-if="!loading && !error && total > 20"
         v-model:page="page"
         :page-size="20"
         :item-count="total"
         class="pagination"
     /></NCard>
     <NDrawer
-      v-model:show="editor"
+      v-model:show="editorVisible"
       width="min(820px, 100vw)"
       :mask-closable="false"
       :close-on-esc="!busy"
       ><NDrawerContent :title="t(`templates.${mode}`)" :closable="!busy">
         <NSpace vertical
+          ><NAlert v-if="!canWrite" type="info">{{ t('governanceUi.readOnly') }}</NAlert
           ><NAlert v-if="error" type="error" role="alert">{{ error }}</NAlert
           ><NAlert v-if="notice" type="success">{{ notice }}</NAlert
           ><NAlert v-if="readonly" type="info">{{ t('templates.builtinHint') }}</NAlert
@@ -412,7 +504,7 @@ onBeforeUnmount(() => {
             t('templates.revisionHint', { revision: saved.revision, count: saved.reference_count })
           }}</NAlert></NSpace
         >
-        <NForm label-placement="top" :disabled="busy || readonly" class="editor-form">
+        <NForm label-placement="top" :disabled="busy || readonly || !canWrite" class="editor-form">
           <div class="form-grid">
             <NFormItem :label="t('common.name')" required
               ><NInput v-model:value="form.name" /></NFormItem
@@ -463,7 +555,9 @@ onBeforeUnmount(() => {
                   :options="versionOptions"
                   style="width: 110px" /></NFormItem
               ><NButton
-                :disabled="resourceId === null || resourceRevision === null"
+                :disabled="
+                  busy || !resourcesEditable || resourceId === null || resourceRevision === null
+                "
                 @click="addResource"
                 >{{ t('templates.addResource') }}</NButton
               ></NSpace
@@ -486,9 +580,12 @@ onBeforeUnmount(() => {
                   </td>
                   <td>{{ entry.pinned_revision }}</td>
                   <td v-if="resourcesEditable">
-                    <NButton size="small" @click="form.resources?.splice(index, 1)">{{
-                      t('common.delete')
-                    }}</NButton>
+                    <NButton
+                      size="small"
+                      :disabled="busy || !resourcesEditable"
+                      @click="form.resources?.splice(index, 1)"
+                      >{{ t('common.delete') }}</NButton
+                    >
                   </td>
                 </tr>
               </tbody></NTable
@@ -498,53 +595,115 @@ onBeforeUnmount(() => {
         <template #footer
           ><NSpace justify="space-between" style="width: 100%"
             ><NPopconfirm
-              v-if="mode === 'edit' && saved && !readonly"
-              :disabled="busy || saved.reference_count > 0"
+              v-if="mode === 'edit' && saved"
+              :disabled="busy || readonly || !canWrite || saved.reference_count > 0"
               @positive-click="remove"
               ><template #trigger
-                ><NButton type="error" secondary :disabled="busy || saved.reference_count > 0">{{
-                  t('common.delete')
-                }}</NButton></template
+                ><NButton
+                  type="error"
+                  secondary
+                  :disabled="busy || readonly || !canWrite || saved.reference_count > 0"
+                  >{{ t('common.delete') }}</NButton
+                ></template
               >{{ t('templates.confirmDelete', { name: saved.name }) }}</NPopconfirm
             ><NSpace
-              ><NButton :disabled="busy" @click="editor = false">{{ t('common.cancel') }}</NButton
-              ><NButton
-                v-if="!readonly"
-                type="primary"
-                :disabled="!canSave"
-                :loading="busy"
-                @click="save"
-                >{{ t('common.save') }}</NButton
-              ></NSpace
+              ><NButton :disabled="busy" @click="editorVisible = false">{{
+                t('common.cancel')
+              }}</NButton
+              ><NButton type="primary" :disabled="busy || !canSave" :loading="busy" @click="save">{{
+                t('common.save')
+              }}</NButton></NSpace
             ></NSpace
           ></template
         >
       </NDrawerContent></NDrawer
     >
     <NModal
-      v-model:show="instantiateVisible"
+      v-model:show="instanceVisible"
       preset="card"
-      :title="t('templates.instantiate')"
-      style="width: min(560px, 100vw)"
+      :title="
+        t(instanceStep === 'preview' ? 'governanceUi.previewTemplate' : 'templates.instantiate')
+      "
+      style="width: min(720px, 100vw)"
       :mask-closable="false"
       :closable="!busy"
       :close-on-esc="!busy"
-      ><NAlert v-if="error" type="error" role="alert">{{ error }}</NAlert
-      ><NForm label-placement="top" :disabled="busy"
-        ><NFormItem :label="t('common.name')" required
-          ><NInput v-model:value="instance.name" /></NFormItem
-        ><NFormItem :label="t('common.iri')" required
-          ><NInput v-model:value="instance.iri" /></NFormItem
-        ><NFormItem :label="t('common.labelZh')" required
-          ><NInput v-model:value="instance.labelZh" /></NFormItem
-        ><NFormItem :label="t('common.labelEn')"
-          ><NInput v-model:value="instance.labelEn" /></NFormItem></NForm
-      ><NButton
+      ><NAlert v-if="error" type="error" role="alert">{{ error }}</NAlert>
+      <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.readOnly') }}</NAlert>
+      <section v-if="instanceTemplate" class="instance-preview">
+        <h3>{{ label(instanceTemplate) }}</h3>
+        <p>{{ t('governanceUi.templateRevision', { revision: instanceTemplate.revision }) }}</p>
+        <p>{{ instanceTemplate.source }} · {{ instanceTemplate.basis }}</p>
+        <NAlert type="info">{{ t('governanceUi.instanceHint') }}</NAlert>
+        <p v-if="catalogLoading" role="status">{{ t('common.loading') }}</p>
+        <NAlert v-else-if="catalogError" type="error"
+          >{{ catalogError }}
+          <NButton @click="loadCatalog">{{ t('governanceUi.retry') }}</NButton>
+        </NAlert>
+        <template v-else>
+          <NAlert v-if="missingInstanceResources" type="warning">{{
+            t('governanceUi.missingMembers')
+          }}</NAlert>
+          <NTable size="small">
+            <thead>
+              <tr>
+                <th>{{ t('templates.resource') }}</th>
+                <th>{{ t('templates.pinnedRevision') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in instanceTemplate.resources" :key="entry.resource_id">
+                <td>
+                  {{
+                    catalog.find((r) => r.resource_id === entry.resource_id)?.name ||
+                    t('templates.resourceUnavailable', { id: entry.resource_id })
+                  }}
+                </td>
+                <td>{{ entry.pinned_revision }}</td>
+              </tr>
+            </tbody>
+          </NTable>
+          <NEmpty
+            v-if="!instanceTemplate.resources.length"
+            :description="t('governanceUi.noMembers')"
+          />
+        </template>
+      </section>
+      <NButton
+        v-if="instanceStep === 'preview'"
         type="primary"
-        :loading="busy"
-        :disabled="!instance.name.trim() || !instance.iri.trim() || !instance.labelZh.trim()"
-        @click="instantiate"
-        >{{ t('templates.instantiate') }}</NButton
+        :disabled="
+          busy || !canWrite || catalogLoading || !!catalogError || missingInstanceResources
+        "
+        @click="configureInstance"
+        >{{ t('governanceUi.configureInstance') }}</NButton
+      >
+      <template v-else>
+        <NForm label-placement="top" :disabled="busy || !canWrite"
+          ><NFormItem :label="t('common.name')" required
+            ><NInput v-model:value="instance.name" /></NFormItem
+          ><NFormItem :label="t('common.iri')" required
+            ><NInput v-model:value="instance.iri" /></NFormItem
+          ><NFormItem :label="t('common.labelZh')" required
+            ><NInput v-model:value="instance.labelZh" /></NFormItem
+          ><NFormItem :label="t('common.labelEn')"
+            ><NInput v-model:value="instance.labelEn" /></NFormItem></NForm
+        ><NButton
+          type="primary"
+          :loading="busy"
+          :disabled="
+            busy ||
+            !canWrite ||
+            !instance.name.trim() ||
+            !instance.iri.trim() ||
+            !instance.labelZh.trim() ||
+            catalogLoading ||
+            !!catalogError ||
+            missingInstanceResources
+          "
+          @click="instantiate"
+          >{{ t('templates.instantiate') }}</NButton
+        ></template
       ></NModal
     >
   </section>
@@ -554,6 +713,18 @@ onBeforeUnmount(() => {
 .templates-page {
   display: grid;
   gap: 16px;
+}
+.templates-page :deep(.n-card),
+.instance-preview {
+  background: var(--bg-surface);
+  border-color: var(--border);
+  border-radius: var(--radius-medium);
+}
+.instance-preview {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+  overflow-wrap: anywhere;
 }
 h2,
 p {

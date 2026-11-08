@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
-import { NButton, NCard, NDataTable, NEmpty, NTag } from 'naive-ui'
+import { NAlert, NButton, NCard, NDataTable, NEmpty, NTag } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -36,10 +36,23 @@ const columns = computed<DataTableColumns<RoleInfo>>(() => [
     render: (row) => t(`account.roleDescriptions.${row.code}`),
   },
   { title: t('system.memberCount'), key: 'member_count' },
+  { title: t('appUi.readCapability'), key: 'read', render: () => t('common.yes') },
+  { title: t('appUi.testCapability'), key: 'test', render: () => t('common.yes') },
+  {
+    title: t('appUi.writeCapability'),
+    key: 'write',
+    render: (row) => t(row.code === 'VIEWER' ? 'common.no' : 'common.yes'),
+  },
+  {
+    title: t('appUi.adminCapability'),
+    key: 'admin',
+    render: (row) => t(row.code === 'ADMIN' ? 'common.yes' : 'common.no'),
+  },
 ])
 
-onMounted(async () => {
+async function load() {
   loading.value = true
+  error.value = ''
   try {
     items.value = await authApi.roles()
   } catch (err) {
@@ -47,7 +60,8 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+onMounted(load)
 </script>
 
 <template>
@@ -57,14 +71,19 @@ onMounted(async () => {
         <NButton secondary @click="goUsers">{{ t('page.systemUsers') }}</NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="error" type="error"
+      >{{ error }} <NButton @click="load">{{ t('ui.retry') }}</NButton></NAlert
+    >
+    <p class="role-scope">{{ t('appUi.capabilityScope') }}</p>
     <NCard size="small">
       <NDataTable
         :columns="columns"
         :data="items"
         :loading="loading"
         :row-key="(row: RoleInfo) => row.code"
+        :scroll-x="1080"
       >
-        <template #empty><NEmpty :description="error || t('common.empty')" /></template>
+        <template #empty><NEmpty :description="t('common.empty')" /></template>
       </NDataTable>
     </NCard>
   </section>

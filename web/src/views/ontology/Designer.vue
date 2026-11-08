@@ -15,7 +15,7 @@ import {
 } from 'naive-ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import type { DomainBrief, DomainMember } from '@/api/domains'
 import { domainsApi } from '@/api/domains'
@@ -31,19 +31,79 @@ import { relationsApi } from '@/api/relations'
 import type { ValidationReport, ValidationResultItem } from '@/api/validation'
 import { validationApi } from '@/api/validation'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
+import { dragPosition, isDrag, wheelCamera, zoomAt } from '@/views/graph/components/graphViewport'
 import AiSuggestions from '@/views/ontology/components/AiSuggestions.vue'
+import { designerEdges } from '@/views/ontology/components/designerGeometry'
+import { useDesignerHistory } from '@/views/ontology/composables/useDesignerHistory'
 
 const { t, te, locale } = useI18n()
 const message = useMessage()
 const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const history = useDesignerHistory(toMessage)
+const { revision: frozenRevision, loading: historyLoading, error: historyError } = history
+const roleCanWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
+const poolOpen = ref(true)
+const inspectorOpen = ref(false)
+const legendOpen = ref(false)
+const poolSearch = ref('')
+function onViewportResize() {
+  if (window.innerWidth < 1280) poolOpen.value = false
+  if (window.innerWidth <= 1000) inspectorOpen.value = false
+}
+watch(inspectorOpen, (open) => {
+  if (open && typeof window !== 'undefined' && window.innerWidth <= 1000) poolOpen.value = false
+})
+watch(poolOpen, (open) => {
+  if (open && typeof window !== 'undefined' && window.innerWidth <= 1000)
+    inspectorOpen.value = false
+})
+const previousCamera = ref<{ x: number; y: number; scale: number } | null>(null)
+const savedPositions = ref<CanvasPositions>({})
+const layoutDirty = ref(false)
+const showDiscard = ref(false)
+let discardAnswer: ((answer: boolean) => void) | undefined
+
+function confirmDiscard(): Promise<boolean> {
+  if (!layoutDirty.value && !createDirty.value && !rulesDirty.value) return Promise.resolve(true)
+  showDiscard.value = true
+  return new Promise((resolve) => {
+    discardAnswer = resolve
+  })
+}
+function answerDiscard(answer: boolean) {
+  showDiscard.value = false
+  discardAnswer?.(answer)
+  discardAnswer = undefined
+}
+function cancelLayout() {
+  positions.value = copyPositions(savedPositions.value)
+  layoutDirty.value = false
+  saveError.value = ''
+}
+function copyPositions(value: CanvasPositions): CanvasPositions {
+  return Object.fromEntries(Object.entries(value).map(([key, point]) => [key, { ...point }]))
+}
+function closeInspector() {
+  inspectorOpen.value = false
+  const key = selectedKey.value
+  void nextTick(() => {
+    if (!key) return
+    const target = Array.from(
+      canvasEl.value?.querySelectorAll<HTMLElement>('[data-selection]') ?? [],
+    ).find((element) => element.dataset.selection === key)
+    target?.focus()
+  })
+}
 
 /** 画布世界尺寸固定，视口通过 transform 平移缩放 —— 拖动因此可以用纯 CSS 像素计算。 */
 const WORLD_W = 2200
 const WORLD_H = 1500
-const NODE_W = 148
-const NODE_H = 68
+const NODE_W = 180
+const NODE_H = 76
 
 const loading = ref(false)
 const catalogLoading = ref(true)
@@ -85,6 +145,13 @@ const ruleLoading = ref(false)
 const ruleError = ref('')
 const ruleCatalog = ref<Rule[]>([])
 const selectedRules = ref<number[]>([])
+const savedRules = ref<number[]>([])
+const rulesDirty = computed(
+  () =>
+    showRules.value &&
+    JSON.stringify([...selectedRules.value].sort()) !==
+      JSON.stringify([...savedRules.value].sort()),
+)
 const ruleOptions = computed(() =>
   ruleCatalog.value.map((rule) => ({
     value: rule.id,
@@ -107,6 +174,7 @@ async function openRules() {
     if (!isCurrentSelection(context)) return
     ruleCatalog.value = catalog
     selectedRules.value = attached.map((rule) => rule.rule_id)
+    savedRules.value = [...selectedRules.value]
   } catch (err) {
     if (isCurrentSelection(context)) ruleError.value = toMessage(err)
   } finally {
@@ -134,7 +202,15 @@ async function saveRules() {
 
 const canvasEl = ref<HTMLElement | null>(null)
 const worldEl = ref<HTMLElement | null>(null)
-const dragging = ref<{ key: string; offsetX: number; offsetY: number } | null>(null)
+const dragging = ref<{
+  key: string
+  start: { x: number; y: number }
+  origin: { x: number; y: number }
+  moved: boolean
+} | null>(null)
+const panning = ref<{ start: { x: number; y: number }; origin: { x: number; y: number } } | null>(
+  null,
+)
 
 type OntologySelection = { id: number; controller: AbortController }
 let selection: OntologySelection | undefined
@@ -143,6 +219,8 @@ let alive = true
 const pendingWrites = new Map<number, Promise<unknown>>()
 const canEdit = computed(
   () =>
+    roleCanWrite.value &&
+    frozenRevision.value === null &&
     detail.value?.id === ontologyId.value &&
     !!detail.value &&
     !catalogLoading.value &&
@@ -151,7 +229,8 @@ const canEdit = computed(
     !loadError.value &&
     !saving.value &&
     !working.value &&
-    !needsRefresh.value,
+    !needsRefresh.value &&
+    !validating.value,
 )
 
 function isCurrentSelection(context: OntologySelection) {
@@ -174,13 +253,33 @@ function pickLabel(labels: Record<string, string> | null | undefined, fallback: 
 }
 
 const typeById = computed(() => {
-  const map: Record<number, EntityTypeBrief> = {}
+  const map: Record<
+    number,
+    Pick<EntityTypeBrief, 'id' | 'name' | 'iri' | 'label_i18n' | 'status'>
+  > = {}
+  if (frozenRevision.value !== null) {
+    for (const { snapshot } of Object.values(history.resources.value)) {
+      if (snapshot.kind === 'ENTITY' || snapshot.kind === 'ASSOC') {
+        map[snapshot.id] = { ...snapshot, status: 'PUBLISHED' }
+      }
+    }
+    return map
+  }
   for (const tp of entityTypes.value) map[tp.id] = tp
   return map
 })
 
 const relationById = computed(() => {
-  const map: Record<number, RelationTypeBrief> = {}
+  const map: Record<
+    number,
+    Pick<RelationTypeBrief, 'id' | 'name' | 'iri' | 'label_i18n' | 'status'>
+  > = {}
+  if (frozenRevision.value !== null) {
+    for (const { snapshot } of Object.values(history.resources.value)) {
+      if (snapshot.kind === 'OBJECT_PROP') map[snapshot.id] = { ...snapshot, status: 'PUBLISHED' }
+    }
+    return map
+  }
   for (const r of relations.value) map[r.id] = r
   return map
 })
@@ -192,14 +291,19 @@ const domainById = computed(() => {
 })
 
 /** 引用里哪些是实体类型（画布节点）、哪些是对象属性（画布连线）。 */
+const displayedRefIds = computed(() =>
+  frozenRevision.value === null
+    ? refs.value.map((r) => r.resource_id)
+    : (history.contents.value?.resources.map((r) => r.resource_id) ?? []),
+)
 const canvasTypeIds = computed(() =>
-  refs.value.map((r) => r.resource_id).filter((id) => typeById.value[id] !== undefined),
+  displayedRefIds.value.filter((id) => typeById.value[id] !== undefined),
 )
 const canvasRelationIds = computed(() =>
-  refs.value.map((r) => r.resource_id).filter((id) => relationById.value[id] !== undefined),
+  displayedRefIds.value.filter((id) => relationById.value[id] !== undefined),
 )
 const canvasDomainIds = computed(() =>
-  domains.value
+  (frozenRevision.value === null ? domains.value : [])
     .filter((domain) => {
       const members = domainMembers.value[domain.id] ?? []
       return (
@@ -291,48 +395,72 @@ const domainBands = computed(() => {
   return [...bands, ...empty]
 })
 
-/** 连线只画两端都在画布上的关系 —— 一端缺失时画不出来，也不该硬画。 */
-const edges = computed(() => {
-  const out: {
-    key: string
-    id: number
-    d: string
-    lx: number
-    ly: number
-    label: string
-    status: ResourceStatus
-  }[] = []
-  for (const rid of canvasRelationIds.value) {
-    const rel = relationById.value[rid]
-    const relDetail = relationDetails.value[rid]
-    if (!rel || !relDetail) continue
-    const from = positions.value[String(relDetail.domain_spec.type_id)]
-    const to = positions.value[String(relDetail.range_spec.type_id)]
-    if (!from || !to) continue
-    const x1 = from.x + NODE_W / 2
-    const y1 = from.y + NODE_H / 2
-    const x2 = to.x + NODE_W / 2
-    const y2 = to.y + NODE_H / 2
-    const dx = x2 - x1
-    const dy = y2 - y1
-    const len = Math.hypot(dx, dy) || 1
-    // 控制点沿垂直方向偏移，同向的两条线因此不会完全重叠
-    const off = Math.min(34, len / 4)
-    const cx = (x1 + x2) / 2 - (dy / len) * off
-    const cy = (y1 + y2) / 2 + (dx / len) * off
-    out.push({
-      key: `rel-${rid}`,
-      id: rid,
-      d: `M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`,
-      // 二次贝塞尔 t=0.5 处即标签落点
-      lx: 0.25 * x1 + 0.5 * cx + 0.25 * x2,
-      ly: 0.25 * y1 + 0.5 * cy + 0.25 * y2,
-      label: pickLabel(rel.label_i18n, rel.name),
-      status: rel.status,
-    })
+/** Frozen endpoints come only from that revision's references, never the live catalog. */
+const relationEndpoints = computed(() => {
+  const out: Record<number, { source: number; target: number }> = {}
+  for (const id of canvasRelationIds.value) {
+    if (frozenRevision.value !== null) {
+      const snapshot = history.resources.value[id]?.snapshot
+      const endpoint = (role: string, legacy: string) =>
+        snapshot?.resource_refs.find((ref) => ref.role === role)?.target_id ??
+        Object.values(typeById.value).find(
+          (type) => type.iri === snapshot?.definition_i18n?.[legacy],
+        )?.id
+      const source = endpoint('relation_domain', 'domain_iri')
+      const target = endpoint('relation_range', 'range_iri')
+      if (source !== undefined && target !== undefined) out[id] = { source, target }
+    } else {
+      const relation = relationDetails.value[id]
+      if (relation)
+        out[id] = { source: relation.domain_spec.type_id, target: relation.range_spec.type_id }
+    }
   }
   return out
 })
+const edges = computed(() =>
+  designerEdges(
+    canvasRelationIds.value.flatMap((id) => {
+      const endpoints = relationEndpoints.value[id]
+      return endpoints &&
+        canvasTypeIds.value.includes(endpoints.source) &&
+        canvasTypeIds.value.includes(endpoints.target)
+        ? [
+            {
+              id,
+              ...endpoints,
+              labelWidth: relationLabel(
+                pickLabel(relationById.value[id]?.label_i18n, relationById.value[id]?.name ?? ''),
+              ).labelWidth,
+            },
+          ]
+        : []
+    }),
+    positions.value,
+    NODE_W,
+    NODE_H,
+  ).map((edge) => {
+    const relation = relationById.value[edge.id]!
+    const label = pickLabel(relation.label_i18n, relation.name)
+    return {
+      ...edge,
+      key: `rel-${edge.id}`,
+      label,
+      ...relationLabel(label),
+      status: relation.status,
+    }
+  }),
+)
+function relationLabel(label: string) {
+  const chars = [...label]
+  const displayLabel = chars.length > 18 ? `${chars.slice(0, 17).join('')}…` : label
+  return {
+    displayLabel,
+    labelWidth: Math.max(
+      60,
+      [...displayLabel].reduce((size, char) => size + (char.codePointAt(0)! > 255 ? 13 : 7), 24),
+    ),
+  }
+}
 
 const availableTypes = computed(() =>
   entityTypes.value.filter((tp) => !canvasTypeIds.value.includes(tp.id)),
@@ -346,14 +474,7 @@ const availableDomains = computed(() =>
 
 /** 端点没有全部在画布上的关系：画不出连线，标成「未配置」而不是静默丢掉。 */
 const unconfiguredRelationIds = computed(() =>
-  canvasRelationIds.value.filter((rid) => {
-    const info = relationDetails.value[rid]
-    if (!info) return true
-    return (
-      positions.value[String(info.domain_spec.type_id)] === undefined ||
-      positions.value[String(info.range_spec.type_id)] === undefined
-    )
-  }),
+  canvasRelationIds.value.filter((id) => !edges.value.some((edge) => edge.id === id)),
 )
 
 type PoolItem = { id: number; label: string; status: ResourceStatus; unconfigured: boolean }
@@ -442,9 +563,81 @@ const availableCategories = computed<PoolCategory[]>(() => [
 const canvasTotal = computed(() =>
   canvasCategories.value.reduce((sum, cat) => sum + cat.items.length, 0),
 )
+function filterPool(categories: PoolCategory[]) {
+  const query = poolSearch.value.trim().toLocaleLowerCase()
+  return categories.map((category) => ({
+    ...category,
+    items: category.items.filter((item) => item.label.toLocaleLowerCase().includes(query)),
+  }))
+}
+const filteredCanvasCategories = computed(() => filterPool(canvasCategories.value))
+const filteredAvailableCategories = computed(() => filterPool(availableCategories.value))
+const inspectedProperties = computed(() => {
+  if (frozenRevision.value !== null) {
+    return selected.value?.kind === 'entity'
+      ? (history.resources.value[selected.value.id]?.snapshot.datatype_props ?? [])
+      : []
+  }
+  return typeDetail.value?.data_props ?? []
+})
+const inspectedRevision = computed(() =>
+  selected.value && frozenRevision.value !== null
+    ? history.resources.value[selected.value.id]?.revision
+    : undefined,
+)
+const pinnedRevision = computed(
+  () => refs.value.find((ref) => ref.resource_id === selected.value?.id)?.pinned_revision,
+)
+const revisionOptions = computed(() => [
+  { value: 0, label: t('designerUi.workingContent') },
+  ...Array.from({ length: detail.value?.current_revision ?? 0 }, (_, index) => ({
+    value: index + 1,
+    label: t('designerUi.frozenVersion', { revision: index + 1 }),
+  })).reverse(),
+])
+let workingView: {
+  positions: CanvasPositions
+  camera: { x: number; y: number; scale: number }
+  selected: string | null
+} | null = null
+async function changeRevision(version: number) {
+  const context = selection
+  if (!context || !detail.value || saving.value || working.value) return
+  if (version === 0) {
+    history.reset()
+    if (workingView) {
+      positions.value = workingView.positions
+      setCamera(workingView.camera)
+      selectedKey.value = workingView.selected
+      workingView = null
+    }
+    return
+  }
+  if (!(await confirmDiscard()) || !isCurrentSelection(context)) return
+  if (frozenRevision.value === null) {
+    cancelLayout()
+    workingView = {
+      positions: copyPositions(positions.value),
+      camera: camera(),
+      selected: selectedKey.value,
+    }
+  }
+  showRules.value = false
+  showCreate.value = false
+  showAi.value = false
+  selectedKey.value = null
+  showValidation.value = false
+  if (await history.load(context.id, version)) {
+    if (!isCurrentSelection(context)) return
+    ensurePositions()
+    await nextTick()
+    fitView()
+  }
+}
 
 /** 池子里点一下：类型/域直接选中，关系要补详情。 */
 function selectPoolItem(kind: PoolCategory['kind'], id: number) {
+  inspectorOpen.value = true
   if (kind === 'relation') selectRelation(id)
   else if (kind === 'domain') selectedKey.value = `domain-${id}`
   else selectedKey.value = String(id)
@@ -498,7 +691,7 @@ const selected = computed<SelectedInspector | null>(() => {
   if (key.startsWith('rel-')) {
     const id = Number(key.slice(4))
     const relation = relationById.value[id]
-    const detail = relationDetails.value[id]
+    const endpoints = relationEndpoints.value[id]
     if (!relation) return null
     return {
       kind: 'relation',
@@ -508,16 +701,16 @@ const selected = computed<SelectedInspector | null>(() => {
       name: relation.name,
       iri: relation.iri,
       status: relation.status,
-      domainLabel: detail
+      domainLabel: endpoints
         ? pickLabel(
-            typeById.value[detail.domain_spec.type_id]?.label_i18n,
-            typeById.value[detail.domain_spec.type_id]?.name ?? '',
+            typeById.value[endpoints.source]?.label_i18n,
+            typeById.value[endpoints.source]?.name ?? '',
           )
         : '',
-      rangeLabel: detail
+      rangeLabel: endpoints
         ? pickLabel(
-            typeById.value[detail.range_spec.type_id]?.label_i18n,
-            typeById.value[detail.range_spec.type_id]?.name ?? '',
+            typeById.value[endpoints.target]?.label_i18n,
+            typeById.value[endpoints.target]?.name ?? '',
           )
         : '',
     }
@@ -541,7 +734,7 @@ const selected = computed<SelectedInspector | null>(() => {
 
   const node = nodes.value.find((item) => item.key === key)
   if (!node) return null
-  const domainLabels = domains.value
+  const domainLabels = (frozenRevision.value === null ? domains.value : [])
     .filter((domain) =>
       domainMembers.value[domain.id]?.some((member) => member.resource_id === node.id),
     )
@@ -613,6 +806,14 @@ function ensurePositions() {
 
 async function selectOntology(id: number | null) {
   if (!alive || catalogLoading.value || catalogError.value) return false
+  if (!(await confirmDiscard())) return false
+  history.reset()
+  workingView = null
+  layoutDirty.value = false
+  showCreate.value = false
+  showRules.value = false
+  showAi.value = false
+  previousCamera.value = null
   selection?.controller.abort()
   validationReport.value = null
   validationResults.value = []
@@ -636,8 +837,12 @@ async function selectOntology(id: number | null) {
   return selection ? loadOntology(selection) : false
 }
 
-async function loadOntology(context: OntologySelection) {
+async function loadOntology(context: OntologySelection, preserveView = false) {
   if (!isCurrentSelection(context)) return false
+  const retainedPositions = copyPositions(positions.value)
+  const retainedSavedPositions = copyPositions(savedPositions.value)
+  const retainedDirty = layoutDirty.value
+  const retainedSelection = selectedKey.value
   showRules.value = false
   validationReport.value = null
   validationResults.value = []
@@ -671,12 +876,19 @@ async function loadOntology(context: OntologySelection) {
     if (!isCurrentSelection(context)) return false
     detail.value = onto
     refs.value = refList
-    positions.value = { ...((canvas.positions ?? {}) as CanvasPositions) }
+    positions.value = {
+      ...((canvas.positions ?? {}) as CanvasPositions),
+      ...(preserveView ? retainedPositions : {}),
+    }
     relationDetails.value = Object.fromEntries(relationItems.map((item) => [item.id, item]))
     ensurePositions()
+    savedPositions.value =
+      preserveView && retainedDirty ? retainedSavedPositions : copyPositions(positions.value)
+    layoutDirty.value = preserveView && retainedDirty
+    if (preserveView) selectedKey.value = retainedSelection
     await nextTick()
     if (!isCurrentSelection(context)) return false
-    fitView()
+    if (!preserveView) fitView()
     return true
   } catch (err) {
     if (isCurrentSelection(context)) loadError.value = toMessage(err)
@@ -704,6 +916,7 @@ async function persist() {
 }
 
 async function persistLayout(context: OntologySelection) {
+  if (!isCurrentSelection(context) || !roleCanWrite.value || frozenRevision.value !== null) return
   const snapshot: CanvasPositions = Object.fromEntries(
     Object.entries(positions.value).map(([key, position]) => [key, { ...position }]),
   )
@@ -711,6 +924,10 @@ async function persistLayout(context: OntologySelection) {
   saveError.value = ''
   try {
     await trackWrite(context.id, ontologyApi.saveCanvas(context.id, snapshot))
+    if (isCurrentSelection(context)) {
+      savedPositions.value = copyPositions(snapshot)
+      layoutDirty.value = false
+    }
   } catch (err) {
     if (isCurrentSelection(context)) saveError.value = toMessage(err)
   } finally {
@@ -773,27 +990,57 @@ function autoLayout() {
   }
 
   positions.value = next
+  layoutDirty.value = true
   fitView()
-  void persist()
 }
 
 function fitView() {
-  const viewportWidth = canvasEl.value?.clientWidth || 800
-  const viewportHeight = canvasEl.value?.clientHeight || 520
+  previousCamera.value = camera()
+  let viewportWidth = canvasEl.value?.clientWidth || 800
+  const viewportHeight = Math.max(100, (canvasEl.value?.clientHeight || 520) - 60)
+  let leftInset = 0
+  const rect = canvasEl.value?.getBoundingClientRect()
+  if (rect) {
+    const inspector = canvasEl.value?.parentElement
+      ?.querySelector('.inspector')
+      ?.getBoundingClientRect()
+    const pool = canvasEl.value?.parentElement?.querySelector('.pool')?.getBoundingClientRect()
+    if (inspector) viewportWidth -= Math.max(0, rect.right - Math.max(rect.left, inspector.left))
+    if (pool) {
+      leftInset = Math.max(0, Math.min(rect.right, pool.right) - rect.left)
+      viewportWidth -= leftInset
+    }
+  }
   const list = nodes.value
   if (!list.length) {
     zoom.value = 0.55
     pan.value = {
-      x: viewportWidth / 2 - (WORLD_W / 2) * zoom.value,
+      x: leftInset + viewportWidth / 2 - (WORLD_W / 2) * zoom.value,
       y: viewportHeight / 2 - (WORLD_H / 2) * zoom.value,
     }
     return
   }
 
-  const minX = Math.min(...list.map((node) => node.x))
-  const minY = Math.min(...list.map((node) => node.y))
-  const maxX = Math.max(...list.map((node) => node.x + NODE_W))
-  const maxY = Math.max(...list.map((node) => node.y + NODE_H))
+  const minX = Math.min(
+    ...list.map((node) => node.x),
+    ...edges.value.map((edge) => edge.lx - edge.labelWidth / 2 - 12),
+    ...domainBands.value.map((band) => band.x),
+  )
+  const minY = Math.min(
+    ...list.map((node) => node.y),
+    ...edges.value.map((edge) => edge.ly - 28),
+    ...domainBands.value.map((band) => band.y),
+  )
+  const maxX = Math.max(
+    ...list.map((node) => node.x + NODE_W),
+    ...edges.value.map((edge) => edge.lx + edge.labelWidth / 2 + 12),
+    ...domainBands.value.map((band) => band.x + band.w),
+  )
+  const maxY = Math.max(
+    ...list.map((node) => node.y + NODE_H),
+    ...edges.value.map((edge) => edge.ly + 28),
+    ...domainBands.value.map((band) => band.y + band.h),
+  )
   const boundsWidth = Math.max(1, maxX - minX)
   const boundsHeight = Math.max(1, maxY - minY)
   const scale = Math.min(
@@ -803,70 +1050,115 @@ function fitView() {
   )
   zoom.value = Math.max(0.2, scale)
   pan.value = {
-    x: (viewportWidth - boundsWidth * zoom.value) / 2 - minX * zoom.value,
+    x: leftInset + (viewportWidth - boundsWidth * zoom.value) / 2 - minX * zoom.value,
     y: (viewportHeight - boundsHeight * zoom.value) / 2 - minY * zoom.value,
   }
 }
 
 function stepZoom(delta: number) {
-  zoom.value = Math.min(2, Math.max(0.2, Math.round((zoom.value + delta) * 100) / 100))
+  setCamera(
+    zoomAt(
+      camera(),
+      { x: (canvasEl.value?.clientWidth ?? 800) / 2, y: (canvasEl.value?.clientHeight ?? 520) / 2 },
+      zoom.value + delta,
+    ),
+  )
+}
+function camera() {
+  return { ...pan.value, scale: zoom.value }
+}
+function setCamera(value: { x: number; y: number; scale: number }) {
+  pan.value = { x: value.x, y: value.y }
+  zoom.value = value.scale
+}
+function restoreView() {
+  if (!previousCamera.value) return
+  setCamera(previousCamera.value)
+  previousCamera.value = null
 }
 
 // ── 拖拽 ───────────────────────────────────────────────────
 
+function selectNode(key: string) {
+  selectedKey.value = key
+  inspectorOpen.value = true
+}
 function onNodeDown(key: string, event: MouseEvent) {
+  if (event.button !== 0) return
+  event.stopPropagation()
+  selectNode(key)
   if (!canEdit.value) return
   event.preventDefault()
-  selectedKey.value = key
-  const world = worldEl.value
-  if (!world) return
-  // 世界容器已被 transform，先换算回未缩放坐标，再减去抓取偏移
-  const rect = world.getBoundingClientRect()
-  const worldX = (event.clientX - rect.left) / zoom.value
-  const worldY = (event.clientY - rect.top) / zoom.value
-  const pos = positions.value[key] ?? { x: 0, y: 0 }
-  dragging.value = { key, offsetX: worldX - pos.x, offsetY: worldY - pos.y }
+  dragging.value = {
+    key,
+    start: { x: event.clientX, y: event.clientY },
+    origin: { ...(positions.value[key] ?? { x: 0, y: 0 }) },
+    moved: false,
+  }
   window.addEventListener('mousemove', onNodeMove)
   window.addEventListener('mouseup', onNodeUp)
 }
-
+function onBackgroundDown(event: MouseEvent) {
+  if (
+    event.button !== 0 ||
+    (event.target as Element).closest('button, [role="button"], .canvas-tools, .legend')
+  )
+    return
+  event.preventDefault()
+  panning.value = { start: { x: event.clientX, y: event.clientY }, origin: { ...pan.value } }
+  window.addEventListener('mousemove', onNodeMove)
+  window.addEventListener('mouseup', onNodeUp)
+}
 function onNodeMove(event: MouseEvent) {
+  const current = { x: event.clientX, y: event.clientY }
+  if (panning.value) {
+    pan.value = dragPosition(panning.value.origin, panning.value.start, current, 1)
+    return
+  }
   const drag = dragging.value
-  const world = worldEl.value
-  if (!drag || !world || !canEdit.value) return
-  const rect = world.getBoundingClientRect()
+  if (!drag || !canEdit.value || (!drag.moved && !isDrag(drag.start, current))) return
+  drag.moved = true
   positions.value = {
     ...positions.value,
-    [drag.key]: {
-      x: Math.round((event.clientX - rect.left) / zoom.value - drag.offsetX),
-      y: Math.round((event.clientY - rect.top) / zoom.value - drag.offsetY),
-    },
+    [drag.key]: dragPosition(drag.origin, drag.start, current, zoom.value),
   }
 }
-
 function stopDragging() {
   if (typeof window !== 'undefined') {
     window.removeEventListener('mousemove', onNodeMove)
     window.removeEventListener('mouseup', onNodeUp)
   }
   dragging.value = null
+  panning.value = null
 }
-
 function onNodeUp() {
-  const moved = !!dragging.value
+  if (dragging.value?.moved) layoutDirty.value = true
   stopDragging()
-  if (!moved) return
-  // 拖拽只改布局，不产生语义版本，所以请求里没有 If-Match
-  void persist()
 }
-
+function onCanvasKey(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  if (dragging.value)
+    positions.value = { ...positions.value, [dragging.value.key]: dragging.value.origin }
+  if (panning.value) pan.value = panning.value.origin
+  stopDragging()
+  closeInspector()
+}
 function onWheel(event: WheelEvent) {
   event.preventDefault()
-  stepZoom(event.deltaY > 0 ? -0.1 : 0.1)
+  const rect = canvasEl.value?.getBoundingClientRect()
+  if (!rect) return
+  setCamera(
+    wheelCamera(
+      camera(),
+      event,
+      { x: event.clientX - rect.left, y: event.clientY - rect.top },
+      { width: rect.width, height: rect.height },
+    ),
+  )
 }
-
 function selectRelation(id: number) {
   selectedKey.value = `rel-${id}`
+  inspectorOpen.value = true
 }
 
 // ── 装配 ───────────────────────────────────────────────────
@@ -883,7 +1175,7 @@ async function updateOntology(
   try {
     await trackWrite(context.id, write(context.id, revision))
     if (!isCurrentSelection(context)) return false
-    const loaded = await loadOntology(context)
+    const loaded = await loadOntology(context, true)
     if (!loaded || !isCurrentSelection(context)) return false
     if (saveLayout) {
       await persistLayout(context)
@@ -901,7 +1193,7 @@ async function updateOntology(
 }
 
 async function addToCanvas(resourceId: number) {
-  await updateOntology(
+  return updateOntology(
     (id, revision) => ontologyApi.addRef(id, resourceId, undefined, revision),
     true,
   )
@@ -933,15 +1225,23 @@ const createLabelZh = ref('')
 const namespaceList = ref<Namespace[]>([])
 const createLoading = ref(false)
 const createError = ref('')
+const createdResourceId = ref<number | null>(null)
+const createDirty = computed(
+  () =>
+    showCreate.value &&
+    (!!createNamespace.value || !!createName.value.trim() || !!createLabelZh.value.trim()),
+)
 const namespaceOptions = computed(() =>
   namespaceList.value.map((ns) => ({ label: `${ns.prefix} → ${ns.iri}`, value: ns.id })),
 )
 async function openCreate() {
   if (!canEdit.value) return
+  const context = selection
   createNamespace.value = null
   createName.value = ''
   createLabelZh.value = ''
   createError.value = ''
+  createdResourceId.value = null
   if (!namespaceList.value.length) {
     try {
       namespaceList.value = await namespacesApi.list()
@@ -949,7 +1249,7 @@ async function openCreate() {
       createError.value = toMessage(err)
     }
   }
-  showCreate.value = true
+  if (context && isCurrentSelection(context)) showCreate.value = true
 }
 async function submitCreate() {
   if (!canEdit.value || createLoading.value || !createNamespace.value || !createName.value.trim())
@@ -959,25 +1259,32 @@ async function submitCreate() {
   createError.value = ''
   try {
     const labelZh = createLabelZh.value.trim() || createName.value.trim()
-    const created = await entityTypesApi.create({
-      name: createName.value.trim(),
-      namespace_id: createNamespace.value,
-      label_i18n: { 'zh-CN': labelZh },
-    })
+    const created =
+      createdResourceId.value === null
+        ? await entityTypesApi.create({
+            name: createName.value.trim(),
+            namespace_id: createNamespace.value,
+            label_i18n: { 'zh-CN': labelZh },
+          })
+        : null
     if (!alive) return
-    entityTypes.value = [
-      ...entityTypes.value.filter((item) => item.id !== created.id),
-      {
-        ...created,
-        data_prop_count: created.data_props?.length ?? 0,
-        relation_count: 0,
-        has_violation: false,
-      },
-    ]
+    if (created) {
+      createdResourceId.value = created.id
+      entityTypes.value = [
+        ...entityTypes.value.filter((item) => item.id !== created.id),
+        {
+          ...created,
+          data_prop_count: created.data_props?.length ?? 0,
+          relation_count: 0,
+          has_violation: false,
+        },
+      ]
+    }
     if (!context || !isCurrentSelection(context)) return
-    await addToCanvas(created.id)
+    const added = await addToCanvas(createdResourceId.value!)
     if (!isCurrentSelection(context)) return
-    showCreate.value = false
+    if (added) showCreate.value = false
+    else createError.value = actionError.value || loadError.value
   } catch (err) {
     if (context && isCurrentSelection(context)) createError.value = toMessage(err)
   } finally {
@@ -1002,20 +1309,28 @@ async function publish() {
 // ── 选中节点的数据属性 ─────────────────────────────────────
 
 /** 画布节点只带 brief，装配时要看这个类型有哪些属性，得按需取详情。 */
-watch(selectedKey, async (key) => {
+const typeDetailError = ref('')
+watch([selectedKey, frozenRevision], async ([key], _oldKey, onCleanup) => {
   typeDetail.value = null
+  typeDetailError.value = ''
+  typeDetailLoading.value = false
+  if (key) inspectorOpen.value = true
   const context = selection
-  if (!key || key.startsWith('rel-') || key.startsWith('domain-')) return
+  if (frozenRevision.value !== null || !key || key.startsWith('rel-') || key.startsWith('domain-'))
+    return
   const id = Number(key)
   if (!Number.isSafeInteger(id) || id <= 0) return
+  const request = new AbortController()
+  onCleanup(() => request.abort())
   typeDetailLoading.value = true
   try {
-    const info = await entityTypesApi.get(id)
-    if (alive && context === selection && selectedKey.value === key) typeDetail.value = info
-  } catch {
-    // 详情取不到不影响装配，检查器退化为不含属性清单
+    const info = await entityTypesApi.get(id, request.signal)
+    if (alive && context === selection && selectedKey.value === key && !request.signal.aborted)
+      typeDetail.value = info
+  } catch (err) {
+    if (!request.signal.aborted && context === selection) typeDetailError.value = toMessage(err)
   } finally {
-    typeDetailLoading.value = false
+    if (!request.signal.aborted && context === selection) typeDetailLoading.value = false
   }
 })
 
@@ -1028,7 +1343,7 @@ watch(selectedKey, async (key) => {
 async function runValidation() {
   const context = selection
   const id = ontologyId.value
-  if (id === null || !context || validating.value || loading.value) return
+  if (id === null || !context || !canEdit.value || validating.value || loading.value) return
   const editRevision = detail.value?.edit_revision
   validating.value = true
   validationError.value = ''
@@ -1080,7 +1395,33 @@ const unconfiguredLabels = computed(() =>
   ),
 )
 
+async function closeCreate() {
+  if (createLoading.value || !(await confirmDiscard())) return
+  showCreate.value = false
+  createName.value = ''
+  createLabelZh.value = ''
+}
+async function closeRules() {
+  if (working.value || !(await confirmDiscard())) return
+  selectedRules.value = [...savedRules.value]
+  showRules.value = false
+}
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!layoutDirty.value && !createDirty.value && !rulesDirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+onBeforeRouteLeave(async () => {
+  if (saving.value || working.value || createLoading.value) return false
+  return confirmDiscard()
+})
 onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', beforeUnload)
+    window.addEventListener('resize', onViewportResize)
+    onViewportResize()
+  }
+
   // 支持从本体列表带 ?ontology=<id> 进来，直接定位到那一个本体
   const requested = Number(route.query.ontology)
   if (Number.isSafeInteger(requested) && requested > 0) ontologyId.value = requested
@@ -1089,6 +1430,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   alive = false
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('beforeunload', beforeUnload)
+    window.removeEventListener('resize', onViewportResize)
+  }
+  answerDiscard(false)
   catalogController?.abort()
   selection?.controller.abort()
   stopDragging()
@@ -1096,9 +1442,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="designer">
+  <section class="designer" @keydown.esc="closeInspector">
     <!-- 顶栏：本体选择 + 布局 + 发布 -->
     <header class="toolbar">
+      <h1>{{ t('designerUi.title') }}</h1>
       <NSelect
         :value="ontologyId"
         :options="ontologies.map((o) => ({ label: o.name, value: o.id }))"
@@ -1106,32 +1453,81 @@ onBeforeUnmount(() => {
         :loading="catalogLoading"
         :disabled="catalogLoading || !!catalogError"
         class="onto-select"
+        :aria-label="t('designer.selectOntology')"
         @update:value="(v: number) => selectOntology(v)"
       />
       <span v-if="detail" class="status-tag" :style="{ '--dot': STATUS_VAR[detail.status] }">
         <i class="status-dot" />
         {{ t(`resourceStatus.${detail.status}`) }}
       </span>
-      <span v-if="saving" class="saving">{{ t('designer.saving') }}</span>
       <span class="spacer" />
-      <NButton size="small" :disabled="!canEdit || !nodes.length" @click="autoLayout">
-        {{ t('designer.autoLayout') }}
-      </NButton>
-      <NButton
-        size="small"
-        :disabled="ontologyId === null"
-        :loading="validating"
-        @click="runValidation"
-      >
+      <NButton size="small" :disabled="!canEdit" :loading="validating" @click="runValidation">
         {{ t('designer.runValidation') }}
       </NButton>
-      <NButton size="small" :disabled="ontologyId === null" @click="showAi = true">
+      <NButton size="small" :disabled="!canEdit" @click="showAi = true">
         {{ t('designer.aiAssist') }}
       </NButton>
       <NButton size="small" type="primary" :disabled="!canEdit" @click="publish">
         {{ t('common.publish') }}
       </NButton>
     </header>
+    <div v-if="detail" class="object-bar">
+      <span class="object-mode">{{
+        t(frozenRevision === null ? 'designerUi.workingContent' : 'designerUi.frozenContent')
+      }}</span>
+      <span>{{
+        t('designerUi.versions', { published: detail.current_revision, edit: detail.edit_revision })
+      }}</span>
+      <NSelect
+        :value="frozenRevision ?? 0"
+        :options="revisionOptions"
+        :aria-label="t('designerUi.versionView')"
+        :disabled="saving || working"
+        size="small"
+        class="revision-select"
+        @update:value="changeRevision"
+      />
+      <span class="spacer" />
+      <span v-if="!roleCanWrite" class="readonly-note">{{ t('designerUi.viewer') }}</span>
+      <span v-else-if="frozenRevision !== null" class="readonly-note">{{
+        t('designerUi.frozenReadOnly')
+      }}</span>
+      <span v-else class="saving" role="status">{{
+        t(
+          saving
+            ? 'designer.saving'
+            : layoutDirty
+              ? 'designerUi.unsavedLayout'
+              : 'designerUi.layoutSaved',
+        )
+      }}</span>
+    </div>
+    <div v-if="detail" class="view-toolbar">
+      <NButton
+        size="small"
+        :aria-expanded="poolOpen"
+        aria-controls="designer-resources"
+        @click="poolOpen = !poolOpen"
+        >{{ t('designer.resourcePool') }}</NButton
+      >
+      <NButton size="small" :disabled="!canEdit || !nodes.length" @click="autoLayout">{{
+        t('designer.autoLayout')
+      }}</NButton>
+      <NButton size="small" :disabled="!canEdit || !layoutDirty" @click="persist">{{
+        t('designerUi.saveLayout')
+      }}</NButton>
+      <NButton size="small" :disabled="!canEdit || !layoutDirty" @click="cancelLayout">{{
+        t('designerUi.cancelLayout')
+      }}</NButton>
+      <span class="spacer" />
+      <NButton
+        size="small"
+        :aria-expanded="inspectorOpen"
+        aria-controls="designer-inspector"
+        @click="inspectorOpen ? closeInspector() : (inspectorOpen = true)"
+        >{{ t('designer.inspector') }}</NButton
+      >
+    </div>
 
     <!-- 资产层校验结果：装配完在这里就能看出能不能发布 -->
     <section v-if="showValidation" class="validation">
@@ -1175,13 +1571,24 @@ onBeforeUnmount(() => {
       {{ saveError }}
       <NButton :disabled="!canEdit" @click="persist">{{ t('common.save') }}</NButton>
     </NAlert>
+    <NAlert v-if="historyError" type="error" role="alert">
+      {{ t('designerUi.snapshotUnavailable') }} {{ historyError }}
+      <NButton @click="frozenRevision !== null && changeRevision(frozenRevision)">{{
+        t('graph.refresh')
+      }}</NButton>
+    </NAlert>
     <p v-if="catalogLoading" role="status">{{ t('common.loading') }}</p>
 
     <div v-if="!catalogLoading && !catalogError && !ontologies.length" class="no-ontology">
       <!-- 空态要给出可执行动作，而不是只说「去创建一个」却没有入口 -->
       <NEmpty :description="t('designer.noOntologyHint')">
         <template #extra>
-          <NButton type="primary" size="small" @click="router.push({ name: 'ontologies' })">
+          <NButton
+            type="primary"
+            size="small"
+            :disabled="!roleCanWrite"
+            @click="router.push({ name: 'ontologies' })"
+          >
             {{ t('ontology.create') }}
           </NButton>
         </template>
@@ -1190,13 +1597,33 @@ onBeforeUnmount(() => {
 
     <div v-else-if="ontologies.length" class="body">
       <!-- 左：资源面板 -->
-      <aside class="panel pool">
+      <aside
+        v-if="poolOpen"
+        id="designer-resources"
+        class="panel pool"
+        :aria-label="t('designer.resourcePool')"
+      >
         <div class="panel-head">
           <span>{{ t('designer.resourcePool') }}</span>
           <NButton size="tiny" :disabled="!canEdit" @click="openCreate">
             {{ t('designer.createOnCanvas') }}
           </NButton>
+          <button
+            class="panel-close"
+            type="button"
+            :aria-label="t('designerUi.closeResources')"
+            @click="poolOpen = false"
+          >
+            {{ t('common.close') }}
+          </button>
         </div>
+        <NInput
+          v-model:value="poolSearch"
+          class="pool-search"
+          clearable
+          :placeholder="t('designerUi.searchResources')"
+          :aria-label="t('designerUi.searchResources')"
+        />
         <div class="pool-body">
           <NButton size="small" :disabled="!canEdit" @click="openRules">{{
             t('designer.configureRules')
@@ -1205,7 +1632,7 @@ onBeforeUnmount(() => {
             <span>{{ t('designer.inCanvas') }}</span>
             <span class="mono pool-count">{{ canvasTotal }}</span>
           </div>
-          <template v-for="cat in canvasCategories" :key="`c-${cat.kind}`">
+          <template v-for="cat in filteredCanvasCategories" :key="`c-${cat.kind}`">
             <div v-if="cat.items.length" class="pool-subgroup">
               <span>{{ cat.label }}</span>
               <span class="mono">{{ cat.items.length }}</span>
@@ -1238,8 +1665,13 @@ onBeforeUnmount(() => {
           </template>
           <div v-if="!canvasTotal" class="pool-empty">{{ t('common.empty') }}</div>
 
-          <div class="pool-group">{{ t('designer.notInCanvas') }}</div>
-          <template v-for="cat in availableCategories" :key="`a-${cat.kind}`">
+          <div v-if="frozenRevision === null" class="pool-group">
+            {{ t('designer.notInCanvas') }}
+          </div>
+          <template
+            v-for="cat in frozenRevision === null ? filteredAvailableCategories : []"
+            :key="`a-${cat.kind}`"
+          >
             <div v-if="cat.items.length" class="pool-subgroup">
               <span>{{ cat.label }}</span>
               <span class="mono">{{ cat.items.length }}</span>
@@ -1266,20 +1698,18 @@ onBeforeUnmount(() => {
             </button>
           </template>
         </div>
-        <div class="pool-foot">{{ t('designer.layoutHint') }}</div>
+        <div class="pool-foot">
+          {{ t(frozenRevision === null ? 'designerUi.workingHint' : 'designerUi.frozenHint') }}
+        </div>
       </aside>
       <!-- B-7 画布直接建模：新建实体类型弹窗 -->
       <NModal
-        v-model:show="showCreate"
+        :show="showCreate"
         preset="dialog"
         :title="t('designer.createOnCanvas')"
-        :positive-text="t('common.create')"
-        :negative-text="t('common.cancel')"
-        :positive-button-props="{
-          loading: createLoading,
-          disabled: !createNamespace || !createName.trim(),
-        }"
-        @positive-click="submitCreate"
+        :mask-closable="false"
+        :close-on-esc="false"
+        @update:show="(value: boolean) => !value && closeCreate()"
       >
         <NForm label-placement="top">
           <NFormItem :label="t('designer.createNamespace')">
@@ -1287,23 +1717,45 @@ onBeforeUnmount(() => {
               v-model:value="createNamespace"
               :options="namespaceOptions"
               :placeholder="t('designer.createNamespacePlaceholder')"
+              :disabled="createLoading || createdResourceId !== null"
               filterable
             />
           </NFormItem>
           <NFormItem :label="t('common.name')" required>
-            <NInput v-model:value="createName" :placeholder="t('designer.createNamePlaceholder')" />
+            <NInput
+              v-model:value="createName"
+              :placeholder="t('designer.createNamePlaceholder')"
+              :disabled="createLoading || createdResourceId !== null"
+            />
           </NFormItem>
           <NFormItem :label="t('common.labelZh')">
             <NInput
               v-model:value="createLabelZh"
               :placeholder="t('designer.createLabelPlaceholder')"
+              :disabled="createLoading || createdResourceId !== null"
             />
           </NFormItem>
         </NForm>
         <NAlert v-if="createError" type="error" class="feedback">{{ createError }}</NAlert>
+        <template #action>
+          <NButton :disabled="createLoading" @click="closeCreate">{{ t('common.cancel') }}</NButton>
+          <NButton
+            type="primary"
+            :loading="createLoading"
+            :disabled="!canEdit || !createNamespace || !createName.trim()"
+            @click="submitCreate"
+            >{{ t('common.create') }}</NButton
+          >
+        </template>
       </NModal>
 
-      <NDrawer v-model:show="showRules" :width="440">
+      <NDrawer
+        :show="showRules"
+        :width="440"
+        :mask-closable="false"
+        :close-on-esc="false"
+        @update:show="(value: boolean) => !value && closeRules()"
+      >
         <NDrawerContent :title="t('designer.configureRules')" closable>
           <p>{{ t('designer.rulesHint') }}</p>
           <NAlert v-if="ruleError" type="error">{{ ruleError }}</NAlert>
@@ -1318,6 +1770,7 @@ onBeforeUnmount(() => {
             :aria-label="t('designer.configureRules')"
           />
           <template #footer>
+            <NButton :disabled="working" @click="closeRules">{{ t('common.cancel') }}</NButton>
             <NButton
               type="primary"
               :loading="working"
@@ -1330,8 +1783,17 @@ onBeforeUnmount(() => {
       </NDrawer>
 
       <!-- 中：画布 -->
-      <div ref="canvasEl" class="canvas" @wheel="onWheel">
-        <NSpin :show="loading" class="canvas-spin">
+      <div
+        ref="canvasEl"
+        class="canvas"
+        :class="{ panning: !!panning }"
+        tabindex="0"
+        :aria-label="t('designerUi.canvas')"
+        @mousedown="onBackgroundDown"
+        @keydown="onCanvasKey"
+        @wheel="onWheel"
+      >
+        <NSpin :show="loading || historyLoading" class="canvas-spin">
           <div ref="worldEl" class="world" :style="worldStyle">
             <svg class="edges" :width="WORLD_W" :height="WORLD_H">
               <defs>
@@ -1370,7 +1832,12 @@ onBeforeUnmount(() => {
                 </text>
               </g>
 
-              <g v-for="edge in edges" :key="edge.key">
+              <g
+                v-for="edge in edges"
+                :key="edge.key"
+                class="edge"
+                :class="{ selected: selectedKey === edge.key }"
+              >
                 <path
                   class="edge-hit"
                   :d="edge.d"
@@ -1380,6 +1847,7 @@ onBeforeUnmount(() => {
                   pointer-events="stroke"
                   tabindex="0"
                   role="button"
+                  :data-selection="edge.key"
                   :aria-label="t('designer.selectRelation', { name: edge.label })"
                   @click.stop="selectRelation(edge.id)"
                   @keydown.enter.stop="selectRelation(edge.id)"
@@ -1396,12 +1864,26 @@ onBeforeUnmount(() => {
                         : 'var(--border-strong)'
                   "
                   :stroke-width="selectedKey === edge.key ? 2.6 : 1.6"
-                  :stroke-dasharray="edge.status === 'PUBLISHED' ? undefined : '5 5'"
                   marker-end="url(#edge-arrow)"
                 />
-                <text :x="edge.lx" :y="edge.ly - 6" text-anchor="middle" class="edge-label">
-                  {{ edge.label }}
-                </text>
+                <g
+                  class="edge-label-button"
+                  role="button"
+                  :aria-label="t('designer.selectRelation', { name: edge.label })"
+                  @click.stop="selectRelation(edge.id)"
+                >
+                  <title>{{ edge.label }}</title>
+                  <rect
+                    :x="edge.lx - edge.labelWidth / 2"
+                    :y="edge.ly - 13"
+                    :width="edge.labelWidth"
+                    height="26"
+                    rx="5"
+                  />
+                  <text :x="edge.lx" :y="edge.ly + 4" text-anchor="middle" class="edge-label">
+                    {{ edge.displayLabel }}
+                  </text>
+                </g>
               </g>
             </svg>
 
@@ -1409,6 +1891,12 @@ onBeforeUnmount(() => {
               v-for="node in nodes"
               :key="node.key"
               class="node"
+              role="button"
+              tabindex="0"
+              :aria-label="node.label"
+              :aria-pressed="selectedKey === node.key"
+              :data-selection="node.key"
+              :title="node.label + '\n' + node.iri"
               :class="{ on: selectedKey === node.key, dragging: dragging?.key === node.key }"
               :style="{
                 left: `${node.x}px`,
@@ -1417,16 +1905,25 @@ onBeforeUnmount(() => {
                 height: `${NODE_H}px`,
               }"
               @mousedown="onNodeDown(node.key, $event)"
+              @keydown.enter.stop="selectNode(node.key)"
+              @keydown.space.prevent.stop="selectNode(node.key)"
             >
               <span class="node-head">
-                <i class="dot" :style="{ background: STATUS_VAR[node.status] }" />
+                <svg class="node-icon" viewBox="0 0 20 20" aria-hidden="true">
+                  <path d="m10 2 7 4v8l-7 4-7-4V6Zm0 8 7-4M10 10 3 6m7 4v8" />
+                </svg>
                 <span class="node-label">{{ node.label }}</span>
               </span>
-              <span class="node-iri mono">{{ node.iri }}</span>
               <span class="node-meta">{{ node.name }}</span>
+              <span class="node-status" :style="{ color: STATUS_VAR[node.status] }">{{
+                t(`resourceStatus.${node.status}`)
+              }}</span>
             </div>
 
-            <div v-if="!loading && !loadError && !nodes.length" class="world-empty">
+            <div
+              v-if="!loading && !historyLoading && !historyError && !loadError && !nodes.length"
+              class="world-empty"
+            >
               <div class="world-empty-title">{{ t('designer.emptyCanvas') }}</div>
               <div class="world-empty-hint">{{ t('designer.emptyCanvasHint') }}</div>
             </div>
@@ -1445,18 +1942,34 @@ onBeforeUnmount(() => {
           <button type="button" :aria-label="t('designer.zoomIn')" @click="stepZoom(0.1)" />
           <span class="divider" />
           <button type="button" @click="fitView">{{ t('designer.fitView') }}</button>
+          <button type="button" :disabled="!previousCamera" @click="restoreView">
+            {{ t('designerUi.restoreView') }}
+          </button>
+          <button type="button" :aria-expanded="legendOpen" @click="legendOpen = !legendOpen">
+            {{ t('designerUi.legend') }}
+          </button>
         </div>
 
-        <div class="legend">
+        <div v-if="legendOpen" class="legend">
           <div><span class="lg-line solid" />{{ t('designer.legendRelation') }}</div>
-          <div><span class="lg-line dashed" />{{ t('designer.legendDraft') }}</div>
+          <div>{{ t('designerUi.legendStatus') }}</div>
           <div><span class="lg-line warn" />{{ t('designer.legendUnconfigured') }}</div>
         </div>
       </div>
 
       <!-- 右：属性检查器 -->
-      <aside class="panel inspector">
-        <div class="panel-head">{{ t('designer.inspector') }}</div>
+      <aside
+        v-if="inspectorOpen"
+        id="designer-inspector"
+        class="panel inspector"
+        :aria-label="t('designer.inspector')"
+      >
+        <div class="panel-head">
+          <span>{{ t('designer.inspector') }}</span
+          ><button class="panel-close" type="button" @click="closeInspector">
+            {{ t('common.close') }}
+          </button>
+        </div>
         <div v-if="selected" class="inspect-body">
           <div class="inspect-title">
             <i
@@ -1479,6 +1992,15 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <span class="iri inspect-iri">{{ selected.iri }}</span>
+          <p class="resource-context">
+            {{
+              frozenRevision !== null
+                ? t('designerUi.frozenResource', { revision: inspectedRevision })
+                : pinnedRevision
+                  ? t('designerUi.livePinnedResource', { revision: pinnedRevision })
+                  : t('designerUi.liveResource')
+            }}
+          </p>
 
           <dl class="inspect-kv">
             <dt>{{ t('common.name') }}</dt>
@@ -1513,19 +2035,19 @@ onBeforeUnmount(() => {
           <div v-if="selected.kind === 'entity'" class="inspect-props">
             <div class="inspect-props-head">
               <span>{{ t('entityType.dataProps') }}</span>
-              <span class="mono">{{ typeDetail?.data_props?.length ?? 0 }}</span>
+              <span v-if="!typeDetailLoading && !typeDetailError" class="mono">{{
+                inspectedProperties.length
+              }}</span>
             </div>
             <p v-if="typeDetailLoading" class="inspect-empty">{{ t('common.loading') }}</p>
-            <template v-else-if="typeDetail?.data_props?.length">
+            <NAlert v-else-if="typeDetailError" type="error">{{ typeDetailError }}</NAlert>
+            <template v-else-if="inspectedProperties.length">
               <ul class="prop-list">
-                <li v-for="prop in typeDetail.data_props.slice(0, 4)" :key="prop.name">
+                <li v-for="prop in inspectedProperties" :key="prop.name">
                   <span class="mono prop-name">{{ prop.name }}</span>
                   <span class="prop-type">{{ t(`entityProps.datatypes.${prop.datatype}`) }}</span>
                 </li>
               </ul>
-              <p v-if="typeDetail.data_props.length > 4" class="prop-more">
-                {{ t('designer.moreProps', { count: typeDetail.data_props.length - 4 }) }}
-              </p>
             </template>
             <p v-else class="inspect-empty">{{ t('common.empty') }}</p>
           </div>
@@ -1546,11 +2068,34 @@ onBeforeUnmount(() => {
         <div v-else class="inspect-empty">{{ t('designer.selectNode') }}</div>
       </aside>
     </div>
+    <footer v-if="detail" class="canvas-status">
+      <span>{{
+        t('designerUi.scope', {
+          nodes: nodes.length,
+          edges: edges.length,
+          missing: unconfiguredRelationIds.length,
+        })
+      }}</span>
+      <span>{{ t('designerUi.gestures') }}</span>
+    </footer>
+    <NModal
+      :show="showDiscard"
+      preset="dialog"
+      :title="t('designerUi.unsavedTitle')"
+      :content="t('designerUi.unsavedPrompt')"
+      :positive-text="t('designerUi.discard')"
+      :negative-text="t('designerUi.keepEditing')"
+      :mask-closable="false"
+      :close-on-esc="false"
+      @positive-click="answerDiscard(true)"
+      @negative-click="answerDiscard(false)"
+      @close="answerDiscard(false)"
+    />
     <!-- AI 补全建议（V-DS-05）：逐条人工确认后才写入草稿资源 -->
     <NDrawer v-model:show="showAi" :width="460" placement="right">
       <NDrawerContent :title="t('designer.aiAssist')" closable>
         <AiSuggestions
-          v-if="ontologyId !== null"
+          v-if="ontologyId !== null && roleCanWrite && frozenRevision === null"
           kind="ONTOLOGY_COMPLETION"
           :title="t('designer.aiAssist')"
           :target-id="ontologyId"
@@ -1587,6 +2132,43 @@ onBeforeUnmount(() => {
   padding: 10px var(--space-4);
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+.toolbar h1 {
+  margin: 0 8px 0 0;
+  font-size: var(--font-h2);
+}
+.object-bar,
+.view-toolbar,
+.canvas-status {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--font-caption);
+}
+.object-mode {
+  color: var(--text);
+  font-weight: 500;
+}
+.revision-select {
+  width: 190px;
+}
+.readonly-note {
+  color: var(--s-na);
+}
+.view-toolbar {
+  padding-block: 6px;
+}
+.canvas-status {
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
 }
 
 .onto-select {
@@ -1610,6 +2192,7 @@ onBeforeUnmount(() => {
 }
 
 .body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -1624,20 +2207,46 @@ onBeforeUnmount(() => {
 }
 
 .pool {
-  width: 216px;
+  width: 248px;
   border-right: 1px solid var(--border-subtle);
 }
 
 .inspector {
-  width: 246px;
+  width: var(--inspector-width, 320px);
   border-left: 1px solid var(--border-subtle);
+  overflow: auto;
 }
 
 .panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 12px 14px;
   color: var(--text-secondary);
   font-size: var(--font-caption);
   border-bottom: 1px solid var(--border-subtle);
+}
+.panel-head > span:first-child {
+  flex: 1;
+}
+.panel-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+  padding: 4px;
+}
+.pool-search {
+  margin: 10px;
+  width: calc(100% - 20px);
+}
+.resource-context {
+  margin: 0;
+  padding: 10px;
+  background: var(--bg-subtle);
+  border-radius: var(--r-md);
+  font-size: var(--font-caption);
 }
 
 .pool-body {
@@ -1661,13 +2270,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 6px 6px 2px 10px;
-  color: var(--text-disabled);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
 }
 
 .pool-count {
-  color: var(--text-disabled);
-  font-size: 10px;
+  color: var(--text-tertiary);
+  font-size: var(--font-caption);
 }
 
 .pool-item {
@@ -1695,11 +2304,12 @@ onBeforeUnmount(() => {
 /* on = 已在画布；active = 当前选中。两者语义不同，样式也分开 */
 .pool-item.on {
   color: var(--text);
-  background: var(--accent-soft);
+  background: transparent;
   border-color: transparent;
 }
 
 .pool-item.active {
+  background: var(--accent-soft);
   border-color: var(--accent);
 }
 
@@ -1709,13 +2319,17 @@ onBeforeUnmount(() => {
   padding: 1px 6px;
   font-size: 10px;
   color: var(--s-notrun);
-  border: 1px solid rgba(217, 119, 6, 0.4);
+  border: 1px solid var(--s-notrun);
   border-radius: var(--r-pill);
 }
 
 .pool-item.addable {
   background: transparent;
-  border-style: dashed;
+  border-color: transparent;
+}
+.pool-item:disabled {
+  cursor: default;
+  opacity: 0.65;
 }
 
 .pool-name {
@@ -1740,8 +2354,8 @@ onBeforeUnmount(() => {
 
 .pool-foot {
   padding: 10px 14px;
-  color: var(--text-disabled);
-  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-size: var(--font-caption);
   line-height: 1.7;
   border-top: 1px solid var(--border-subtle);
 }
@@ -1753,11 +2367,13 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
   cursor: grab;
-  background-color: var(--bg-base);
-  background-image:
-    linear-gradient(var(--border-subtle) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-color: var(--canvas, var(--bg-base));
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
   background-size: 24px 24px;
+  overscroll-behavior: contain;
+}
+.canvas.panning {
+  cursor: grabbing;
 }
 
 .canvas-spin {
@@ -1776,12 +2392,28 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   pointer-events: none;
+  overflow: visible;
 }
 
 .edge-label {
-  font-size: 10.5px;
-  fill: var(--g-relation);
+  font-size: 13px;
+  fill: var(--text-secondary);
   pointer-events: none;
+}
+.edge-label-button {
+  pointer-events: all;
+  cursor: pointer;
+}
+.edge-label-button rect {
+  fill: var(--bg-surface);
+  stroke: var(--border);
+}
+.edge.selected .edge-label-button rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+}
+.edge.selected .edge-label {
+  fill: var(--accent);
 }
 .edge-hit {
   cursor: pointer;
@@ -1801,7 +2433,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: 0 12px;
   cursor: grab;
-  background: var(--bg-raised);
+  background: var(--bg-surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-lg);
   transition: box-shadow var(--dur-fast) var(--ease-out);
@@ -1828,8 +2460,24 @@ onBeforeUnmount(() => {
 }
 
 .node-label {
-  font-size: var(--font-caption);
+  font-size: var(--font-small);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: var(--g-entity);
+  stroke-width: 1.3;
+}
+.node-status {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  padding-left: 25px;
 }
 
 .node-iri {
@@ -1841,8 +2489,12 @@ onBeforeUnmount(() => {
 }
 
 .node-meta {
-  color: var(--text-disabled);
-  font-size: 9.5px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  padding-left: 25px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .world-empty {
@@ -1874,7 +2526,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--s-notrun);
   background: var(--bg-raised);
-  border: 1px solid rgba(217, 119, 6, 0.4);
+  border: 1px solid var(--s-notrun);
   border-radius: var(--r-md);
 }
 
@@ -1890,19 +2542,25 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   opacity: 0.94;
+  max-width: calc(100% - 28px);
+  flex-wrap: wrap;
 }
 
 .canvas-tools button {
   min-width: 26px;
-  height: 24px;
+  height: 28px;
   padding: 0 7px;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--font-caption);
   color: var(--text-secondary);
   cursor: pointer;
   background: transparent;
   border: 0;
   border-radius: var(--r-sm);
+}
+.canvas-tools button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .canvas-tools button:hover {
@@ -1932,7 +2590,7 @@ onBeforeUnmount(() => {
 .legend {
   position: absolute;
   right: 14px;
-  bottom: 14px;
+  bottom: 66px;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -2076,6 +2734,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .inspect-title b {
@@ -2091,7 +2750,7 @@ onBeforeUnmount(() => {
   grid-template-columns: 72px 1fr;
   gap: 7px 10px;
   margin: 0;
-  font-size: 11px;
+  font-size: var(--font-caption);
 }
 
 .inspect-kv dt {
@@ -2100,8 +2759,7 @@ onBeforeUnmount(() => {
 
 .inspect-kv dd {
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .inspect-empty {
@@ -2186,5 +2844,44 @@ onBeforeUnmount(() => {
   height: 6px;
   background: var(--dot);
   border-radius: 50%;
+}
+@media (max-width: 1399px) {
+  .inspector {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 4;
+    box-shadow: var(--elev-2);
+    max-width: min(360px, 90%);
+  }
+}
+@media (max-width: 1000px) {
+  .pool {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 4;
+    box-shadow: var(--elev-2);
+    max-width: 90%;
+  }
+  .onto-select {
+    width: 180px;
+  }
+  .toolbar h1 {
+    font-size: var(--font-h3);
+  }
+  .object-bar {
+    gap: 6px;
+  }
+  .canvas-status {
+    font-size: 11px;
+  }
+}
+@media (max-height: 720px) {
+  .validation {
+    max-height: 160px;
+  }
+  .object-bar,
+  .toolbar {
+    padding-block: 6px;
+  }
 }
 </style>

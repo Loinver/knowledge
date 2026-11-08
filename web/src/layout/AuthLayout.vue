@@ -100,27 +100,12 @@ const localeStore = useLocaleStore()
 /* ── 品牌栏 ─────────────────────────────────────────────── */
 .auth-brand {
   display: flex;
-  flex: 0 0 46%;
+  flex: 0 0 36%;
   flex-direction: column;
   padding: 44px 40px;
   overflow: hidden;
-  background:
-    radial-gradient(120% 90% at 20% 15%, rgba(47, 111, 228, 0.14), transparent 62%),
-    radial-gradient(90% 70% at 85% 80%, rgba(124, 58, 237, 0.12), transparent 58%), var(--bg-inset);
-}
-
-/* 星图底色需要网格来暗示「坐标系」，这是设计语言的一部分 */
-[data-theme='dark'] .auth-brand {
-  background-image:
-    radial-gradient(120% 90% at 20% 15%, rgba(79, 141, 247, 0.2), transparent 62%),
-    radial-gradient(90% 70% at 85% 80%, rgba(139, 92, 246, 0.18), transparent 58%),
-    linear-gradient(var(--border-subtle) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
-  background-size:
-    auto,
-    auto,
-    24px 24px,
-    24px 24px;
+  background: var(--bg-inset);
+  border-right: 1px solid var(--border);
 }
 
 .brand-head {

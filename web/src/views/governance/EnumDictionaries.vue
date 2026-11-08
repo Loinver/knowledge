@@ -33,9 +33,12 @@ import type {
 import { enumDictionariesApi } from '@/api/enum-dictionaries'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useGovernanceAccess } from '@/views/governance/composables/useGovernanceAccess'
 
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
+const { canWrite } = useGovernanceAccess()
 const router = useRouter()
 const items = ref<EnumDictionary[]>([])
 const total = ref(0)
@@ -57,6 +60,11 @@ const revisions = ref<EnumDictionary[]>([])
 const references = ref<EnumReference[]>([])
 const selectedRevision = ref<number | null>(null)
 const activeTab = ref('edit')
+const editorVisible = useDraftGuard(
+  showEditor,
+  () => form.value,
+  () => canWrite.value && editorReady.value,
+)
 let listController: AbortController | undefined
 let editorController: AbortController | undefined
 let editorGeneration = 0
@@ -137,7 +145,7 @@ function changeSort(value: EnumSort) {
 }
 
 function openCreate() {
-  if (busy.value) return
+  if (!canWrite.value || busy.value) return
   editorController?.abort()
   editorGeneration++
   saved.value = null
@@ -200,7 +208,7 @@ function validInput() {
 }
 
 async function submit() {
-  if (busy.value || !editorReady.value) return
+  if (!canWrite.value || activeTab.value !== 'edit' || busy.value || !editorReady.value) return
   if (!validInput()) {
     editorError.value = t('enumDictionaries.invalid')
     return
@@ -225,7 +233,7 @@ async function submit() {
 }
 
 async function remove(item: EnumDictionary) {
-  if (busy.value) return
+  if (!canWrite.value || busy.value) return
   busy.value = true
   error.value = ''
   notice.value = ''
@@ -300,11 +308,13 @@ const columns = computed(() => [
         ),
         h(
           NPopconfirm,
-          { onPositiveClick: () => remove(item) },
+          { disabled: busy.value || !canWrite.value, onPositiveClick: () => remove(item) },
           {
             trigger: () =>
-              h(NButton, { size: 'small', type: 'error', disabled: busy.value }, () =>
-                t('common.delete'),
+              h(
+                NButton,
+                { size: 'small', type: 'error', disabled: busy.value || !canWrite.value },
+                () => t('common.delete'),
               ),
             default: () => t('enumDictionaries.confirmDelete', { name: item.name }),
           },
@@ -345,11 +355,12 @@ const referenceColumns = computed(() => [
   <div class="enum-page">
     <PageHeader :title="t('enumDictionaries.title')" :description="t('enumDictionaries.intro')">
       <template #actions>
-        <n-button type="primary" :disabled="busy" @click="openCreate">
+        <n-button type="primary" :disabled="busy || !canWrite" @click="openCreate">
           {{ t('enumDictionaries.create') }}
         </n-button>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.readOnly') }}</NAlert>
     <n-card :bordered="false">
       <n-space class="toolbar" align="center">
         <n-form-item
@@ -388,7 +399,9 @@ const referenceColumns = computed(() => [
         <n-button size="small" @click="load">{{ t('enumDictionaries.retry') }}</n-button></n-alert
       >
       <n-alert v-if="notice" type="success" class="feedback">{{ notice }}</n-alert>
+      <p v-if="loading" role="status">{{ t('common.loading') }}</p>
       <n-data-table
+        v-else-if="!error"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -401,7 +414,7 @@ const referenceColumns = computed(() => [
         /></template>
       </n-data-table>
       <n-pagination
-        v-if="total > 0"
+        v-if="!loading && !error && total > 0"
         v-model:page="page"
         :item-count="total"
         :page-size="20"
@@ -410,16 +423,19 @@ const referenceColumns = computed(() => [
       />
     </n-card>
     <n-drawer
-      :show="showEditor"
-      :width="760"
+      :show="editorVisible"
+      width="min(760px, 100vw)"
       :close-on-esc="!busy"
       :mask-closable="!busy"
-      @update:show="showEditor = $event"
+      @update:show="editorVisible = $event"
     >
       <n-drawer-content
         :title="saved ? t('enumDictionaries.details') : t('enumDictionaries.create')"
         :closable="!busy"
       >
+        <NAlert v-if="!canWrite" type="info" class="feedback">{{
+          t('governanceUi.readOnly')
+        }}</NAlert>
         <n-alert v-if="editorError" type="error" class="feedback">
           {{ editorError }}
           <n-button
@@ -429,17 +445,18 @@ const referenceColumns = computed(() => [
             >{{ t('enumDictionaries.retry') }}</n-button
           >
         </n-alert>
+        <p v-if="editorLoading" role="status">{{ t('common.loading') }}</p>
         <n-spin :show="editorLoading">
-          <n-tabs v-model:value="activeTab" type="line">
-            <n-tab-pane name="edit" :tab="t('common.edit')">
+          <n-tabs v-if="editorReady" v-model:value="activeTab" type="line">
+            <n-tab-pane name="edit" :tab="t('governanceUi.currentEntries')">
               <p v-if="saved">
                 {{ t('enumDictionaries.editRevision', { revision: saved.revision }) }}
               </p>
-              <n-form :disabled="busy || !editorReady" label-placement="top">
+              <n-form :disabled="busy || !editorReady || !canWrite" label-placement="top">
                 <n-form-item :label="t('common.name')" required
                   ><n-input
                     v-model:value="form.name"
-                    :disabled="!!saved"
+                    :disabled="!!saved || busy || !canWrite"
                     :placeholder="t('enumDictionaries.nameHint')"
                 /></n-form-item>
                 <n-form-item :label="t('common.labelZh')" required
@@ -466,14 +483,14 @@ const referenceColumns = computed(() => [
                     ><n-input v-model:value="entry.label_i18n['en-US']"
                   /></n-form-item>
                   <n-button
-                    :disabled="busy || editorLoading || form.entries.length === 1"
+                    :disabled="!canWrite || busy || editorLoading || form.entries.length === 1"
                     :aria-label="t('enumDictionaries.removeEntry', { index: index + 1 })"
                     @click="form.entries.splice(index, 1)"
                     >{{ t('common.delete') }}</n-button
                   >
                 </div>
                 <n-button
-                  :disabled="busy || !editorReady"
+                  :disabled="!canWrite || busy || !editorReady"
                   @click="
                     form.entries.push({ value: '', label_i18n: { 'zh-CN': '', 'en-US': '' } })
                   "
@@ -482,6 +499,9 @@ const referenceColumns = computed(() => [
               </n-form>
             </n-tab-pane>
             <n-tab-pane v-if="saved" name="history" :tab="t('enumDictionaries.history')">
+              <NAlert type="info" class="feedback">{{
+                t('governanceUi.frozenRevision', { revision: selectedRevision ?? '—' })
+              }}</NAlert>
               <p>{{ t('enumDictionaries.historyHint') }}</p>
               <n-select
                 v-model:value="selectedRevision"
@@ -526,11 +546,11 @@ const referenceColumns = computed(() => [
               v-if="activeTab === 'edit'"
               type="primary"
               :loading="busy"
-              :disabled="!editorReady"
+              :disabled="busy || !canWrite || !editorReady"
               @click="submit"
               >{{ t('common.save') }}</n-button
             >
-            <n-button :disabled="busy" @click="showEditor = false">{{
+            <n-button :disabled="busy" @click="editorVisible = false">{{
               t('common.cancel')
             }}</n-button>
           </n-space>
@@ -545,6 +565,11 @@ const referenceColumns = computed(() => [
   display: grid;
   gap: var(--space-4);
 }
+.enum-page :deep(.n-card) {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
+}
 .toolbar,
 .feedback {
   margin-bottom: 16px;
@@ -558,5 +583,12 @@ const referenceColumns = computed(() => [
   grid-template-columns: 1fr 1fr 1fr auto;
   gap: 8px;
   align-items: center;
+}
+@media (max-width: 640px) {
+  .entry-row {
+    grid-template-columns: 1fr;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
 }
 </style>

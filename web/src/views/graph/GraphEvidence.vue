@@ -10,7 +10,7 @@ import {
   NRadioButton,
   NRadioGroup,
 } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -35,8 +35,16 @@ const object = ref('')
 const sourceId = ref<number | null>(null)
 const reverseTable = ref('')
 const reverseRowKey = ref('')
+const advancedOpen = ref(!route.query.iri && !route.query.subject)
+const listContext = computed(() => ({
+  graph: route.query.graph,
+  q: route.query.q,
+  page: route.query.page,
+  size: route.query.size,
+  sort: route.query.sort,
+}))
 function goEntities() {
-  void router.push({ name: 'graph-entities', query: { graph: route.query.graph } })
+  void router.push({ name: 'graph-entities', query: listContext.value })
 }
 watch(
   () => route.query,
@@ -79,21 +87,41 @@ const fusion = useAsyncData((signal) => {
 // ===== 反向追溯（源行 → 产出实体/事实，V-TR-05） =====
 const reverseResult = ref<ReverseTrace | null>(null)
 const reverseError = ref('')
+const reverseLoading = ref(false)
+let reverseController: AbortController | null = null
+watch(
+  [sourceId, reverseTable, reverseRowKey, mode, () => route.query.graph],
+  () => {
+    reverseController?.abort()
+    reverseResult.value = null
+    reverseError.value = ''
+    reverseLoading.value = false
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => reverseController?.abort())
 async function runReverse() {
   reverseError.value = ''
   if (!sourceId.value || !reverseTable.value || !reverseRowKey.value) return
+  reverseController?.abort()
+  const controller = new AbortController()
+  reverseController = controller
+  reverseLoading.value = true
   try {
-    reverseResult.value = await graphApi.reverseTrace(
+    const result = await graphApi.reverseTrace(
       {
         source_id: sourceId.value,
         table: reverseTable.value,
         row_key: reverseRowKey.value,
       },
       route.query.graph ? Number(route.query.graph) : undefined,
-      new AbortController().signal,
+      controller.signal,
     )
+    if (!controller.signal.aborted) reverseResult.value = result
   } catch (cause) {
-    reverseError.value = toMessage(cause)
+    if (!controller.signal.aborted) reverseError.value = toMessage(cause)
+  } finally {
+    if (reverseController === controller) reverseLoading.value = false
   }
 }
 
@@ -105,10 +133,17 @@ async function search() {
   await router.replace({
     name: 'graph-evidence',
     query: {
+      ...route.query,
+      returnEntity: route.query.returnEntity,
       graph: route.query.graph,
       ...(mode.value === 'entity'
-        ? { iri: iri.value }
-        : { subject: subject.value, predicate: predicate.value, object: object.value }),
+        ? { iri: iri.value, subject: undefined, predicate: undefined, object: undefined }
+        : {
+            iri: undefined,
+            subject: subject.value,
+            predicate: predicate.value,
+            object: object.value,
+          }),
     },
   })
   reload()
@@ -207,10 +242,20 @@ const canSubmit = computed(() =>
   <section class="graph-page">
     <PageHeader :title="t('page.graphEvidence')" :description="t('graph.traceHint')">
       <template #actions>
+        <RouterLink
+          v-if="typeof route.query.returnEntity === 'string'"
+          :to="{
+            name: 'graph-entity-detail',
+            params: { id: route.query.returnEntity },
+            query: listContext,
+          }"
+          >{{ t('graphUi.backObject') }}</RouterLink
+        >
+        <NButton @click="advancedOpen = !advancedOpen">{{ t('graphUi.advancedQuery') }}</NButton>
         <NButton secondary @click="goEntities">{{ t('page.graphEntities') }}</NButton>
       </template>
     </PageHeader>
-    <form @submit.prevent="search">
+    <form v-if="advancedOpen" class="workspace-panel" @submit.prevent="search">
       <NRadioGroup
         v-model:value="mode"
         :aria-label="t('graph.traceMode')"
@@ -277,13 +322,22 @@ const canSubmit = computed(() =>
           />
         </NFormItem>
       </template>
-      <NButton attr-type="submit" type="primary" :loading="loading" :disabled="!canSubmit">{{
-        t('graph.trace')
-      }}</NButton>
+      <NButton
+        attr-type="submit"
+        type="primary"
+        :loading="loading || reverseLoading"
+        :disabled="!canSubmit || reverseLoading"
+        >{{ t('graph.trace') }}</NButton
+      >
     </form>
-    <NAlert v-if="error" type="error">{{ error }}</NAlert>
+    <p v-if="loading || reverseLoading" role="status">{{ t('common.loading') }}</p>
+    <NAlert v-if="error" type="error"
+      >{{ error }} <NButton @click="reload">{{ t('ui.retry') }}</NButton></NAlert
+    >
     <template v-if="mode === 'reverse'">
-      <NAlert v-if="reverseError" type="error">{{ reverseError }}</NAlert>
+      <NAlert v-if="reverseError" type="error"
+        >{{ reverseError }} <NButton @click="runReverse">{{ t('ui.retry') }}</NButton></NAlert
+      >
       <template v-if="reverseResult">
         <p>
           {{
@@ -313,7 +367,7 @@ const canSubmit = computed(() =>
           </li>
         </ul>
       </template>
-      <NEmpty v-else-if="!reverseError" :description="t('graph.reverseHint')" />
+      <NEmpty v-else-if="!reverseError && !reverseLoading" :description="t('graph.reverseHint')" />
     </template>
     <template v-if="mode !== 'reverse' && data">
       <p>

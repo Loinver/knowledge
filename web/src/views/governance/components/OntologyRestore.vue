@@ -5,8 +5,11 @@ import { useI18n } from 'vue-i18n'
 
 import type { RestoreInput, RestorePreview, RestoreResult } from '@/api/ontology-restore'
 import { ontologyRestoreApi } from '@/api/ontology-restore'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useGovernanceAccess } from '@/views/governance/composables/useGovernanceAccess'
 
 const { t } = useI18n()
+const { canWrite } = useGovernanceAccess()
 const emit = defineEmits<{ restored: [result: RestoreResult] }>()
 const format = ref<RestoreInput['format']>('turtle')
 const content = ref('')
@@ -15,6 +18,13 @@ const loading = ref(false)
 const error = ref('')
 const applying = ref(false)
 const restored = ref<RestoreResult | null>(null)
+// This inline form survives tab changes; protect route/unload until its content is imported.
+const draftOpen = ref(true)
+useDraftGuard(
+  draftOpen,
+  () => !restored.value && (!!content.value || format.value !== 'turtle'),
+  () => canWrite.value,
+)
 let controller: AbortController | null = null
 let generation = 0
 const formats = computed(() => [
@@ -33,7 +43,7 @@ function invalidate() {
 watch([content, format], invalidate, { flush: 'sync' })
 
 async function loadFile(event: Event) {
-  if (applying.value) return
+  if (!canWrite.value || applying.value) return
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
@@ -58,7 +68,7 @@ async function loadFile(event: Event) {
 }
 
 async function inspect() {
-  if (!content.value.trim() || loading.value || applying.value) return
+  if (!canWrite.value || !content.value.trim() || loading.value || applying.value) return
   invalidate()
   const owner = generation
   const request = new AbortController()
@@ -82,7 +92,7 @@ async function inspect() {
 }
 
 async function apply() {
-  if (!preview.value?.can_apply || applying.value) return
+  if (!canWrite.value || !preview.value?.can_apply || applying.value) return
   const payload = {
     format: format.value,
     content: content.value,
@@ -114,13 +124,14 @@ onBeforeUnmount(invalidate)
 
 <template>
   <NCard :title="t('ontologyRestore.title')">
+    <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.importReadOnly') }}</NAlert>
     <p>{{ t('ontologyRestore.intro') }}</p>
     <NFormItem :label="t('ontologyRestore.file')" label-for="ontology-restore-file">
       <input
         id="ontology-restore-file"
         type="file"
         accept=".ttl,.jsonld,.json"
-        :disabled="applying"
+        :disabled="applying || !canWrite"
         @change="loadFile"
       />
     </NFormItem>
@@ -128,7 +139,7 @@ onBeforeUnmount(invalidate)
       <NSelect
         v-model:value="format"
         :options="formats"
-        :disabled="applying"
+        :disabled="applying || !canWrite"
         :aria-label="t('export.format')"
       />
     </NFormItem>
@@ -137,7 +148,7 @@ onBeforeUnmount(invalidate)
         v-model:value="content"
         type="textarea"
         :rows="6"
-        :disabled="applying"
+        :disabled="applying || !canWrite"
         :input-props="{ id: 'ontology-restore-content' }"
       />
     </NFormItem>
@@ -152,10 +163,19 @@ onBeforeUnmount(invalidate)
       }}
     </NAlert>
     <NSpace>
-      <NButton :disabled="!content.trim() || applying" :loading="loading" @click="inspect">
+      <NButton
+        :disabled="!canWrite || !content.trim() || applying"
+        :loading="loading"
+        @click="inspect"
+      >
         {{ t('ontologyRestore.preview') }}
       </NButton>
-      <NButton type="primary" :disabled="!preview?.can_apply" :loading="applying" @click="apply">
+      <NButton
+        type="primary"
+        :disabled="!canWrite || !preview?.can_apply || applying"
+        :loading="applying"
+        @click="apply"
+      >
         {{ t('ontologyRestore.apply') }}
       </NButton>
     </NSpace>

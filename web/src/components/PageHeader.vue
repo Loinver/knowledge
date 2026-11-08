@@ -5,8 +5,9 @@ defineProps<{ title: string; description?: string }>()
 <template>
   <header class="page-header">
     <div class="titles">
-      <h2>{{ title }}</h2>
+      <h1>{{ title }}</h1>
       <p v-if="description">{{ description }}</p>
+      <slot name="context" />
     </div>
     <div class="actions">
       <slot name="actions" />
@@ -22,10 +23,13 @@ defineProps<{ title: string; description?: string }>()
   justify-content: space-between;
   margin-bottom: var(--space-4);
 }
-.titles h2 {
+.titles {
+  min-width: 0;
+}
+.titles h1 {
   margin: 0;
   font-size: var(--font-h1);
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
 }
 .titles p {
@@ -33,6 +37,7 @@ defineProps<{ title: string; description?: string }>()
   margin: var(--space-1) 0 0;
   color: var(--text-secondary);
   font-size: var(--font-small);
+  overflow-wrap: anywhere;
 }
 .actions {
   display: flex;

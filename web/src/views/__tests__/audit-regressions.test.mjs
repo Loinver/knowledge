@@ -53,7 +53,12 @@ test('task creation uses the latest selected mapping revision', async () => {
   const first = deferred(),
     second = deferred(),
     writes = []
-  globalThis.window = { setInterval: () => 1, clearInterval: () => {} }
+  globalThis.window = {
+    setInterval: () => 1,
+    clearInterval: () => {},
+    addEventListener() {},
+    removeEventListener() {},
+  }
   const ctx = await mount(
     'views/extraction/ExtractionTasks.vue',
     {
@@ -102,6 +107,8 @@ test('task polling never starts after unmount during initial reads', async () =>
       return timers.length
     },
     clearInterval: (id) => clears.push(id),
+    addEventListener() {},
+    removeEventListener() {},
   }
   const ctx = await mount(
     'views/extraction/ExtractionTasks.vue',

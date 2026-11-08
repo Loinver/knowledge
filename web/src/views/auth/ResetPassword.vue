@@ -36,12 +36,14 @@ const rules = computed<FormRules>(() => ({
 }))
 
 async function submit() {
+  if (loading.value || !token.value) return
   error.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (loading.value) return
   loading.value = true
   try {
     await authApi.resetPassword(token.value, model.value.password)

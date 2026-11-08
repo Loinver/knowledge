@@ -9,6 +9,7 @@ import { setup } from '@css-render/vue3-ssr'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
+import { createPinia } from 'pinia'
 import { createRenderer, createSSRApp, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -16,9 +17,9 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed = {
   Designer:
-    'catalogLoading,catalogError,loading,detail,ontologyId,refs,positions,selectedKey,canEdit,saving,working,loadError,actionError,saveError,needsRefresh,loadCatalog,selectOntology,persist,addToCanvas,addPoolItem,canvasDomainIds,removeFromCanvas,publish',
+    'auth,catalogLoading,catalogError,loading,detail,ontologyId,refs,positions,selectedKey,canEdit,saving,working,loadError,actionError,saveError,needsRefresh,loadCatalog,selectOntology,persist,addToCanvas,addPoolItem,canvasDomainIds,removeFromCanvas,publish',
   Domains:
-    'items,selected,members,loading,membersLoading,checking,working,canEdit,checkResult,listError,membersError,actionError,needsRefresh,addTypeId,load,select,refreshSelection,addMember,removeMember,publishCheck,publish',
+    'auth,items,selected,members,loading,membersLoading,checking,working,canEdit,checkResult,listError,membersError,actionError,needsRefresh,addTypeId,load,select,refreshSelection,addMember,removeMember,publishCheck,publish',
 }
 const renderer = createRenderer({
   createElement: () => ({}),
@@ -174,8 +175,10 @@ async function mount(t, name, api = state()) {
   const app = renderer
     .createApp({ ...view.component, render: () => null })
     .use(translations)
+    .use(createPinia())
     .use(createTestRouter())
   const vm = app.mount({})
+  vm.auth.user = { role: 'EDITOR' }
   let stopped = false
   const stop = () => {
     if (!stopped) app.unmount()
@@ -609,7 +612,10 @@ test('selection pages render visible errors and translated refresh controls usin
     try {
       for (const locale of ['en-US', 'zh-CN']) {
         const translations = await i18n(locale)
-        const app = createSSRApp(view.component).use(translations).use(createTestRouter())
+        const app = createSSRApp(view.component)
+          .use(translations)
+          .use(createPinia())
+          .use(createTestRouter())
         setup(app)
         const html = await renderToString(app)
         assert.match(html, /role="alert"/)

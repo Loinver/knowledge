@@ -20,9 +20,17 @@ const { data, error, loading, reload } = useAsyncData(async (signal) => {
   const iri = String(route.params.id)
   const graphId = route.query.graph ? Number(route.query.graph) : undefined
   const detail = await graphApi.detail(iri, graphId, signal)
-  const evidence = await graphApi.entityEvidence(iri, detail.entity.graph_revision_id, signal)
-  return { detail, evidence }
+  return { detail }
 })
+const evidence = useAsyncData((signal) =>
+  data.value
+    ? graphApi.entityEvidence(
+        data.value.detail.entity.iri,
+        data.value.detail.entity.graph_revision_id,
+        signal,
+      )
+    : Promise.resolve(null),
+)
 const attrs = computed(() =>
   Object.entries(data.value?.detail.entity.attrs ?? {}).map(([key, value]) => ({
     key,
@@ -76,7 +84,9 @@ function openChain(item: EvidenceItem) {
   void router.push({
     name: 'graph-evidence',
     query: {
-      graph: route.query.graph,
+      ...route.query,
+      graph: data.value?.detail.entity.graph_revision_id,
+      returnEntity: route.params.id,
       subject: item.subject,
       predicate: item.predicate,
       object: item.object,
@@ -117,13 +127,22 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
   <section class="graph-page">
     <PageHeader :title="t('page.graphEntityDetail')">
       <template #actions>
-        <RouterLink :to="{ name: 'graph-entities', query: { graph: route.query.graph } }">{{
-          t('page.graphEntities')
-        }}</RouterLink>
+        <RouterLink
+          :to="{
+            name: 'graph-entities',
+            query: {
+              ...route.query,
+              graph: data?.detail.entity.graph_revision_id ?? route.query.graph,
+            },
+          }"
+          >{{ t('ui.backList') }}</RouterLink
+        >
         <NButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</NButton>
       </template>
     </PageHeader>
-    <NAlert v-if="error" type="error">{{ error }}</NAlert>
+    <NAlert v-if="error" type="error"
+      >{{ error }} <NButton @click="reload">{{ t('ui.retry') }}</NButton></NAlert
+    >
     <p v-if="loading" role="status">{{ t('common.loading') }}</p>
     <template v-if="data">
       <p class="iri">{{ data.detail.entity.iri }}</p>
@@ -152,7 +171,12 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
         <RouterLink
           :to="{
             name: 'graph-evidence',
-            query: { graph: data.detail.entity.graph_revision_id, iri: data.detail.entity.iri },
+            query: {
+              ...route.query,
+              graph: data.detail.entity.graph_revision_id,
+              iri: data.detail.entity.iri,
+              returnEntity: data.detail.entity.iri,
+            },
           }"
           >{{ t('graph.chainTitle') }}</RouterLink
         >
@@ -189,15 +213,29 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
           />
         </NTabPane>
         <NTabPane name="evidence" :tab="t('page.graphEvidence')">
-          <NAlert v-if="data.evidence.quarantined_count" type="warning" class="notice">{{
+          <p v-if="evidence.loading.value" role="status">{{ t('common.loading') }}</p>
+          <NAlert v-else-if="evidence.error.value" type="warning"
+            >{{ evidence.error.value }}
+            <NButton @click="evidence.reload">{{ t('ui.retry') }}</NButton></NAlert
+          >
+          <NAlert v-if="evidence.data.value?.quarantined_count" type="warning" class="notice">{{
             t('graph.quarantineWarning')
           }}</NAlert>
-          <NEmpty v-if="!data.evidence.total_count" :description="t('graph.noEvidence')" />
-          <EvidenceTable v-else :items="data.evidence.evidences" @chain="openChain" />
+          <NEmpty
+            v-if="evidence.data.value && !evidence.data.value.total_count"
+            :description="t('graphUi.noEvidence')"
+          />
+          <EvidenceTable
+            v-else-if="evidence.data.value"
+            :items="evidence.data.value.evidences"
+            @chain="openChain"
+          />
         </NTabPane>
         <NTabPane name="fusion" :tab="t('graph.fusionTitle')">
           <p v-if="fusionLoading" role="status">{{ t('common.loading') }}</p>
-          <NAlert v-if="fusionError" type="error">{{ fusionError }}</NAlert>
+          <NAlert v-if="fusionError" type="error"
+            >{{ fusionError }} <NButton @click="loadFusion">{{ t('ui.retry') }}</NButton></NAlert
+          >
           <NEmpty v-if="fusion && !fusion.source_rows.length" :description="t('graph.noFusion')" />
           <template v-if="fusion && fusion.source_rows.length">
             <NAlert v-if="fusion.conflicts.length" type="warning" class="notice">{{

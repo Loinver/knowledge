@@ -163,6 +163,7 @@ async function publishEntityType(page: Page, name: string): Promise<void> {
   // 卡片视图的卡片可访问名含机读名（cell-sub），按子串匹配。
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page.getByRole('button', { name: name }).first().click()
+  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
   await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
   await page.getByRole('button', { name: '发布', exact: true }).first().click()
   await expect(page.getByText('已发布').first()).toBeVisible({ timeout: 15000 })
@@ -248,15 +249,14 @@ test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 
   await createEntityType(page, `UiDeleteEntity${stamp}`, `界面删除实体${stamp}`, prefix)
   await deleteEntityTypeThroughUI(page, `UiDeleteEntity${stamp}`, `界面删除实体${stamp}`)
 
-  // 类型 id 从详情页 URL 拿：切到卡片视图后点卡片进详情，全程不碰 API。
-  // （表格视图的名字单元格不可点，进入详情要走操作列按钮；卡片本身是 button，
-  //  可访问名是整张卡片的文本，按子串匹配即可。）
+  // 卡片先打开预览抽屉，再通过「查看」进入详情，从 URL 取 id，全程走界面。
   await page.goto('/ontology/entity-types')
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page
     .getByRole('button', { name: `UiEmployee${stamp}` })
     .first()
     .click()
+  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
   await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
   const typeId = Number(/entity-types\/(\d+)/.exec(page.url())![1])
   // 属性机读名必须是 PascalCase（小写开头会被表单拒："请填写 PascalCase 属性名与中文标签"）。

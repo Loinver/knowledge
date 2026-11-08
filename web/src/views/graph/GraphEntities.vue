@@ -4,13 +4,14 @@ import {
   NAlert,
   NButton,
   NDataTable,
+  NEmpty,
   NFormItem,
   NInput,
   NPagination,
   NSelect,
   NSpace,
 } from 'naive-ui'
-import { computed, h, ref } from 'vue'
+import { computed, h, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
@@ -18,28 +19,82 @@ import type { GraphEntity } from '@/api/graph'
 import { graphApi } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAsyncData } from '@/composables/useAsyncData'
+import { entityName } from '@/views/graph/components/graphWorkspace'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const input = ref('')
-const query = ref('')
-const page = ref(1)
-const pageSize = ref(50)
-const sort = ref<'iri' | '-iri'>('iri')
+const input = ref(String(route.query.q ?? ''))
+const query = ref(input.value)
+const positive = (value: unknown, fallback: number) =>
+  Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : fallback
+const page = ref(positive(route.query.page, 1))
+const pageSize = ref(
+  [25, 50, 100, 200].includes(Number(route.query.size)) ? Number(route.query.size) : 50,
+)
+const sort = ref<'iri' | '-iri'>(route.query.sort === '-iri' ? '-iri' : 'iri')
+const listContext = computed(() => ({
+  ...route.query,
+  q: query.value || undefined,
+  page: page.value,
+  size: pageSize.value,
+  sort: sort.value,
+}))
+watch([query, page, pageSize, sort], () => void router.replace({ query: listContext.value }))
+watch(
+  () => route.query,
+  (params) => {
+    query.value = String(params.q ?? '')
+    input.value = query.value
+    page.value = positive(params.page, 1)
+    pageSize.value = [25, 50, 100, 200].includes(Number(params.size)) ? Number(params.size) : 50
+    sort.value = params.sort === '-iri' ? '-iri' : 'iri'
+  },
+)
+let resolvedRevision: number | undefined
+watch(
+  () => route.query.graph,
+  () => {
+    resolvedRevision = undefined
+  },
+  { flush: 'sync' },
+)
 const { data, error, loading, reload } = useAsyncData((signal) =>
-  graphApi.entities(
-    {
-      graph_revision_id: route.query.graph ? Number(route.query.graph) : undefined,
-      q: query.value,
-      page: page.value,
-      page_size: pageSize.value,
-      sort: sort.value,
-    },
-    signal,
-  ),
+  graphApi
+    .entities(
+      {
+        graph_revision_id: route.query.graph ? Number(route.query.graph) : resolvedRevision,
+        q: query.value,
+        page: page.value,
+        page_size: pageSize.value,
+        sort: sort.value,
+      },
+      signal,
+    )
+    .then((result) => {
+      if (!signal.aborted && result) resolvedRevision = result.graph_revision_id
+      return result
+    }),
 )
 const columns = computed<DataTableColumns<GraphEntity>>(() => [
+  {
+    key: 'name',
+    title: t('common.name'),
+    width: 220,
+    ellipsis: { tooltip: true },
+    render: (row) =>
+      h(
+        RouterLink,
+        {
+          to: {
+            name: 'graph-entity-detail',
+            params: { id: row.iri },
+            query: { ...listContext.value, graph: row.graph_revision_id },
+          },
+        },
+        () => entityName(row),
+      ),
+  },
   {
     key: 'iri',
     title: t('common.iri'),
@@ -52,7 +107,7 @@ const columns = computed<DataTableColumns<GraphEntity>>(() => [
           to: {
             name: 'graph-entity-detail',
             params: { id: row.iri },
-            query: { graph: row.graph_revision_id },
+            query: { ...listContext.value, graph: row.graph_revision_id },
           },
         },
         () => row.iri,
@@ -68,7 +123,10 @@ function search() {
 }
 
 function goEvidence() {
-  void router.push({ name: 'graph-evidence' })
+  void router.push({
+    name: 'graph-evidence',
+    query: { graph: data.value?.graph_revision_id ?? route.query.graph },
+  })
 }
 </script>
 
@@ -115,19 +173,26 @@ function goEvidence() {
         <NButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</NButton>
       </NSpace>
     </form>
-    <NAlert v-if="error" type="warning">{{ error }}</NAlert>
+    <NAlert v-if="error" type="warning"
+      >{{ error }} <NButton @click="reload">{{ t('ui.retry') }}</NButton></NAlert
+    >
     <template v-if="data">
       <p>
         {{ t('graph.resultSet', { id: data.graph_revision_id }) }} ·
         {{ t('graph.total', { n: data.total }) }}
       </p>
+      <NEmpty
+        v-if="!data.total"
+        :description="t(query ? 'ui.emptyFiltered' : 'graph.noVisibleNodes')"
+      />
       <NDataTable
+        v-else
         :columns="columns"
         :data="data.items"
         :row-key="(row: GraphEntity) => row.id"
         :loading="loading"
         :max-height="520"
-        :scroll-x="900"
+        :scroll-x="1120"
         virtual-scroll
       />
       <NPagination

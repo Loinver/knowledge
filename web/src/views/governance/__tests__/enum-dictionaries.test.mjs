@@ -9,6 +9,7 @@ import { setup } from '@css-render/vue3-ssr'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { renderToString } from '@vue/server-renderer'
 import { build } from 'esbuild'
+import { createPinia } from 'pinia'
 import { createRenderer, createSSRApp, nextTick, reactive } from 'vue'
 import { createI18n } from 'vue-i18n'
 
@@ -93,7 +94,7 @@ async function compileView(name, state, ssr = false) {
             bundler.onLoad({ filter: /.*/, namespace: 'stub' }, ({ path: module }) => ({
               contents:
                 module === 'vue-router'
-                  ? `export const useRoute = () => globalThis[${JSON.stringify(key)}].route; export const useRouter = () => ({push: () => {}})`
+                  ? `export const RouterLink = {render: () => null}; export const useRoute = () => globalThis[${JSON.stringify(key)}].route; export const useRouter = () => ({push: () => {}}); export const onBeforeRouteLeave = () => {}`
                   : module.endsWith('entity-types')
                     ? `export const entityTypesApi = globalThis[${JSON.stringify(key)}].api.entityTypes`
                     : `export const enumDictionariesApi = globalThis[${JSON.stringify(key)}].dictionaries`,
@@ -172,9 +173,14 @@ async function mountView(name, overrides = {}) {
   const built = await compileView(name, state)
   built.component.render = () => null
   const messages = JSON.parse(await readFile(path.join(web, 'src/locales/en-US.json'), 'utf8'))
+  const pinia = createPinia()
+  pinia.state.value.auth = {
+    user: { id: 1, role: 'EDITOR', status: 'ACTIVE', username: 'test_actor' },
+  }
   const app = renderer
     .createApp(built.component)
     .use(createI18n({ legacy: false, locale: 'en-US', messages: { 'en-US': messages } }))
+    .use(pinia)
   const vm = app.mount({})
   return {
     vm,
@@ -488,7 +494,11 @@ test('enum management renders real templates in both locales without untranslate
         await readFile(path.join(web, `src/locales/${locale}.json`), 'utf8'),
       )
       const i18n = createI18n({ legacy: false, locale, messages: { [locale]: messages } })
-      const app = createSSRApp(built.component).use(i18n)
+      const pinia = createPinia()
+      pinia.state.value.auth = {
+        user: { id: 1, role: 'EDITOR', status: 'ACTIVE', username: 'test_actor' },
+      }
+      const app = createSSRApp(built.component).use(i18n).use(pinia)
       setup(app)
       const html = await renderToString(app)
       assert.ok(html.includes(i18n.global.t('enumDictionaries.title')))

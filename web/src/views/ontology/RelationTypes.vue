@@ -16,7 +16,7 @@ import {
   NSpace,
   NSpin,
 } from 'naive-ui'
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -28,9 +28,13 @@ import type { RelationTypeBrief, RelationTypeDetail } from '@/api/relations'
 import { relationsApi } from '@/api/relations'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
 
 import NamespaceCreateModal from './components/NamespaceCreateModal.vue'
 
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const router = useRouter()
@@ -54,10 +58,26 @@ const publishingId = ref<number | null>(null)
 const removingId = ref<number | null>(null)
 const notice = ref('')
 const editingDetail = ref<RelationTypeDetail | null>(null)
-const statusFilter = ref<ResourceStatus | ''>('')
-const view = ref<'table' | 'card'>('table')
+const statusFilter = ref<ResourceStatus | ''>(
+  ['DRAFT', 'PUBLISHED', 'ARCHIVED'].includes(String(route.query.status))
+    ? (route.query.status as ResourceStatus)
+    : '',
+)
+const view = ref<'table' | 'card'>(route.query.view === 'card' ? 'card' : 'table')
 /** 列表搜索词。后端 /relations 支持 q（按机读名过滤），此前页面没接。 */
-const searchQuery = ref('')
+const searchQuery = ref(String(route.query.q ?? ''))
+watch(
+  [searchQuery, statusFilter, view],
+  () =>
+    void router.replace({
+      query: {
+        ...route.query,
+        q: searchQuery.value || undefined,
+        status: statusFilter.value || undefined,
+        view: view.value,
+      },
+    }),
+)
 
 const STATUS_ORDER: ResourceStatus[] = ['PUBLISHED', 'DRAFT', 'ARCHIVED']
 const STATUS_VAR: Record<ResourceStatus, string> = {
@@ -67,6 +87,12 @@ const STATUS_VAR: Record<ResourceStatus, string> = {
 }
 /** 卡片视图最多补多少条详情，避免列表很长时打出一串请求。 */
 const DETAIL_CAP = 40
+let listGeneration = 0
+let detailGeneration = 0
+onBeforeUnmount(() => {
+  listGeneration++
+  detailGeneration++
+})
 
 function pickLabel(labels: Record<string, string> | null | undefined, fallback: string): string {
   return labels?.[locale.value] ?? labels?.['zh-CN'] ?? fallback
@@ -115,9 +141,22 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
     render(row) {
       const label = pickLabel(row.label_i18n, row.name)
       return h('div', { class: 'cell-name' }, [
-        h('span', { class: 'cell-primary' }, label),
+        h('button', { class: 'name-link', onClick: () => goToDetail(row.id) }, label),
         label === row.name ? null : h('span', { class: 'cell-sub mono' }, row.name),
       ])
+    },
+  },
+  {
+    title: t('ontologyUi.endpoints'),
+    key: 'endpoints',
+    minWidth: 250,
+    render: (row) => {
+      const detail = details.value[row.id]
+      return detail
+        ? `${typeNameById.value[detail.domain_spec.type_id] ?? `#${detail.domain_spec.type_id}`} → ${typeNameById.value[detail.range_spec.type_id] ?? `#${detail.range_spec.type_id}`}`
+        : h(NButton, { size: 'tiny', quaternary: true, onClick: () => goToDetail(row.id) }, () =>
+            t('common.view'),
+          )
     },
   },
   {
@@ -167,11 +206,16 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
         ),
         h(
           NButton,
-          { size: 'small', quaternary: true, onClick: () => void openEdit(row.id) },
+          {
+            size: 'small',
+            quaternary: true,
+            disabled: !canWrite.value || row.status !== 'DRAFT',
+            onClick: () => void openEdit(row.id),
+          },
           { default: () => t('common.edit') },
         ),
         // 草稿才能发布：发布即冻结，之后不可再改。已发布的没有「重新发布」语义。
-        row.status === 'DRAFT'
+        canWrite.value && row.status === 'DRAFT'
           ? h(
               NButton,
               {
@@ -212,7 +256,7 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
 ])
 
 function canDelete(row: RelationTypeBrief): boolean {
-  return row.status === 'DRAFT' && row.current_revision === 0
+  return canWrite.value && row.status === 'DRAFT' && row.current_revision === 0
 }
 
 function owlTags(detail: RelationTypeDetail): string[] {
@@ -304,16 +348,24 @@ const editRules = computed<FormRules>(() => ({
 }))
 
 async function load() {
+  const generation = ++listGeneration
+  detailGeneration++
+  details.value = {}
   loading.value = true
   loadError.value = ''
   try {
-    items.value = await relationsApi.list({ q: searchQuery.value })
+    const next = await relationsApi.list({ q: searchQuery.value })
+    if (generation !== listGeneration) return
+    items.value = next
+    void loadDetails()
   } catch (err) {
     // 加载失败静默清空会让用户以为「没有数据」；至少给出可见的错误提示
-    items.value = []
-    loadError.value = toMessage(err)
+    if (generation === listGeneration) {
+      items.value = []
+      loadError.value = toMessage(err)
+    }
   } finally {
-    loading.value = false
+    if (generation === listGeneration) loading.value = false
   }
 }
 
@@ -322,6 +374,7 @@ async function load() {
  * 按需补齐，已取过的进缓存，切回表格再切回来不会重复请求。
  */
 async function loadDetails() {
+  const generation = ++detailGeneration
   const missing = items.value
     .slice(0, DETAIL_CAP)
     .map((row) => row.id)
@@ -337,11 +390,12 @@ async function loadDetails() {
           .catch(() => null),
       ),
     )
+    if (generation !== detailGeneration) return
     const next = { ...details.value }
     for (const d of results) if (d) next[d.id] = d
     details.value = next
   } finally {
-    detailsLoading.value = false
+    if (generation === detailGeneration) detailsLoading.value = false
   }
 }
 
@@ -350,6 +404,7 @@ watch(view, (v) => {
 })
 
 async function handleCreate() {
+  if (!canWrite.value) return
   createError.value = ''
   try {
     await createFormRef.value?.validate()
@@ -388,10 +443,11 @@ async function handleCreate() {
 
 /** 详情页与实体类型对齐：端点、基数、OWL 特征、规则命中与引用面。 */
 function goToDetail(id: number) {
-  void router.push({ name: 'relation-detail', params: { id } })
+  void router.push({ name: 'relation-detail', params: { id }, query: route.query })
 }
 
 async function openEdit(id: number) {
+  if (!canWrite.value) return
   editError.value = ''
   try {
     const detail = await relationsApi.get(id)
@@ -412,7 +468,9 @@ async function openEdit(id: number) {
 }
 
 async function handleEdit() {
+  if (!canWrite.value) return
   const detail = editingDetail.value
+  if (!detail || detail.status !== 'DRAFT') return
   editError.value = ''
   try {
     await editFormRef.value?.validate()
@@ -454,6 +512,7 @@ async function handleEdit() {
  * 前端此前没有封装，等于把工作流断在列表页。
  */
 async function publish(row: RelationTypeBrief) {
+  if (!canWrite.value) return
   if (publishingId.value !== null) return
   publishingId.value = row.id
   actionError.value = ''
@@ -524,15 +583,22 @@ onMounted(async () => {
   ])
   await loadDetails()
 })
+
+const createVisible = useDraftGuard(showCreate, () => formData.value)
+
+const editVisible = useDraftGuard(showEdit, () => formData.value)
 </script>
 
 <template>
   <section class="page">
     <PageHeader :title="t('page.relationTypes')" :description="t('relation.description')">
       <template #actions>
-        <NButton type="primary" @click="showCreate = true">{{ t('common.create') }}</NButton>
+        <NButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('common.create')
+        }}</NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info" class="alert">{{ t('ui.readonly') }}</NAlert>
 
     <NAlert v-if="actionError" type="error" role="alert" class="action-alert">{{
       actionError
@@ -593,7 +659,9 @@ onMounted(async () => {
     </div>
 
     <NSpin :show="loading || detailsLoading">
-      <NAlert v-if="loadError" type="error" class="list-error">{{ loadError }}</NAlert>
+      <NAlert v-if="loadError" type="error" class="list-error"
+        >{{ loadError }} <NButton @click="load">{{ t('ui.retry') }}</NButton></NAlert
+      >
       <div v-if="view === 'table'" class="card">
         <NDataTable
           :columns="columns"
@@ -710,7 +778,7 @@ onMounted(async () => {
       </defs>
     </svg>
 
-    <NDrawer v-model:show="showCreate" :width="520">
+    <NDrawer v-model:show="createVisible" :width="520">
       <NDrawerContent :title="t('relation.create')" closable>
         <NForm
           ref="createFormRef"
@@ -753,7 +821,7 @@ onMounted(async () => {
         <NAlert v-if="createError" type="error" class="create-error">{{ createError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
-            <NButton :disabled="creating" @click="showCreate = false">
+            <NButton :disabled="creating" @click="createVisible = false">
               {{ t('common.cancel') }}
             </NButton>
             <NButton type="primary" :loading="creating" @click="handleCreate">
@@ -764,13 +832,14 @@ onMounted(async () => {
       </NDrawerContent>
     </NDrawer>
 
-    <NDrawer v-model:show="showEdit" :width="520">
+    <NDrawer v-model:show="editVisible" :width="520">
       <NDrawerContent :title="t('relation.edit')" closable>
+        <NAlert v-if="editingDetail?.status !== 'DRAFT'" type="info">{{ t('ui.frozen') }}</NAlert>
         <NForm
           ref="editFormRef"
+          :disabled="editing || !canWrite || editingDetail?.status !== 'DRAFT'"
           :model="formData"
           :rules="editRules"
-          :disabled="editing"
           label-placement="top"
         >
           <NFormItem :label="t('common.name')" path="name">
@@ -797,10 +866,15 @@ onMounted(async () => {
         <NAlert v-if="editError" type="error" class="create-error">{{ editError }}</NAlert>
         <template #footer>
           <div class="drawer-actions">
-            <NButton :disabled="editing" @click="showEdit = false">
+            <NButton :disabled="editing" @click="editVisible = false">
               {{ t('common.cancel') }}
             </NButton>
-            <NButton type="primary" :loading="editing" @click="handleEdit">
+            <NButton
+              type="primary"
+              :loading="editing"
+              :disabled="!canWrite || editingDetail?.status !== 'DRAFT'"
+              @click="handleEdit"
+            >
               {{ t('common.save') }}
             </NButton>
           </div>
@@ -812,6 +886,16 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.name-link {
+  border: 0;
+  background: none;
+  color: var(--pri);
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
 .page {
   padding-bottom: var(--space-5);
 }

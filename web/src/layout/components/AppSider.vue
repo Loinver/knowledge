@@ -23,7 +23,7 @@ function updateExpanded(keys: string[]) {
     collapse-mode="width"
     :collapsed="ui.collapsed"
     :collapsed-width="64"
-    :width="220"
+    :width="208"
     :native-scrollbar="false"
     class="app-sider"
   >
@@ -54,6 +54,15 @@ function updateExpanded(keys: string[]) {
 .app-sider {
   display: flex;
   flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .app-sider:not(.n-layout-sider--collapsed) {
+    width: var(--sider-width) !important;
+    min-width: var(--sider-width) !important;
+    max-width: var(--sider-width) !important;
+    flex-basis: var(--sider-width) !important;
+  }
 }
 
 .app-sider :deep(.n-layout-sider-scroll-container) {

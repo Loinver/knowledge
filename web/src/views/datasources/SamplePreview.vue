@@ -3,11 +3,12 @@ import type { DataTableColumns } from 'naive-ui'
 import { NAlert, NButton, NCard, NDataTable, NEmpty, NSelect, NSpin, NTag } from 'naive-ui'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import type { DatasourceBrief, MetadataSnapshot, PreviewResponse } from '@/api/datasources'
 import { datasourcesApi, metadataApi } from '@/api/datasources'
 import PageHeader from '@/components/PageHeader.vue'
+import { useAuthStore } from '@/stores/auth'
 
 interface CatalogColumn {
   name: string
@@ -31,6 +32,8 @@ interface PreviewRow extends Record<string, unknown> {
 
 const { t, locale } = useI18n()
 const route = useRoute()
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const datasources = ref<DatasourceBrief[]>([])
 const datasourceId = ref<number | null>(null)
 const snapshot = ref<MetadataSnapshot | null>(null)
@@ -211,6 +214,7 @@ async function loadLatestMetadata() {
 }
 
 async function captureMetadata() {
+  if (!canWrite.value) return
   if (datasourceId.value === null) return
   const requestId = ++metadataRequest
   metadataLoading.value = true
@@ -324,7 +328,24 @@ onBeforeUnmount(() => {
     <PageHeader
       :title="t('dataAccess.preview.title')"
       :description="t('dataAccess.preview.description')"
-    />
+      ><template #actions
+        ><RouterLink
+          :to="{
+            name: 'data-catalog',
+            query: {
+              datasourceId,
+              schema: selectedSchema,
+              table: selectedTable,
+              snapshot:
+                datasourceId === Number(route.query.datasourceId)
+                  ? route.query.snapshot
+                  : undefined,
+            },
+          }"
+          >{{ t('page.dataCatalog') }}</RouterLink
+        ></template
+      ></PageHeader
+    >
 
     <NAlert type="warning" :show-icon="true">
       <div class="security-note">
@@ -332,6 +353,7 @@ onBeforeUnmount(() => {
         <span>{{ t('dataAccess.preview.securityNote') }}</span>
       </div>
     </NAlert>
+    <NAlert v-if="route.query.snapshot" type="info">{{ t('ui.livePreviewContext') }}</NAlert>
 
     <NCard size="small" class="selector-card">
       <div class="selection-grid">
@@ -387,7 +409,7 @@ onBeforeUnmount(() => {
           </NButton>
           <NButton
             type="default"
-            :disabled="datasourceId === null || metadataLoading"
+            :disabled="!canWrite || datasourceId === null || metadataLoading"
             :loading="metadataLoading"
             @click="captureMetadata"
           >
@@ -414,12 +436,15 @@ onBeforeUnmount(() => {
 
     <NAlert v-if="datasourcesError" type="error" :title="t('dataAccess.preview.loadFailed')">
       {{ t('dataAccess.preview.errorCode', { code: datasourcesError }) }}
+      <NButton @click="loadDatasources">{{ t('ui.retry') }}</NButton>
     </NAlert>
     <NAlert v-if="metadataError" type="error" :title="t('dataAccess.preview.loadFailed')">
       {{ t('dataAccess.preview.errorCode', { code: metadataError }) }}
+      <NButton @click="loadLatestMetadata">{{ t('ui.retry') }}</NButton>
     </NAlert>
     <NAlert v-if="previewError" type="error" :title="t('dataAccess.preview.previewFailed')">
       {{ t('dataAccess.preview.errorCode', { code: previewError }) }}
+      <NButton @click="runPreview(offset)">{{ t('ui.retry') }}</NButton>
     </NAlert>
 
     <NCard v-if="noMetadata" size="small">

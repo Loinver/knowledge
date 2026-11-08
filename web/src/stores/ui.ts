@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 
 const SIDER_KEY = 'kg-sider-collapsed'
 const THEME_KEY = 'kg-theme-mode'
@@ -16,12 +16,24 @@ function read(key: string): string | null {
  * 两项都持久化到 localStorage，并在 store 创建时立刻应用到 `<html>`，
  * 避免刷新后先渲染浅色再跳暗色的闪烁。
  *
- * 默认主题是**深色**——设计语言「星图」以深空为基调，浅色是它的亮色变体。
- * 只有用户显式切到浅色（localStorage 里存了 `light`）才会离开深色。
+ * 首次使用默认浅色；已有 light/dark 偏好保持不变。
  */
 export const useUiStore = defineStore('ui', () => {
-  const collapsed = ref(read(SIDER_KEY) === '1')
-  const themeMode = ref<ThemeMode>(read(THEME_KEY) === 'light' ? 'light' : 'dark')
+  const desktopCollapsed = ref(read(SIDER_KEY) === '1')
+  const media =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 1199px)')
+      : null
+  const narrow = ref(media?.matches ?? false)
+  const narrowCollapsed = ref(true)
+  const collapsed = computed(() => (narrow.value ? narrowCollapsed.value : desktopCollapsed.value))
+  function updateViewport(event: MediaQueryListEvent): void {
+    narrow.value = event.matches
+    if (event.matches) narrowCollapsed.value = true
+  }
+  media?.addEventListener('change', updateViewport)
+  onScopeDispose(() => media?.removeEventListener('change', updateViewport))
+  const themeMode = ref<ThemeMode>(read(THEME_KEY) === 'dark' ? 'dark' : 'light')
 
   const isDark = computed(() => themeMode.value === 'dark')
 
@@ -32,14 +44,15 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function toggleSider(): void {
-    collapsed.value = !collapsed.value
+    if (narrow.value) narrowCollapsed.value = !narrowCollapsed.value
+    else desktopCollapsed.value = !desktopCollapsed.value
   }
 
   function toggleTheme(): void {
     themeMode.value = isDark.value ? 'light' : 'dark'
   }
 
-  watch(collapsed, (value) => {
+  watch(desktopCollapsed, (value) => {
     if (typeof localStorage !== 'undefined') localStorage.setItem(SIDER_KEY, value ? '1' : '0')
   })
 

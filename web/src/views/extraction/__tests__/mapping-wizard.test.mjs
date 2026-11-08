@@ -7,13 +7,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { build } from 'esbuild'
+import { createPinia } from 'pinia'
 import { createRenderer, nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 const web = fileURLToPath(new URL('../../../..', import.meta.url))
 const exposed =
-  'mappings,selectedMappingId,selectedMapping,selectedOntologyId,selectedDatasourceId,mappingName,entityMaps,draftRevision,publishedRevision,catalog,preview,previewSignature,draftSignature,working,notice,actionError,canSaveDraft,canPublish,selectMapping,newMapping,handleSaveDraft,publishMapping,removeMapping,runCompile,copyPublishedMapping,serializeDraft'
+  'mappings,selectedMappingId,selectedMapping,selectedOntologyId,selectedDatasourceId,mappingName,entityMaps,draftRevision,publishedRevision,catalog,preview,previewSignature,draftSignature,working,notice,actionError,canSaveDraft,canPublish,selectMapping,newMapping,handleSaveDraft,publishMapping,removeMapping,runCompile,copyPublishedMapping,serializeDraft,entityTypes,relationMaps,sampleLimit,metadataRevision,canWrite,auth,previewInvalidated,readOnly,chooseDatasource,selectionFailed'
 const renderer = createRenderer({
   createElement: () => ({}),
   createText: () => ({}),
@@ -187,8 +188,11 @@ async function mount(t, api = state()) {
     history: createMemoryHistory(),
     routes: [{ path: '/', component: { render: () => null } }],
   })
+  const pinia = createPinia()
+  pinia.state.value.auth = { user: { id: 1, role: 'EDITOR' } }
   const app = renderer
     .createApp({ ...view.component, render: () => null })
+    .use(pinia)
     .use(translations)
     .use(router)
   const vm = app.mount({})
@@ -227,6 +231,35 @@ test('saving and publishing use the saved mapping and advance only its edit toke
   assert.equal(vm.publishedRevision.mapping_id, 1)
   assert.equal(vm.selectedMapping.current_revision, 1)
   assert.equal(vm.selectedMapping.edit_revision, 3)
+})
+
+test('dirty mapping cancellation retains fields and explicit discard switches context', async (t) => {
+  const { vm } = await mount(t)
+  const previousWindow = globalThis.window
+  let decisions = 0
+  globalThis.window = {
+    confirm: () => {
+      decisions++
+      return false
+    },
+    addEventListener() {},
+    removeEventListener() {},
+  }
+  try {
+    vm.entityMaps[0].field_maps[0].source_field = 'unsaved_column'
+    await vm.selectMapping(2)
+    assert.equal(vm.selectedMappingId, 1)
+    assert.equal(vm.entityMaps[0].field_maps[0].source_field, 'unsaved_column')
+    vm.newMapping()
+    assert.equal(vm.selectedMappingId, 1)
+    assert.equal(decisions, 2)
+    globalThis.window.confirm = () => true
+    await vm.selectMapping(2)
+    assert.equal(vm.selectedMappingId, 2)
+    assert.equal(vm.entityMaps[0].field_maps[0].source_field, 'name2')
+  } finally {
+    globalThis.window = previousWindow
+  }
 })
 
 test('published copy waits for its frozen details and preserves the incremental configuration', async (t) => {
@@ -440,4 +473,113 @@ test('a delayed creation cannot select its mapping after navigating elsewhere', 
     vm.mappings.some((item) => item.id === 3),
     false,
   )
+})
+
+test('published detail never loads live ontology assets or adds new upstream fields', async (t) => {
+  const { vm, api } = await mount(t)
+  let liveReads = 0
+  api.ontology.refs = async () => {
+    liveReads++
+    throw new Error('live upstream must not be read')
+  }
+  vm.entityTypes = [{ name: 'Employee', data_props: [{ name: 'newUpstreamField' }] }]
+  const frozen = published(2)
+  frozen.entity_maps[0].field_maps[0].transform_params = { format: ['frozen'] }
+  api.mappings.get = async () => ({ ...mapping(2), status: 'PUBLISHED', current_revision: 1 })
+  api.mappings.published = async () => frozen
+  await vm.selectMapping(2)
+  assert.equal(liveReads, 0)
+  assert.equal(vm.actionError, '')
+  assert.equal(vm.publishedRevision.onto_version, 1)
+  assert.deepEqual(
+    vm.entityMaps[0].field_maps.map((field) => field.target_attr),
+    ['name'],
+  )
+  vm.entityMaps[0].field_maps[0].transform_params.format.push('local')
+  assert.deepEqual(frozen.entity_maps[0].field_maps[0].transform_params, { format: ['frozen'] })
+  assert.equal(vm.canSaveDraft, false)
+  assert.equal(vm.canPublish, false)
+})
+
+for (const setting of ['sampleLimit', 'metadataRevision']) {
+  test(`${setting} changes invalidate preview and publication readiness`, async (t) => {
+    const { vm } = await mount(t)
+    assert.equal(vm.canPublish, true)
+    const before = vm.draftSignature()
+    vm[setting] = 42
+    assert.notEqual(vm.draftSignature(), before)
+    assert.equal(vm.preview, null)
+    assert.equal(vm.previewInvalidated, true)
+    assert.equal(vm.canPublish, false)
+  })
+}
+
+test('viewer cannot save, publish, compile or delete even through action handlers', async (t) => {
+  const { vm, api } = await mount(t)
+  vm.auth.user.role = 'VIEWER'
+  assert.equal(vm.canWrite, false)
+  assert.equal(vm.readOnly, true)
+  await vm.handleSaveDraft()
+  await vm.publishMapping()
+  await vm.runCompile()
+  await vm.removeMapping()
+  assert.deepEqual(api.writes, [])
+})
+
+test('late preview cannot restore publication readiness after sample scope changes', async (t) => {
+  const { vm, api } = await mount(t)
+  const result = deferred()
+  api.mappings.compile = () => result.promise
+  const pending = vm.runCompile()
+  await settle()
+  vm.sampleLimit = 100
+  result.resolve({ entities: [], relations: [], summary: {} })
+  await pending
+  assert.equal(vm.preview, null)
+  assert.equal(vm.canPublish, false)
+})
+
+test('returning to the same datasource cannot accept an earlier metadata response', async (t) => {
+  const { vm, api } = await mount(t)
+  const requests = []
+  api.metadata.latest = (id) => {
+    const request = { id, ...deferred() }
+    requests.push(request)
+    return request.promise
+  }
+  const first = vm.chooseDatasource(1)
+  const second = vm.chooseDatasource(2)
+  const current = vm.chooseDatasource(1)
+  requests[2].resolve({ revision: 3, catalog: { schemas: [] } })
+  await current
+  requests[1].resolve({ revision: 2, catalog: { schemas: [] } })
+  requests[0].resolve({ revision: 1, catalog: { schemas: [] } })
+  await Promise.all([first, second])
+  assert.equal(vm.metadataRevision, 3)
+})
+
+test('missing published revision is an explicit retryable failure without live fallback', async (t) => {
+  const { vm, api } = await mount(t)
+  api.mappings.get = async () => ({ ...mapping(2), status: 'PUBLISHED', current_revision: 1 })
+  api.mappings.published = async () => null
+  api.ontology.refs = () => {
+    throw new Error('live fallback forbidden')
+  }
+  await vm.selectMapping(2)
+  assert.equal(vm.selectionFailed, true)
+  assert.equal(vm.publishedRevision, null)
+  assert.equal(vm.entityMaps.length, 0)
+  assert.equal(vm.canPublish, false)
+})
+
+test('role downgrade during save prevents the subsequent publish request', async (t) => {
+  const { vm, api } = await mount(t)
+  const response = deferred()
+  api.mappings.saveDraft = () => response.promise
+  const pending = vm.publishMapping()
+  vm.auth.user.role = 'VIEWER'
+  response.resolve(draft(1, 1))
+  await pending
+  assert.deepEqual(api.writes, [])
+  assert.equal(vm.publishedRevision, null)
 })

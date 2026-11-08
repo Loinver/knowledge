@@ -45,7 +45,7 @@ test('admin searches retained asset versions and safely retries failed reads', a
   await panel.getByRole('button', { name: '刷新', exact: true }).click()
   await expect(panel).toContainText('共 1 条记录')
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.locator('.mobile-backdrop').click({ position: { x: 350, y: 300 } })
+  await expect(page.locator('.app-sider')).toHaveClass(/n-layout-sider--collapsed/)
   await expect(panel.getByRole('button', { name: '搜索', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,

@@ -14,6 +14,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onBeforeRouteLeave } from 'vue-router'
 
 import { authApi } from '@/api/auth'
 import { getSessionGeneration } from '@/api/tokens'
@@ -30,6 +31,24 @@ const formRef = ref<FormInst | null>(null)
 const model = ref({ display_name: '', avatar_url: '' })
 const error = ref('')
 const saving = ref(false)
+onBeforeRouteLeave(() => {
+  const user = auth.user
+  if (
+    !user ||
+    (model.value.display_name.trim() === (user.display_name ?? '') &&
+      model.value.avatar_url.trim() === (user.avatar_url ?? ''))
+  )
+    return true
+  return typeof window === 'undefined' || window.confirm(t('ui.unsaved'))
+})
+function cancel() {
+  model.value = {
+    display_name: auth.user?.display_name ?? '',
+    avatar_url: auth.user?.avatar_url ?? '',
+  }
+  error.value = ''
+  formRef.value?.restoreValidation()
+}
 let formGeneration: string | null = null
 watch(
   () => auth.user?.id,
@@ -76,7 +95,7 @@ async function submit() {
   } catch {
     return
   }
-  if (generation !== getSessionGeneration()) return
+  if (generation !== getSessionGeneration() || saving.value) return
   saving.value = true
   try {
     // 传 null 才是「清空」：后端按 exclude_unset 处理，省略字段表示不改。
@@ -91,14 +110,16 @@ async function submit() {
 </script>
 
 <template>
-  <section>
+  <section class="account-page">
     <PageHeader :title="t('account.profile')" :description="t('account.profileHint')" />
     <NAlert v-if="error" type="error" role="alert" class="alert">{{ error }}</NAlert>
 
     <NCard size="small" class="card">
       <NDescriptions :column="2" bordered label-placement="left">
         <NDescriptionsItem :label="t('auth.username')">{{ auth.user?.username }}</NDescriptionsItem>
-        <NDescriptionsItem :label="t('auth.email')">{{ auth.user?.email }}</NDescriptionsItem>
+        <NDescriptionsItem :label="t('auth.email')"
+          ><span class="identity-value">{{ auth.user?.email }}</span></NDescriptionsItem
+        >
         <NDescriptionsItem :label="t('account.role')">
           <NTag size="small">{{ t(`account.roles.${auth.user?.role ?? 'VIEWER'}`) }}</NTag>
         </NDescriptionsItem>
@@ -124,12 +145,24 @@ async function submit() {
         <NButton type="primary" :disabled="!auth.user" :loading="saving" @click="submit">{{
           t('common.save')
         }}</NButton>
+        <NButton class="cancel" :disabled="saving" @click="cancel">{{
+          t('common.cancel')
+        }}</NButton>
       </NForm>
     </NCard>
   </section>
 </template>
 
 <style scoped>
+.account-page {
+  max-width: 960px;
+}
+.identity-value {
+  overflow-wrap: anywhere;
+}
+.cancel {
+  margin-left: 8px;
+}
 .alert,
 .card {
   margin-bottom: var(--space-4);

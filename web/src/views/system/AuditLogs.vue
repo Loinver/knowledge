@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DataTableColumns } from 'naive-ui'
 import {
+  NAlert,
   NButton,
   NCard,
   NDataTable,
@@ -10,9 +11,11 @@ import {
   NPagination,
   NSelect,
   NSpace,
+  NTabPane,
+  NTabs,
   NTag,
 } from 'naive-ui'
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { AuditAction, AuditLog } from '@/api/auth'
@@ -42,6 +45,8 @@ const page = ref(1)
 const pageSize = 20
 const loading = ref(false)
 const error = ref('')
+let generation = 0
+onBeforeUnmount(() => generation++)
 
 const query = ref('')
 const keyword = ref('')
@@ -81,6 +86,7 @@ const columns = computed<DataTableColumns<AuditLog>>(() => [
 ])
 
 async function load() {
+  const request = ++generation
   loading.value = true
   error.value = ''
   try {
@@ -90,13 +96,14 @@ async function load() {
       page: page.value,
       page_size: pageSize,
     })
+    if (request !== generation) return
     items.value = result.items
     total.value = result.total
     if (!items.value.length && page.value > 1) page.value--
   } catch (err) {
-    error.value = toMessage(err)
+    if (request === generation) error.value = toMessage(err)
   } finally {
-    loading.value = false
+    if (request === generation) loading.value = false
   }
 }
 
@@ -112,57 +119,64 @@ onMounted(load)
 <template>
   <section>
     <PageHeader :title="t('page.systemAuditLogs')" :description="t('system.auditHint')" />
-    <AssetAuditLogs />
-    <NCard size="small" :title="t('assetAudit.accountTitle')">
-      <NSpace class="filters" align="center">
-        <NFormItem
-          :label="t('common.search')"
-          label-placement="left"
-          :label-width="72"
-          :show-feedback="false"
-        >
-          <NInput
-            v-model:value="query"
-            clearable
-            :placeholder="t('system.searchAuditLogs')"
-            @keyup.enter="search"
+    <NTabs type="line" default-value="assets"
+      ><NTabPane name="assets" :tab="t('assetAudit.title')"><AssetAuditLogs /></NTabPane
+      ><NTabPane name="account" :tab="t('assetAudit.accountTitle')">
+        <NCard size="small" :title="t('assetAudit.accountTitle')">
+          <NSpace class="filters" align="center">
+            <NFormItem
+              :label="t('common.search')"
+              label-placement="left"
+              :label-width="72"
+              :show-feedback="false"
+            >
+              <NInput
+                v-model:value="query"
+                clearable
+                :placeholder="t('system.searchAuditLogs')"
+                @keyup.enter="search"
+              />
+            </NFormItem>
+            <NButton @click="search">{{ t('common.search') }}</NButton>
+            <NFormItem
+              :label="t('system.action')"
+              label-placement="left"
+              :label-width="72"
+              :show-feedback="false"
+            >
+              <NSelect
+                v-model:value="actionFilter"
+                :options="actionOptions"
+                clearable
+                class="filter-select"
+                @update:value="search"
+              />
+            </NFormItem>
+            <NButton :loading="loading" @click="load">{{ t('graph.refresh') }}</NButton>
+          </NSpace>
+          <NAlert v-if="error" type="error"
+            >{{ error }} <NButton @click="load">{{ t('ui.retry') }}</NButton></NAlert
+          >
+          <NDataTable
+            v-else
+            :columns="columns"
+            :data="items"
+            :loading="loading"
+            :row-key="(row: AuditLog) => row.id"
+            :scroll-x="820"
+          >
+            <template #empty><NEmpty :description="t('common.empty')" /></template>
+          </NDataTable>
+          <NPagination
+            v-if="total > pageSize"
+            v-model:page="page"
+            :page-size="pageSize"
+            :item-count="total"
+            class="pagination"
+            @update:page="load"
           />
-        </NFormItem>
-        <NButton @click="search">{{ t('common.search') }}</NButton>
-        <NFormItem
-          :label="t('system.action')"
-          label-placement="left"
-          :label-width="72"
-          :show-feedback="false"
-        >
-          <NSelect
-            v-model:value="actionFilter"
-            :options="actionOptions"
-            clearable
-            class="filter-select"
-            @update:value="search"
-          />
-        </NFormItem>
-        <NButton :loading="loading" @click="load">{{ t('graph.refresh') }}</NButton>
-      </NSpace>
-      <NDataTable
-        :columns="columns"
-        :data="items"
-        :loading="loading"
-        :row-key="(row: AuditLog) => row.id"
-        :scroll-x="820"
-      >
-        <template #empty><NEmpty :description="error || t('common.empty')" /></template>
-      </NDataTable>
-      <NPagination
-        v-if="total > pageSize"
-        v-model:page="page"
-        :page-size="pageSize"
-        :item-count="total"
-        class="pagination"
-        @update:page="load"
-      />
-    </NCard>
+        </NCard> </NTabPane
+    ></NTabs>
   </section>
 </template>
 

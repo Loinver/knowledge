@@ -17,67 +17,46 @@ const { data: stats, loading, error, reload } = useAsyncData(dashboardApi.stats)
  */
 const pipeline = computed(() => [
   {
-    key: 'entity-types',
-    step: t('menu.entityTypes'),
-    count: stats.value?.entity_types ?? 0,
-    link: 'entity-types',
-    hint: t('dashboard.goEntityTypes'),
-  },
-  {
-    key: 'relation-types',
-    step: t('menu.relationTypes'),
-    count: stats.value?.relation_types ?? 0,
-    link: 'relation-types',
-    hint: t('page.relationTypes'),
-  },
-  {
-    key: 'domains',
-    step: t('menu.domains'),
-    count: stats.value?.domains ?? 0,
-    link: 'domains',
-    hint: t('dashboard.goDomains'),
-  },
-  {
-    key: 'ontology',
-    step: t('menu.ontology'),
+    key: 'model',
+    step: t('appUi.model'),
     count: stats.value?.ontologies ?? 0,
-    link: 'ontologies',
-    hint: t('page.ontologies'),
-  },
-  {
-    key: 'designer',
-    step: t('menu.designer'),
-    count: null,
     link: 'designer',
     hint: t('dashboard.goDesigner'),
   },
   {
-    key: 'rules',
-    step: t('menu.rules'),
-    count: null,
-    link: 'governance-rules',
-    hint: t('dashboard.goRules'),
+    key: 'source',
+    step: t('menu.datasources'),
+    count: stats.value?.datasources ?? 0,
+    link: 'datasources',
+    hint: t('appUi.sourceHint'),
   },
   {
-    key: 'extraction',
-    step: t('menu.extraction'),
+    key: 'mapping',
+    step: t('appUi.mapping'),
+    count: stats.value?.mappings ?? 0,
+    link: 'mapping-wizard',
+    hint: t('appUi.mappingHint'),
+  },
+  {
+    key: 'execute',
+    step: t('page.extractionRuns'),
     count: stats.value?.runs ?? 0,
-    link: 'datasources',
+    link: 'extraction-runs',
     hint: t('dashboard.goExtractionRuns'),
   },
   {
-    key: 'graph',
-    step: t('menu.graph'),
+    key: 'explore',
+    step: t('page.graphBrowse'),
     count: stats.value?.result_set_count ?? 0,
     link: 'graph-browse',
     hint: t('dashboard.goGraphBrowse'),
   },
   {
-    key: 'evidence',
-    step: t('menu.evidence'),
+    key: 'govern',
+    step: t('appUi.govern'),
     count: null,
-    link: 'graph-evidence',
-    hint: t('dashboard.goEvidence'),
+    link: 'graph-reports',
+    hint: t('appUi.governHint'),
   },
 ])
 
@@ -116,7 +95,23 @@ const hasIssues = computed(
     </NSpin>
 
     <template v-else-if="stats">
-      <!-- 主流程：九个入口，已知数量与操作入口分开呈现 -->
+      <div class="continue-work workspace-panel">
+        <div>
+          <strong>{{ t('appUi.continueWork') }}</strong>
+          <p>{{ stats.current_graph_id ? t('appUi.continueGraph') : t('appUi.startHint') }}</p>
+        </div>
+        <RouterLink
+          :to="
+            stats.current_graph_id
+              ? { name: 'graph-browse', query: { graph: stats.current_graph_id } }
+              : { name: 'designer' }
+          "
+          ><NButton type="primary">{{
+            stats.current_graph_id ? t('dashboard.goGraphBrowse') : t('dashboard.goDesigner')
+          }}</NButton></RouterLink
+        >
+      </div>
+      <!-- 数量只表示已有资产，不代表业务阶段已完成。 -->
       <section class="block">
         <h3 class="block-title">{{ t('dashboard.overview') }}</h3>
         <ol class="pipeline">
@@ -185,15 +180,15 @@ const hasIssues = computed(
         <h3 class="block-title">{{ t('dashboard.issues') }}</h3>
         <div v-if="!hasIssues" class="empty-ok">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" stroke="var(--s-pass)" stroke-width="1.5" />
+            <circle cx="12" cy="12" r="9" stroke="var(--text-secondary)" stroke-width="1.5" />
             <path
               d="M8 12.4l2.6 2.6L16 9.6"
-              stroke="var(--s-pass)"
+              stroke="var(--text-secondary)"
               stroke-width="1.6"
               stroke-linecap="round"
             />
           </svg>
-          <span>{{ t('dashboard.noIssues') }}</span>
+          <span>{{ t('appUi.noPending') }}</span>
         </div>
         <div v-else class="issue-list">
           <NAlert
@@ -217,6 +212,25 @@ const hasIssues = computed(
 </template>
 
 <style scoped>
+.continue-work {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.continue-work p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+}
+@media (max-width: 700px) {
+  .continue-work {
+    flex-direction: column;
+    align-items: start;
+  }
+}
+
 .dashboard {
   padding-bottom: var(--space-5);
 }

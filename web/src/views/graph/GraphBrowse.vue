@@ -18,25 +18,30 @@ import {
   NTabs,
   NTag,
 } from 'naive-ui'
-import { computed, h, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
+  type EvidenceTrace,
   graphApi,
   type GraphDiff,
   type GraphPath,
   type GraphRecommendations,
+  type GraphView,
   type SemanticViewConfig as SemanticConfig,
   viewTemplateApi,
 } from '@/api/graph'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
+import { useAuthStore } from '@/stores/auth'
+import EvidenceInspector from '@/views/graph/components/EvidenceInspector.vue'
 import GraphCanvas from '@/views/graph/components/GraphCanvas.vue'
 import { exportCsv, exportPng, exportSvg } from '@/views/graph/components/graphExport'
 import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 import { LAYOUTS } from '@/views/graph/components/graphLayout'
+import { edgeKey, entityName, mergeNeighborhoods } from '@/views/graph/components/graphWorkspace'
 import {
   hasSemanticConfig,
   nodeTime,
@@ -48,27 +53,205 @@ const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const center = computed(() => (typeof route.query.center === 'string' ? route.query.center : ''))
 const graphId = computed(() => (route.query.graph ? Number(route.query.graph) : undefined))
 const layoutId = computed(() =>
-  typeof route.query.layout === 'string' ? route.query.layout : null,
+  typeof route.query.layout === 'string' ? route.query.layout : center.value ? 'ring' : 'force',
 )
 const depth = ref(1)
 const excludedTypes = ref<string[]>([])
 const includeDerived = ref(true)
 const searchText = ref('')
-const { data, loading, error, reload } = useAsyncData((signal) =>
-  graphApi.view(
-    {
-      graph_revision_id: graphId.value,
-      center: center.value,
-      depth: depth.value,
-      excluded_types: excludedTypes.value,
-      include_derived: includeDerived.value,
-    },
-    signal,
-  ),
+let resolvedRevision: number | undefined
+let pendingFocus: string | null = center.value || null
+const base = shallowRef<GraphView | null>(null)
+const branches = shallowRef(new Map<string, GraphView>())
+// Expansion intent survives temporary filters. Keep it nonreactive so selecting an
+// expansion does not cause the base read to refetch itself.
+const expandedRoots = new Set<string>()
+const data = computed(() =>
+  base.value ? mergeNeighborhoods(base.value, branches.value.values()) : null,
 )
+const branchError = ref('')
+const expanding = ref(false)
+let branchController: AbortController | null = null
+function cancelExpansion() {
+  branchController?.abort()
+  expanding.value = false
+}
+const {
+  data: incoming,
+  loading,
+  error,
+  reload,
+} = useAsyncData(async (signal) => {
+  // A refresh owns the branch snapshot. Late expansion responses must not be
+  // applied between taking that snapshot and replacing it with refreshed data.
+  cancelExpansion()
+  const params = {
+    graph_revision_id: graphId.value ?? resolvedRevision,
+    center: center.value,
+    depth: depth.value,
+    excluded_types: [...excludedTypes.value],
+    include_derived: includeDerived.value,
+  }
+  const roots = [...expandedRoots]
+  const view = await graphApi.view(params, signal)
+  if (!view) return null
+  const refreshed = new Map<string, GraphView>()
+  // Recompute every retained branch with the backend's exclusion rules; hidden
+  // types must never act as invisible traversal bridges. Abort bounds the work.
+  for (const root of roots) {
+    if (signal.aborted) break
+    const branch = await graphApi.view(
+      { ...params, graph_revision_id: view.graph_revision_id, center: root },
+      signal,
+    )
+    refreshed.set(root, branch)
+  }
+  return { view, branches: refreshed }
+})
+const canvas = ref<InstanceType<typeof GraphCanvas> | null>(null)
+const selectedIri = ref<string | null>(null)
+const selectedEdgeIdentity = ref<string | null>(null)
+const selectedEdge = computed(
+  () => data.value?.edges.find((edge) => edgeKey(edge) === selectedEdgeIdentity.value) ?? null,
+)
+const showEvidence = ref(false)
+const showSettings = ref(false)
+const showFacts = ref(false)
+const relationshipFilter = ref<string[]>([])
+watch(
+  [graphId, center, depth, excludedTypes, includeDerived],
+  () => {
+    cancelExpansion()
+    branchError.value = ''
+  },
+  { deep: true, flush: 'sync' },
+)
+watch(
+  [graphId, center],
+  () => {
+    expandedRoots.clear()
+    branches.value = new Map()
+  },
+  { flush: 'sync' },
+)
+watch(
+  graphId,
+  () => {
+    resolvedRevision = undefined
+    base.value = null
+    selectedIri.value = null
+    selectedEdgeIdentity.value = null
+    showEvidence.value = false
+    relationshipFilter.value = []
+  },
+  { flush: 'sync' },
+)
+watch(incoming, async (result) => {
+  if (!result) return
+  const value = result.view
+  if (base.value && base.value.graph_revision_id !== value.graph_revision_id) {
+    expandedRoots.clear()
+    clearSelection()
+  }
+  resolvedRevision = value.graph_revision_id
+  base.value = value
+  branches.value = result.branches
+  if (pendingFocus && value.nodes.some((node) => node.iri === pendingFocus)) {
+    selectedIri.value = pendingFocus
+    await nextTick()
+    canvas.value?.focus(pendingFocus)
+    pendingFocus = null
+  }
+})
+const selectedNode = computed(() =>
+  data.value?.nodes.find((node) => node.iri === selectedIri.value),
+)
+const relationshipOptions = computed(() =>
+  [...new Set(data.value?.edges.map((edge) => edge.predicate) ?? [])].map((iri) => ({
+    value: iri,
+    label: shortName(iri),
+  })),
+)
+function selectNode(iri: string) {
+  if (!data.value?.nodes.some((node) => node.iri === iri)) {
+    explore(iri)
+    return
+  }
+  selectedIri.value = iri
+  selectedEdgeIdentity.value = null
+  showEvidence.value = false
+}
+function selectEdge(edge: GraphView['edges'][number]) {
+  selectedEdgeIdentity.value = edgeKey(edge)
+  selectedIri.value = null
+  showEvidence.value = false
+}
+function clearSelection() {
+  selectedIri.value = null
+  selectedEdgeIdentity.value = null
+  showEvidence.value = false
+}
+async function expandSelected() {
+  const iri = selectedIri.value
+  const revision = data.value?.graph_revision_id
+  if (!iri || !revision || loading.value || expanding.value) return
+  cancelExpansion()
+  const controller = new AbortController()
+  branchController = controller
+  expanding.value = true
+  branchError.value = ''
+  try {
+    const branch = await graphApi.view(
+      {
+        graph_revision_id: revision,
+        center: iri,
+        depth: depth.value,
+        excluded_types: excludedTypes.value,
+        include_derived: includeDerived.value,
+      },
+      controller.signal,
+    )
+    if (controller.signal.aborted || data.value?.graph_revision_id !== revision) return
+    expandedRoots.add(iri)
+    branches.value = new Map(branches.value).set(iri, branch)
+  } catch (cause) {
+    if (!controller.signal.aborted) branchError.value = toMessage(cause)
+  } finally {
+    if (branchController === controller) expanding.value = false
+  }
+}
+function collapseSelected() {
+  if (!selectedIri.value || loading.value) return
+  cancelExpansion()
+  const next = new Map(branches.value)
+  next.delete(selectedIri.value)
+  expandedRoots.delete(selectedIri.value)
+  branches.value = next
+  if (!data.value?.nodes.some((node) => node.iri === selectedIri.value)) clearSelection()
+}
+onBeforeUnmount(cancelExpansion)
+const evidence = useAsyncData<EvidenceTrace>((signal) => {
+  const revision = data.value?.graph_revision_id
+  if (!showEvidence.value || !revision) return Promise.resolve(null)
+  if (selectedEdge.value?.kind === 'DIRECT')
+    return graphApi.factEvidence(
+      {
+        subject: selectedEdge.value.subject,
+        predicate: selectedEdge.value.predicate,
+        object: selectedEdge.value.object_,
+      },
+      revision,
+      signal,
+    )
+  return selectedNode.value
+    ? graphApi.entityEvidence(selectedNode.value.iri, revision, signal)
+    : Promise.resolve(null)
+})
 const search = useAsyncData((signal) =>
   graphApi.entities(
     {
@@ -83,7 +266,7 @@ const searchOptions = computed(
   () =>
     search.data.value?.items.map((node) => ({
       value: node.iri,
-      label: `${node.attrs.name ?? node.row_key} · ${node.iri}`,
+      label: `${entityName(node)} · ${node.iri}`,
     })) ?? [],
 )
 const typeOptions = computed(
@@ -120,6 +303,13 @@ function explore(iri: string | null) {
     })
     return
   }
+  if (iri && data.value?.nodes.some((node) => node.iri === iri)) {
+    selectNode(iri)
+    canvas.value?.focus(iri)
+    return
+  }
+  pendingFocus = iri
+  clearSelection()
   updateQuery({
     graph: graphId.value ?? data.value?.graph_revision_id,
     center: iri || undefined,
@@ -127,8 +317,11 @@ function explore(iri: string | null) {
 }
 
 function selectGraph(id: number | null) {
+  resolvedRevision = undefined
   excludedTypes.value = []
-  updateQuery({ graph: id || undefined, layout: undefined, template: undefined })
+  updateQuery({ graph: id || undefined, center: undefined, layout: undefined, template: undefined })
+  showHistory.value = false
+  if (graphId.value === (id || undefined)) reload()
 }
 
 function selectLayout(id: string | null) {
@@ -139,22 +332,12 @@ function selectLayout(id: string | null) {
 }
 
 // ===== 形态推荐（语义信号 → 形态 + 理由） =====
-const recommendations = ref<GraphRecommendations | null>(null)
-watch(
-  () => [data.value?.graph_revision_id] as const,
-  ([revision], previous) => {
-    if (!revision || revision === previous?.[0]) return
-    void graphApi
-      .recommendations(revision, new AbortController().signal)
-      .then((result) => {
-        recommendations.value = result
-      })
-      .catch(() => {
-        recommendations.value = null
-      })
-  },
-  { immediate: true },
+const recommendationRequest = useAsyncData<GraphRecommendations>((signal) =>
+  data.value?.graph_revision_id
+    ? graphApi.recommendations(data.value.graph_revision_id, signal)
+    : Promise.resolve(null),
 )
+const recommendations = recommendationRequest.data
 const reasonText = (reasonKey: string, params: Record<string, unknown>) => {
   if (reasonKey === 'graph.reason.hierarchy') {
     return t(reasonKey, { edge: shortName(String(params.hierarchy_edge ?? '')) })
@@ -254,7 +437,13 @@ const templateOptions = computed(() =>
 )
 async function saveTemplate() {
   const name = templateName.value.trim()
-  if (!name || !data.value?.ontology_id || !data.value?.ontology_revision || savingTemplate.value)
+  if (
+    !canWrite.value ||
+    !name ||
+    !data.value?.ontology_id ||
+    !data.value?.ontology_revision ||
+    savingTemplate.value
+  )
     return
   if (semanticFields.data.value?.stale) {
     templateError.value = t('semanticView.stale')
@@ -358,7 +547,7 @@ const selectedTemplateName = computed(
     '',
 )
 async function removeTemplate() {
-  if (selectedTemplateId.value === null || removingTemplate.value) return
+  if (selectedTemplateId.value === null || removingTemplate.value || !canWrite.value) return
   const request = templateRequest()
   removingTemplate.value = true
   templateError.value = ''
@@ -377,37 +566,20 @@ async function removeTemplate() {
 
 // ===== 质量叠加（G-28）：隔离命中节点标记 =====
 const qualityOverlay = ref(false)
-const flaggedIris = ref<Set<string>>(new Set())
-watch(
-  [qualityOverlay, () => data.value?.run_id] as const,
-  ([enabled, runId]) => {
-    if (!enabled || !runId) {
-      flaggedIris.value = new Set()
-      return
-    }
-    // 拉取失败只影响叠加标记，静默清空即可，但不能留下未处理的 rejection
-    void graphApi
-      .runQuarantine(runId, new AbortController().signal)
-      .then((rows) => {
-        const rowKeys = new Set(rows.map((row) => row.row_key))
-        flaggedIris.value = new Set(
-          (data.value?.nodes ?? [])
-            .filter((node) => rowKeys.has(node.row_key))
-            .map((node) => node.iri),
-        )
-      })
-      .catch(() => {
-        flaggedIris.value = new Set()
-      })
-  },
-  { immediate: true },
-)
+// Source identity is absent from GraphViewNode. Do not mark unrelated rows sharing a key.
+const flaggedIris = computed(() => new Set<string>())
 
 // ===== 关系路径（G-12）与版本差异（G-24）抽屉 =====
 const showPath = ref(false)
 const showDiff = ref(false)
 const showMatrix = ref(false)
 const showCentrality = ref(false)
+function openAnalysis(mode: 'diff' | 'matrix' | 'centrality') {
+  showSettings.value = false
+  if (mode === 'diff') showDiff.value = true
+  if (mode === 'matrix') showMatrix.value = true
+  if (mode === 'centrality') showCentrality.value = true
+}
 const pathFrom = ref('')
 const pathTo = ref('')
 const pathHops = ref(3)
@@ -419,18 +591,45 @@ const highlightIris = computed(() =>
 watch(center, (value) => {
   if (value && !pathFrom.value) pathFrom.value = value
 })
+const pathLoading = ref(false)
+let pathController: AbortController | null = null
+watch(
+  [graphId, pathFrom, pathTo, pathHops, includeDerived],
+  () => {
+    pathController?.abort()
+    pathResult.value = null
+    pathError.value = ''
+    pathLoading.value = false
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => pathController?.abort())
 async function findPath() {
-  const graph = graphId.value ?? data.value?.graph_revision_id
+  const graph = data.value?.graph_revision_id
   if (!graph || !pathFrom.value || !pathTo.value) return
+  pathController?.abort()
+  const controller = new AbortController()
+  pathController = controller
   pathError.value = ''
+  pathResult.value = null
+  pathLoading.value = true
   try {
-    pathResult.value = await graphApi.path(
+    const result = await graphApi.path(
       graph,
-      { from: pathFrom.value, to: pathTo.value, max_hops: pathHops.value, include_derived: true },
-      new AbortController().signal,
+      {
+        from: pathFrom.value,
+        to: pathTo.value,
+        max_hops: pathHops.value,
+        include_derived: includeDerived.value,
+      },
+      controller.signal,
     )
+    if (!controller.signal.aborted && data.value?.graph_revision_id === graph)
+      pathResult.value = result
   } catch (cause) {
-    pathError.value = toMessage(cause)
+    if (!controller.signal.aborted) pathError.value = toMessage(cause)
+  } finally {
+    if (pathController === controller) pathLoading.value = false
   }
 }
 
@@ -443,7 +642,7 @@ const switchError = ref('')
 const viewController = new AbortController()
 onBeforeUnmount(() => viewController.abort())
 async function switchCurrent(id: number) {
-  if (switching.value) return
+  if (switching.value || !canWrite.value) return
   switching.value = true
   switchError.value = ''
   try {
@@ -504,7 +703,7 @@ function svgElement(): SVGSVGElement | null {
 }
 async function doExport(kind: 'png' | 'svg' | 'csv') {
   exportError.value = ''
-  const graph = data.value
+  const graph = visibleGraph.value
   if (!graph) return
   try {
     const stamp = `graph-${graph.graph_revision_id}`
@@ -544,7 +743,7 @@ const centralityColumns = computed(() => [
   },
 ])
 const typeMatrix = computed(() => {
-  const graph = data.value
+  const graph = visibleGraph.value
   if (!graph) return null
   const types = [...new Set(graph.nodes.map((node) => node.type_iri))].sort()
   const typeOf = new Map(graph.nodes.map((node) => [node.iri, node.type_iri] as const))
@@ -583,7 +782,7 @@ function centralityRowKey(row: { iri: string }): string {
   return row.iri
 }
 const centralityRows = computed(() => {
-  const graph = data.value
+  const graph = visibleGraph.value
   if (!graph) return []
   const stats = new Map<string, { in: number; out: number }>()
   for (const node of graph.nodes) {
@@ -647,6 +846,19 @@ const replayedGraph = computed(() => {
     edges: graph.edges.filter((edge) => keep.has(edge.subject) && keep.has(edge.object_)),
   }
 })
+const visibleGraph = computed(() => {
+  const graph = replayedGraph.value
+  if (!graph || !relationshipFilter.value.length) return graph
+  return {
+    ...graph,
+    edges: graph.edges.filter((edge) => relationshipFilter.value.includes(edge.predicate)),
+  }
+})
+function clearFilters() {
+  excludedTypes.value = []
+  relationshipFilter.value = []
+  includeDerived.value = true
+}
 function onExport(kind: string) {
   void doExport(kind as 'png' | 'svg' | 'csv')
 }
@@ -654,182 +866,82 @@ function onExport(kind: string) {
 
 <template>
   <section class="graph-page">
-    <PageHeader :title="t('page.graphBrowse')" :description="t('graph.canvasHint')">
-      <template #actions>
-        <NButton @click="showHistory = true">{{ t('graph.history') }}</NButton>
-        <RouterLink :to="{ name: 'graph-entities', query: { graph: data?.graph_revision_id } }">{{
-          t('page.graphEntities')
-        }}</RouterLink>
-      </template>
-    </PageHeader>
-    <div class="controls">
-      <label>
-        <span>{{ t('graph.searchHint') }}</span>
-        <NSelect
-          :value="center || null"
-          :options="searchOptions"
-          :loading="search.loading.value"
-          filterable
-          remote
-          clearable
-          :placeholder="t('graph.searchHint')"
-          :aria-label="t('graph.searchHint')"
-          @search="searchText = $event"
-          @update:value="explore"
-        />
-      </label>
-      <label>
-        <span>{{ t('graph.depth') }}</span>
-        <NSelect
-          v-model:value="depth"
-          :disabled="!center"
-          :options="[
-            { label: t('graph.oneDegree'), value: 1 },
-            { label: t('graph.twoDegrees'), value: 2 },
-          ]"
-          :aria-label="t('graph.depth')"
-        />
-      </label>
-      <label>
-        <span>{{ t('graph.revisionInput') }}</span>
-        <NInputNumber
-          :value="graphId ?? null"
-          :min="1"
-          :precision="0"
-          clearable
-          :placeholder="t('graph.currentResult')"
-          :aria-label="t('graph.revisionInput')"
-          @update:value="selectGraph"
-        />
-      </label>
-      <label>
-        <span>{{ t('graph.layoutLabel') }}</span>
-        <NSelect
-          :value="layoutId ?? (center ? 'ring' : 'type_grid')"
-          :options="layoutOptions"
-          :aria-label="t('graph.layoutLabel')"
-          @update:value="selectLayout"
-        />
-      </label>
-    </div>
-    <NAlert v-if="search.error.value" type="warning">{{ search.error.value }}</NAlert>
-    <NSpace align="center">
-      <NButton :disabled="!center" @click="explore(null)">{{ t('graph.overview') }}</NButton>
-      <NCheckbox v-model:checked="includeDerived">{{ t('graph.showDerived') }}</NCheckbox>
-      <NCheckbox v-model:checked="qualityOverlay">{{ t('graph.qualityOverlay') }}</NCheckbox>
-      <NButton @click="showPath = true">{{ t('graph.pathQuery') }}</NButton>
-      <NButton @click="showDiff = true">{{ t('graph.diffQuery') }}</NButton>
-      <NButton @click="showMatrix = true">{{ t('graph.matrix') }}</NButton>
-      <NButton @click="showCentrality = true">{{ t('graph.centrality') }}</NButton>
-      <NPopselect :options="exportOptions" trigger="click" @update:value="onExport">
-        <NButton>{{ t('graph.export.title') }}</NButton>
-      </NPopselect>
-      <NButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</NButton>
-      <RouterLink
-        v-if="center && data"
-        :to="{
-          name: 'graph-entity-detail',
-          params: { id: center },
-          query: { graph: data.graph_revision_id },
-        }"
-        >{{ t('page.graphEntityDetail') }}</RouterLink
-      >
-      <NPopselect
-        v-if="templateOptions.length"
-        :options="templateOptions"
-        trigger="click"
-        @update:value="applyTemplate"
-      >
-        <NButton :loading="applyingTemplate || templateData.loading.value">{{
-          t('graph.templates')
-        }}</NButton>
-      </NPopselect>
-      <NPopconfirm v-if="selectedTemplateId !== null" @positive-click="removeTemplate">
-        <template #trigger>
-          <NButton size="small" tertiary type="error" :loading="removingTemplate">{{
-            t('graph.templateDelete')
-          }}</NButton>
+    <div class="graph-heading">
+      <PageHeader :title="t('page.graphBrowse')">
+        <template #context
+          ><span class="workspace-context"
+            >{{
+              data ? t('graph.resultSet', { id: data.graph_revision_id }) : t('graph.currentResult')
+            }}
+            · {{ t('ui.readOnlyLabel') }}</span
+          ></template
+        >
+        <template #actions>
+          <NButton size="small" @click="showHistory = true">{{ t('graph.history') }}</NButton>
+          <RouterLink :to="{ name: 'graph-entities', query: { graph: data?.graph_revision_id } }">{{
+            t('page.graphEntities')
+          }}</RouterLink>
         </template>
-        {{ t('graph.templateDeleteConfirm', { name: selectedTemplateName }) }}
-      </NPopconfirm>
-      <span v-if="data" class="inline-save">
-        <NInput
-          v-model:value="templateName"
-          size="small"
-          :placeholder="t('graph.templateName')"
-          @keydown.enter.prevent="saveTemplate"
-        />
-        <NButton
-          size="small"
-          :loading="savingTemplate"
-          :disabled="
-            !templateName.trim() || semanticFields.loading.value || semanticFields.data.value?.stale
-          "
-          @click="saveTemplate"
-          >{{ t('graph.templateSave') }}</NButton
-        >
-      </span>
-    </NSpace>
-    <SemanticViewConfig
-      :layout-id="layoutId ?? (center ? 'ring' : 'type_grid')"
-      :config="semanticConfig"
-      :catalog="semanticFields.data.value"
-      :loading="semanticFields.loading.value"
-      :error="semanticFields.error.value"
-      @change="configureSemantics"
-      @retry="semanticFields.reload"
-    />
-    <label>
-      <span>{{ t('graph.hiddenTypes') }}</span>
+      </PageHeader>
+    </div>
+    <div class="graph-toolbar">
       <NSelect
-        v-model:value="excludedTypes"
-        :options="typeOptions"
-        multiple
+        class="graph-search"
+        :value="selectedIri || center || null"
+        :options="searchOptions"
+        :loading="search.loading.value"
+        filterable
+        remote
         clearable
-        :aria-label="t('graph.hiddenTypes')"
-        :placeholder="t('graph.hiddenTypes')"
+        :placeholder="t('graph.searchHint')"
+        :aria-label="t('graph.searchHint')"
+        @search="searchText = $event"
+        @update:value="explore"
       />
-    </label>
-    <NAlert v-if="recommendations?.recommendations.length" type="info" class="recommendations">
-      <div class="recommendation-row">
-        <span>{{ t('graph.recommended') }}</span>
-        <NButton
-          v-for="item in recommendations.recommendations.filter(
-            (rec) => rec.reason_key !== 'graph.reason.generic',
-          )"
-          :key="item.layout_id"
-          size="tiny"
-          :type="layoutId === item.layout_id ? 'primary' : 'default'"
-          @click="selectLayout(item.layout_id)"
+      <NSelect
+        class="layout-select"
+        :value="layoutId ?? (center ? 'ring' : 'type_grid')"
+        :options="layoutOptions"
+        :aria-label="t('graph.layoutLabel')"
+        @update:value="selectLayout"
+      />
+      <NButton
+        :type="excludedTypes.length || relationshipFilter.length ? 'primary' : 'default'"
+        @click="showSettings = true"
+        >{{ t('graphUi.filters') }}</NButton
+      >
+      <NButton :disabled="!data" @click="showPath = true">{{ t('graph.pathQuery') }}</NButton>
+      <NButton :disabled="!data" @click="showFacts = true">{{ t('graphUi.facts') }}</NButton>
+      <NButton :disabled="!center" @click="explore(null)">{{ t('graph.overview') }}</NButton>
+      <NButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</NButton>
+    </div>
+    <div v-if="error || branchError || search.error.value || exportError" class="graph-message">
+      <NAlert type="warning"
+        >{{ error || branchError || search.error.value || exportError
+        }}<span v-if="data"> · {{ t('graphUi.retained') }}</span>
+        <span class="alert-action"
+          ><NButton
+            size="small"
+            @click="error ? reload() : branchError ? expandSelected() : search.reload()"
+            >{{ t('ui.retry') }}</NButton
+          ></span
         >
-          {{ t(`graph.layout.${item.layout_id}`) }}
-        </NButton>
-        <span class="reason">
-          {{
-            reasonText(
-              recommendations.recommendations.find(
-                (rec) => rec.reason_key !== 'graph.reason.generic',
-              )?.reason_key ?? 'graph.reason.generic',
-              recommendations.signals,
-            )
-          }}
-        </span>
-        <NTag
-          v-for="item in recommendations.recommendations.filter(
-            (rec) => rec.reason_key !== 'graph.reason.generic',
-          )"
-          :key="item.layout_id + '-tag'"
-          size="small"
-          :type="layoutId === item.layout_id ? 'primary' : 'default'"
-          round
-        >
-          {{ item.layout_id }}
-        </NTag>
-      </div>
-    </NAlert>
-    <label v-if="layoutId === 'timeline' && replayBounds && replayRange" class="replay">
-      <span>{{ t('graph.replay') }}</span>
-      <NSlider
+      </NAlert>
+    </div>
+    <div v-if="data?.truncated" class="graph-message">
+      <NAlert type="warning">{{ t('graphUi.limited') }}</NAlert>
+    </div>
+    <div v-if="qualityOverlay" class="graph-message">
+      <NAlert type="info">{{
+        t('graphUi.qualityScope', { count: data?.quarantine_count ?? '—' })
+      }}</NAlert>
+    </div>
+    <label
+      v-if="layoutId === 'timeline' && replayBounds && replayRange"
+      class="replay graph-message"
+    >
+      <span>{{ t('graph.replay') }}</span
+      ><NSlider
         v-model:value="replayRange"
         range
         :min="replayBounds[0]"
@@ -839,55 +951,293 @@ function onExport(kind: string) {
         :aria-label="t('graph.replay')"
       />
     </label>
-    <NAlert v-if="error" type="warning">{{ error }}</NAlert>
-    <NAlert v-if="exportError" type="warning">{{ exportError }}</NAlert>
-    <NAlert v-if="templateError" type="warning">{{ templateError }}</NAlert>
-    <NAlert v-if="templateData.error.value" type="warning">{{ templateData.error.value }}</NAlert>
-    <p v-if="loading" role="status">{{ t('common.loading') }}</p>
-    <template v-if="data">
-      <p>
-        {{ t('graph.resultSet', { id: data.graph_revision_id }) }} ·
-        {{
-          t('graph.visibleCounts', {
-            nodes: data.nodes.length,
-            edges: data.edges.length,
-            total: data.entity_total,
-          })
-        }}
-      </p>
-      <NAlert v-if="data.truncated" type="warning">{{ t('graph.truncated') }}</NAlert>
-      <NAlert v-if="data.quarantine_count" type="warning">{{
-        t('graph.graphQuarantine', { count: data.quarantine_count, run: data.run_id })
-      }}</NAlert>
-      <NEmpty v-if="!data.nodes.length" :description="t('graph.noVisibleNodes')" />
-      <template v-else>
+    <div
+      class="graph-workspace"
+      :aria-busy="loading || expanding"
+      @keydown.esc="showEvidence ? (showEvidence = false) : clearSelection()"
+    >
+      <main class="canvas-area">
+        <p v-if="loading || expanding" class="loading-indicator" role="status">
+          {{ t('common.loading') }}
+        </p>
         <GraphCanvas
-          :graph="replayedGraph ?? data"
+          v-if="data && visibleGraph"
+          ref="canvas"
+          :graph="visibleGraph"
           :neighborhood="!!center"
           :layout-id="layoutId"
           :semantic-context="semanticContext"
           :flagged-iris="qualityOverlay ? flaggedIris : undefined"
           :highlight-iris="highlightIris"
-          @select="explore"
+          :selected-iri="selectedIri"
+          :selected-edge-key="selectedEdge ? edgeKey(selectedEdge) : null"
+          @select="selectNode"
+          @select-edge="selectEdge"
         />
-        <NTabs type="line" animated>
-          <NTabPane name="direct" :tab="t('graph.directRelation')">
+        <div v-if="!loading && !visibleGraph?.nodes.length" class="canvas-empty">
+          <NEmpty :description="error ? t('graphUi.loadFailed') : t('graph.noVisibleNodes')"
+            ><template #extra
+              ><NButton @click="error ? reload() : clearFilters()">{{
+                error ? t('ui.retry') : t('ui.clearFilters')
+              }}</NButton></template
+            ></NEmpty
+          >
+        </div>
+      </main>
+      <aside
+        v-if="selectedNode || selectedEdge"
+        class="graph-inspector"
+        :aria-label="t('graphUi.inspector')"
+      >
+        <div class="inspector-heading">
+          <strong>{{ showEvidence ? t('page.graphEvidence') : t('graphUi.inspector') }}</strong
+          ><NButton
+            size="small"
+            quaternary
+            @click="showEvidence ? (showEvidence = false) : clearSelection()"
+            >{{ showEvidence ? t('graphUi.backObject') : t('common.close') }}</NButton
+          >
+        </div>
+        <div class="inspector-body">
+          <template v-if="!showEvidence">
+            <template v-if="selectedNode">
+              <NTag size="small">{{ shortName(selectedNode.type_iri) }}</NTag>
+              <h2>{{ entityName(selectedNode) }}</h2>
+              <p class="object-iri">{{ selectedNode.iri }}</p>
+              <NSpace
+                ><NButton
+                  type="primary"
+                  :loading="expanding"
+                  :disabled="loading || !!error || data!.nodes.length >= 500"
+                  @click="expandSelected"
+                  >{{ t('graphUi.expand') }}</NButton
+                ><NButton
+                  :disabled="!branches.has(selectedNode.iri) || loading"
+                  @click="collapseSelected"
+                  >{{ t('graphUi.collapse') }}</NButton
+                ></NSpace
+              >
+              <dl class="attribute-list">
+                <template v-for="(value, key) in selectedNode.attrs" :key="key"
+                  ><dt>{{ key }}</dt>
+                  <dd>{{ typeof value === 'object' ? JSON.stringify(value) : value }}</dd></template
+                >
+              </dl>
+            </template>
+            <template v-if="selectedEdge">
+              <NTag size="small" :type="selectedEdge.kind === 'DERIVED' ? 'warning' : 'default'">{{
+                t(selectedEdge.kind === 'DERIVED' ? 'graph.derived' : 'graph.direct')
+              }}</NTag>
+              <h2>{{ shortName(selectedEdge.predicate) }}</h2>
+              <dl class="attribute-list">
+                <dt>{{ t('graph.subject') }}</dt>
+                <dd>{{ selectedEdge.subject }}</dd>
+                <dt>{{ t('graph.predicate') }}</dt>
+                <dd>{{ selectedEdge.predicate }}</dd>
+                <dt>{{ t('graph.object') }}</dt>
+                <dd>{{ selectedEdge.object_ }}</dd>
+                <template v-for="(value, key) in selectedEdge.props" :key="key"
+                  ><dt>{{ key }}</dt>
+                  <dd>{{ value }}</dd></template
+                >
+              </dl>
+              <NAlert v-if="selectedEdge.kind === 'DERIVED'" type="info">{{
+                t('graphUi.derivedEvidence')
+              }}</NAlert>
+            </template>
+            <NButton
+              block
+              :disabled="selectedEdge?.kind === 'DERIVED' || loading || !!error"
+              @click="showEvidence = true"
+              >{{ t('graph.trace') }}</NButton
+            >
+          </template>
+          <template v-else>
+            <p class="evidence-context">
+              {{
+                selectedEdge
+                  ? shortName(selectedEdge.predicate)
+                  : selectedNode
+                    ? entityName(selectedNode)
+                    : ''
+              }}
+              ·
+              {{ t('graph.resultSet', { id: data!.graph_revision_id }) }}
+            </p>
+            <p v-if="evidence.loading.value" role="status">{{ t('common.loading') }}</p>
+            <NAlert v-else-if="evidence.error.value" type="warning"
+              >{{ evidence.error.value
+              }}<span class="alert-action"
+                ><NButton @click="evidence.reload">{{ t('ui.retry') }}</NButton></span
+              ></NAlert
+            >
+            <template v-else-if="evidence.data.value"
+              ><p>{{ t('graph.totalEvidence', { n: evidence.data.value.total_count }) }}</p>
+              <EvidenceInspector :items="evidence.data.value.evidences" /><NEmpty
+                v-if="!evidence.data.value.total_count"
+                :description="t('graphUi.noEvidence')"
+            /></template>
+          </template>
+        </div>
+      </aside>
+    </div>
+    <footer class="graph-footer">
+      <span v-if="data">{{
+        t('graphUi.counts', {
+          total: data.entity_total,
+          loaded: data.nodes.length,
+          visible: visibleGraph?.nodes.length ?? 0,
+          edges: visibleGraph?.edges.length ?? 0,
+        })
+      }}</span
+      ><span>{{ t('graphUi.gestureHint') }}</span>
+    </footer>
+    <NDrawer v-model:show="showSettings" :width="420"
+      ><NDrawerContent :title="t('graphUi.filters')" closable
+        ><div class="panel-form">
+          <label
+            ><span>{{ t('graph.revisionInput') }}</span
+            ><NInputNumber
+              :value="graphId ?? null"
+              :min="1"
+              :precision="0"
+              clearable
+              :placeholder="t('graph.currentResult')"
+              :aria-label="t('graph.revisionInput')"
+              @update:value="selectGraph"
+          /></label>
+          <label
+            ><span>{{ t('graph.depth') }}</span
+            ><NSelect
+              v-model:value="depth"
+              :options="[
+                { label: t('graph.oneDegree'), value: 1 },
+                { label: t('graph.twoDegrees'), value: 2 },
+              ]"
+              :aria-label="t('graph.depth')"
+          /></label>
+          <label
+            ><span>{{ t('graph.hiddenTypes') }}</span
+            ><NSelect
+              v-model:value="excludedTypes"
+              :options="typeOptions"
+              multiple
+              clearable
+              :aria-label="t('graph.hiddenTypes')"
+              :placeholder="t('graph.hiddenTypes')"
+          /></label>
+          <p class="scope-hint">{{ t('graphUi.typeScope') }}</p>
+          <label
+            ><span>{{ t('graphUi.relationships') }}</span
+            ><NSelect
+              v-model:value="relationshipFilter"
+              :options="relationshipOptions"
+              multiple
+              clearable
+              :aria-label="t('graphUi.relationships')"
+              :placeholder="t('graphUi.allRelations')"
+          /></label>
+          <NCheckbox v-model:checked="includeDerived">{{ t('graph.showDerived') }}</NCheckbox
+          ><NCheckbox v-model:checked="qualityOverlay">{{ t('graph.qualityOverlay') }}</NCheckbox
+          ><NButton @click="clearFilters">{{ t('ui.clearFilters') }}</NButton>
+          <h3>{{ t('graphUi.analysis') }}</h3>
+          <p class="scope-hint">{{ t('graphUi.analysisScope') }}</p>
+          <NSpace
+            ><NButton @click="openAnalysis('diff')">{{ t('graph.diffQuery') }}</NButton
+            ><NButton @click="openAnalysis('matrix')">{{ t('graph.matrix') }}</NButton
+            ><NButton @click="openAnalysis('centrality')">{{ t('graph.centrality') }}</NButton
+            ><NPopselect :options="exportOptions" trigger="click" @update:value="onExport"
+              ><NButton :disabled="!data">{{ t('graph.export.title') }}</NButton></NPopselect
+            ></NSpace
+          >
+          <h3>{{ t('graph.templates') }}</h3>
+          <NAlert v-if="templateError || templateData.error.value" type="warning">{{
+            templateError || templateData.error.value
+          }}</NAlert>
+          <NSelect
+            :value="selectedTemplateId"
+            :options="templateOptions"
+            :loading="applyingTemplate || templateData.loading.value"
+            :placeholder="t('graph.templates')"
+            :aria-label="t('graph.templates')"
+            @update:value="applyTemplate"
+          />
+          <SemanticViewConfig
+            :layout-id="layoutId ?? (center ? 'ring' : 'type_grid')"
+            :config="semanticConfig"
+            :catalog="semanticFields.data.value"
+            :loading="semanticFields.loading.value"
+            :error="semanticFields.error.value"
+            @change="configureSemantics"
+            @retry="semanticFields.reload"
+          />
+          <div v-if="data && canWrite" class="inline-save">
+            <NInput
+              v-model:value="templateName"
+              :placeholder="t('graph.templateName')"
+              @keydown.enter.prevent="saveTemplate"
+            /><NButton
+              :loading="savingTemplate"
+              :disabled="
+                !templateName.trim() ||
+                semanticFields.loading.value ||
+                semanticFields.data.value?.stale
+              "
+              @click="saveTemplate"
+              >{{ t('graph.templateSave') }}</NButton
+            >
+          </div>
+          <NPopconfirm
+            v-if="canWrite && selectedTemplateId !== null"
+            @positive-click="removeTemplate"
+            ><template #trigger
+              ><NButton tertiary type="error" :loading="removingTemplate">{{
+                t('graph.templateDelete')
+              }}</NButton></template
+            >{{ t('graph.templateDeleteConfirm', { name: selectedTemplateName }) }}</NPopconfirm
+          >
+          <NAlert v-if="recommendations?.recommendations.length" type="info"
+            ><p>{{ t('graph.recommended') }}</p>
+            <NSpace
+              ><NButton
+                v-for="item in recommendations.recommendations.filter(
+                  (rec) => rec.reason_key !== 'graph.reason.generic',
+                )"
+                :key="item.layout_id"
+                size="small"
+                @click="selectLayout(item.layout_id)"
+                >{{ t(`graph.layout.${item.layout_id}`) }}</NButton
+              ></NSpace
+            >
+            <p>
+              {{
+                reasonText(
+                  recommendations.recommendations.find(
+                    (rec) => rec.reason_key !== 'graph.reason.generic',
+                  )?.reason_key ?? 'graph.reason.generic',
+                  recommendations.signals,
+                )
+              }}
+            </p></NAlert
+          >
+        </div></NDrawerContent
+      ></NDrawer
+    >
+    <NDrawer v-model:show="showFacts" width="min(960px, 100vw)"
+      ><NDrawerContent :title="t('graphUi.facts')" closable
+        ><p>{{ t('graphUi.analysisScope') }}</p>
+        <NTabs v-if="visibleGraph" type="line"
+          ><NTabPane name="direct" :tab="t('graph.directRelation')"
+            ><GraphFactTable
+              :items="visibleGraph.edges.filter((edge) => edge.kind === 'DIRECT')"
+              :graph-revision-id="visibleGraph.graph_revision_id" /></NTabPane
+          ><NTabPane name="derived" :tab="t('graph.derived')"
+            ><p>{{ t('graph.derivedHint') }}</p>
             <GraphFactTable
-              :items="data.edges.filter((edge) => edge.kind === 'DIRECT')"
-              :graph-revision-id="data.graph_revision_id"
-            />
-          </NTabPane>
-          <NTabPane name="derived" :tab="t('graph.derived')">
-            <p>{{ t('graph.derivedHint') }}</p>
-            <GraphFactTable
-              :items="data.edges.filter((edge) => edge.kind === 'DERIVED')"
-              :graph-revision-id="data.graph_revision_id"
-              derived
-            />
-          </NTabPane>
-        </NTabs>
-      </template>
-    </template>
+              :items="visibleGraph.edges.filter((edge) => edge.kind === 'DERIVED')"
+              :graph-revision-id="visibleGraph.graph_revision_id"
+              derived /></NTabPane></NTabs></NDrawerContent
+    ></NDrawer>
     <NDrawer v-model:show="showPath" :width="420">
       <NDrawerContent :title="t('graph.pathQuery')" closable>
         <div class="panel-form">
@@ -903,9 +1253,13 @@ function onExport(kind: string) {
             <span>{{ t('graph.pathHops') }}</span>
             <NInputNumber v-model:value="pathHops" :min="1" :max="6" />
           </label>
-          <NButton type="primary" :disabled="!pathFrom || !pathTo" @click="findPath">{{
-            t('graph.pathFind')
-          }}</NButton>
+          <NButton
+            type="primary"
+            :loading="pathLoading"
+            :disabled="!pathFrom || !pathTo || !data || loading"
+            @click="findPath"
+            >{{ t('graph.pathFind') }}</NButton
+          >
           <NAlert v-if="pathError" type="warning">{{ pathError }}</NAlert>
           <template v-if="pathResult">
             <NAlert :type="pathResult.found ? 'success' : 'warning'">
@@ -1029,7 +1383,7 @@ function onExport(kind: string) {
             <NTag v-if="item.is_current" type="success">{{ t('graph.currentRevision') }}</NTag>
             <NButton size="small" @click="selectGraph(item.id)">{{ t('common.view') }}</NButton>
             <NPopconfirm
-              v-if="item.publishable && !item.is_current"
+              v-if="canWrite && item.publishable && !item.is_current"
               @positive-click="switchCurrent(item.id)"
             >
               <template #trigger
@@ -1074,22 +1428,166 @@ function onExport(kind: string) {
 
 <style scoped>
 .graph-page {
-  display: grid;
-  gap: 16px;
+  height: calc(100dvh - 56px);
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-h2,
-p {
+.graph-heading {
+  padding: 12px 20px 8px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.graph-heading :deep(.page-header) {
+  margin-bottom: 0;
+}
+.graph-heading :deep(h1) {
+  font-size: 18px;
+}
+.workspace-context {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.graph-search {
+  width: 280px;
+  flex: 1;
+  min-width: 200px;
+  max-width: 360px;
+}
+.layout-select {
+  width: 155px;
+}
+.graph-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+.canvas-area {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--canvas);
+}
+.canvas-area :deep(.canvas-panel) {
+  height: 100%;
+}
+.canvas-empty {
+  position: absolute;
+  inset: 70px 0 32px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.canvas-empty :deep(.n-empty) {
+  pointer-events: auto;
+  padding: 20px;
+  background: var(--canvas);
+}
+.loading-indicator {
+  position: absolute;
+  z-index: 3;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.graph-message {
+  padding: 6px 16px;
+}
+.graph-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+}
+.graph-inspector {
+  flex: 0 0 340px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.inspector-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.inspector-body {
+  padding: 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.inspector-body h2 {
+  font-size: 18px;
   margin: 0;
 }
-.controls {
+.object-iri,
+.evidence-context {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.attribute-list {
   display: grid;
-  /* 标签在控件左侧，各列要预留标签宽度 */
-  grid-template-columns: minmax(220px, 2fr) minmax(150px, 1fr) minmax(190px, 1fr) minmax(
-      180px,
-      1fr
-    );
-  gap: 16px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0;
+}
+.attribute-list dt {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.attribute-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.scope-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 0;
+}
+p {
+  margin-top: 0;
+}
+@media (max-width: 1100px) {
+  .graph-inspector {
+    position: absolute;
+    z-index: 5;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(340px, 90vw);
+    box-shadow: -4px 0 20px #0001;
+  }
+  .graph-footer {
+    flex-wrap: wrap;
+  }
 }
 /* 筛选字段：标签在左、控件在右，横向一行读完 */
 label {

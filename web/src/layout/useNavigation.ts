@@ -49,22 +49,14 @@ export function useNavigation() {
         icon: 'ontology',
         label: t('menu.resources'),
         items: [
+          { key: 'ontologies', label: t('page.ontologies') },
+          { key: 'designer', label: t('page.designer') },
           { key: 'entity-types', label: t('page.entityTypes') },
           { key: 'relation-types', label: t('page.relationTypes') },
           { key: 'domains', label: t('page.domains') },
           { key: 'namespaces', label: t('page.namespaces') },
           { key: 'enum-dictionaries', label: t('enumDictionaries.title') },
-        ],
-      },
-      {
-        group: 'ontology',
-        icon: 'ontology',
-        label: t('menu.ontologyManagement'),
-        items: [
-          { key: 'ontologies', label: t('page.ontologies') },
-          { key: 'designer', label: t('page.designer') },
           { key: 'assembly-templates', label: t('templates.title') },
-          { key: 'ontology-export', label: t('export.title') },
         ],
       },
       {
@@ -106,6 +98,7 @@ export function useNavigation() {
         items: [
           { key: 'governance-rules', label: t('page.governanceRules') },
           { key: 'governance-clauses', label: t('page.governanceClauses') },
+          { key: 'ontology-export', label: t('ui.exchange') },
         ],
       },
     ]

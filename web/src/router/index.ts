@@ -131,6 +131,7 @@ const routes: RouteRecordRaw[] = [
         path: 'graph',
         name: 'graph-browse',
         component: () => import('@/views/graph/GraphBrowse.vue'),
+        meta: { fullBleed: true },
       },
       {
         path: 'graph/entities',
@@ -249,7 +250,7 @@ router.beforeEach(async (to) => {
     if (!auth.user) {
       return { name: 'login', query: { redirect: to.fullPath } }
     }
-    if (!auth.isAdmin) return { name: 'forbidden' }
+    if (!auth.isAdmin) return { name: 'forbidden', query: { redirect: to.fullPath } }
   }
 
   return true

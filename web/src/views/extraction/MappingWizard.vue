@@ -14,9 +14,9 @@ import {
   NSpin,
   NTag,
 } from 'naive-ui'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { datasourcesApi, metadataApi } from '@/api/datasources'
 import type { EntityType, EntityTypeBrief } from '@/api/entity-types'
@@ -32,8 +32,10 @@ import { relationsApi } from '@/api/relations'
 import type { components } from '@/api/schema'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
+import ExtractionSuggestions from '@/views/extraction/components/ExtractionSuggestions.vue'
+import FrozenMapping from '@/views/extraction/components/FrozenMapping.vue'
 import FusionPolicyEditor from '@/views/extraction/components/FusionPolicyEditor.vue'
-import AiSuggestions from '@/views/ontology/components/AiSuggestions.vue'
 
 type S = components['schemas']
 type Datasource = components['schemas']['DatasourceBrief']
@@ -120,6 +122,10 @@ const { t, locale } = useI18n()
 const { toMessage: describeError } = useApiError()
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
+const canWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
+const isPublished = computed(() => selectedMapping.value?.status === 'PUBLISHED')
+const readOnly = computed(() => !canWrite.value || isPublished.value)
 const step = ref(1)
 const loading = ref(false)
 const working = ref(false)
@@ -145,7 +151,13 @@ const relationMaps = ref<RelationDraft[]>([])
 const preview = ref<MappingPreview | null>(null)
 const previewSignature = ref('')
 function draftSignature(): string {
-  return JSON.stringify([selectedDatasourceId.value, selectedOntologyId.value, serializeDraft()])
+  return JSON.stringify([
+    selectedDatasourceId.value,
+    selectedOntologyId.value,
+    metadataRevision.value,
+    sampleLimit.value,
+    serializeDraft(),
+  ])
 }
 const draftRevision = ref<MappingRevision | null>(null)
 const publishedRevision = ref<MappingRevision | null>(null)
@@ -154,8 +166,41 @@ const samplePreview = ref<S['PreviewResponse'] | null>(null)
 const selectedSampleTable = ref<string | null>(null)
 const sampleLimit = ref<number>(20)
 const namespace = ref('')
-const viewMode = ref<'graph' | 'table'>('graph')
+const viewMode = ref<'graph' | 'table'>('table')
 const showAi = ref(false)
+const selectionLoading = ref(false)
+const selectionFailed = ref(false)
+const previewInvalidated = ref(false)
+const savedContentSignature = ref('')
+const hasUnsavedChanges = computed(
+  () => savedContentSignature.value !== JSON.stringify(serializeDraft()),
+)
+const navigationDirty = computed(
+  () =>
+    !readOnly.value &&
+    !selectionLoading.value &&
+    !selectionFailed.value &&
+    (selectedMapping.value
+      ? hasUnsavedChanges.value
+      : !!mappingName.value.trim() ||
+        !!selectedOntologyId.value ||
+        entityMaps.value.length > 0 ||
+        relationMaps.value.length > 0),
+)
+function confirmDiscard(): boolean {
+  return !navigationDirty.value || typeof window === 'undefined' || window.confirm(t('ui.unsaved'))
+}
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (!navigationDirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+onBeforeRouteLeave(() => confirmDiscard())
+const focusedField = ref('')
+const fieldRows = new Map<string, HTMLElement>()
+const relationRows = new Map<number, HTMLElement>()
+let datasourceGeneration = 0
+let ontologyGeneration = 0
 let selectionController: AbortController | undefined
 let assetController: AbortController | undefined
 let lifecycleController: AbortController | undefined
@@ -207,6 +252,7 @@ const resultErrorCount = computed(() => {
   )
 })
 const canSaveDraft = computed(() => {
+  if (readOnly.value) return false
   if (!mappingName.value.trim() || !selectedOntologyId.value || entityMaps.value.length === 0)
     return false
   const entitiesComplete = entityMaps.value.every((map) => {
@@ -287,7 +333,9 @@ const canPublish = computed(() =>
     currentPreviewIsClean.value,
   ),
 )
-const canRun = computed(() => Boolean(selectedDatasourceId.value && publishedRevision.value))
+const canRun = computed(() =>
+  Boolean(canWrite.value && selectedDatasourceId.value && publishedRevision.value),
+)
 const savedRevisionLabel = computed(() =>
   selectedMapping.value?.status === 'PUBLISHED'
     ? `rev.${selectedMapping.value.current_revision}`
@@ -347,8 +395,32 @@ function refTableOptions() {
   }))
 }
 function invalidatePreview(): void {
+  if (preview.value) previewInvalidated.value = true
   preview.value = null
   samplePreview.value = null
+}
+function fieldKey(map: EntityDraft, attribute: string): string {
+  return `${map.localId}:${attribute}`
+}
+async function correctField(type: string, table: string, attribute: string): Promise<void> {
+  const map = entityMaps.value.find((item) => item.entity_type === type && item.table === table)
+  if (!map) return
+  focusedField.value = fieldKey(map, attribute)
+  step.value = 3
+  viewMode.value = 'table'
+  await nextTick()
+  const row = fieldRows.get(focusedField.value)
+  row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  row?.querySelector<HTMLElement>('input, [tabindex="0"]')?.focus()
+}
+async function correctRelation(type: string, table: string): Promise<void> {
+  const map = relationMaps.value.find((item) => item.relation_type === type && item.table === table)
+  if (!map) return
+  step.value = 3
+  await nextTick()
+  const row = relationRows.get(map.localId)
+  row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  row?.focus()
 }
 function setEntityTable(map: EntityDraft, value: string | null): void {
   const parsed = tableParts(value ?? '')
@@ -503,7 +575,7 @@ function recordOf(value: unknown): Record<string, unknown> {
 function textOf(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback
 }
-function normalizeEntityMap(value: unknown): EntityDraft {
+function normalizeEntityMap(value: unknown, enrich = true): EntityDraft {
   const row = recordOf(value)
   const maps = Array.isArray(row.field_maps) ? row.field_maps : []
   const fields = maps.map((item): FieldMap => {
@@ -512,13 +584,17 @@ function normalizeEntityMap(value: unknown): EntityDraft {
       target_attr: textOf(field.target_attr),
       source_field: textOf(field.source_field),
       transform: (field.transform ?? 'IDENTITY') as TransformKind,
-      transform_params: (field.transform_params ?? null) as Record<string, unknown> | null,
+      transform_params: field.transform_params
+        ? (JSON.parse(JSON.stringify(field.transform_params)) as Record<string, unknown>)
+        : null,
       null_policy: (field.null_policy ?? 'NULLABLE') as NullPolicy,
       default_value: typeof field.default_value === 'string' ? field.default_value : null,
     }
   })
   const name = textOf(row.entity_type)
-  const properties = entityTypes.value.find((item) => item.name === name)?.data_props ?? []
+  const properties = enrich
+    ? (entityTypes.value.find((item) => item.name === name)?.data_props ?? [])
+    : []
   for (const property of properties)
     if (!fields.some((item) => item.target_attr === property.name))
       fields.push(newFieldMap(property))
@@ -605,6 +681,7 @@ function parseCandidates(value: unknown): EndpointCandidate[] {
 }
 
 async function loadInitial(): Promise<void> {
+  lifecycleController?.abort()
   loading.value = true
   lifecycleController = new AbortController()
   loadError.value = ''
@@ -618,6 +695,7 @@ async function loadInitial(): Promise<void> {
         entityTypesApi.list({}, signal),
         relationsApi.list({}, signal),
       ])
+    if (signal.aborted) return
     mappings.value = mappingItems
     datasources.value = datasourceItems
     ontologies.value = ontologyItems
@@ -627,9 +705,9 @@ async function loadInitial(): Promise<void> {
     if (!signal.aborted && mappingItems.some((item) => item.id === requested))
       await selectMapping(requested)
   } catch (error: unknown) {
-    if (!isCanceled(error)) loadError.value = describeError(error)
+    if (!signal.aborted && !isCanceled(error)) loadError.value = describeError(error)
   } finally {
-    loading.value = false
+    if (!signal.aborted) loading.value = false
   }
 }
 async function loadOntologyAssets(ontologyId: number, signal: AbortSignal): Promise<void> {
@@ -658,6 +736,15 @@ async function loadOntologyAssets(ontologyId: number, signal: AbortSignal): Prom
   }
 }
 async function chooseOntology(value: number | null): Promise<void> {
+  if (readOnly.value) return
+  if (
+    value !== selectedOntologyId.value &&
+    (entityMaps.value.length || relationMaps.value.length) &&
+    !confirmDiscard()
+  )
+    return
+  const generation = ++ontologyGeneration
+  assetController?.abort()
   selectedOntologyId.value = value
   entityMaps.value = []
   relationMaps.value = []
@@ -673,14 +760,24 @@ async function chooseOntology(value: number | null): Promise<void> {
   try {
     await loadOntologyAssets(value, lifecycleController?.signal ?? new AbortController().signal)
   } catch (error: unknown) {
-    if (!isCanceled(error)) actionError.value = describeError(error)
+    if (generation === ontologyGeneration && !isCanceled(error))
+      actionError.value = describeError(error)
   }
 }
 function newMapping(): void {
+  if (!confirmDiscard()) return
+  resetMapping()
+}
+function resetMapping(): void {
   selectionGeneration += 1
+  ontologyGeneration++
   working.value = false
   selectionController?.abort()
   assetController?.abort()
+  selectionLoading.value = false
+  selectionFailed.value = false
+  showAi.value = false
+  previewInvalidated.value = false
   selectedMappingId.value = null
   mappingName.value = ''
   selectedOntologyId.value = null
@@ -700,7 +797,7 @@ function newMapping(): void {
 }
 async function removeMapping(): Promise<void> {
   const mapping = selectedMapping.value
-  if (!mapping || mapping.status === 'PUBLISHED' || working.value) return
+  if (!canWrite.value || !mapping || mapping.status === 'PUBLISHED' || working.value) return
   const generation = selectionGeneration
   working.value = true
   actionError.value = ''
@@ -709,7 +806,7 @@ async function removeMapping(): Promise<void> {
     await mappingsApi.remove(mapping)
     if (generation !== selectionGeneration) return
     mappings.value = mappings.value.filter((item) => item.id !== mapping.id)
-    newMapping()
+    resetMapping()
     notice.value = t('dataAccess.mapping.deleted', { name: mapping.name })
   } catch (error: unknown) {
     if (generation === selectionGeneration && !isCanceled(error))
@@ -719,17 +816,26 @@ async function removeMapping(): Promise<void> {
   }
 }
 async function selectMapping(value: number | null): Promise<void> {
+  if (!confirmDiscard()) return
   if (!value) {
-    newMapping()
+    resetMapping()
     return
   }
   selectionGeneration += 1
+  ontologyGeneration++
   working.value = false
   selectionController?.abort()
   assetController?.abort()
   const controller = new AbortController()
   selectionController = controller
   selectedMappingId.value = value
+  selectionLoading.value = true
+  selectionFailed.value = false
+  showAi.value = false
+  previewInvalidated.value = false
+  entityTypes.value = []
+  relationTypes.value = []
+  ontologyRefs.value = []
   actionError.value = ''
   notice.value = ''
   preview.value = null
@@ -745,25 +851,36 @@ async function selectMapping(value: number | null): Promise<void> {
     mappings.value = mappings.value.map((mapping) => (mapping.id === value ? item : mapping))
     mappingName.value = item.name
     selectedOntologyId.value = item.ontology_id
-    await loadOntologyAssets(item.ontology_id, controller.signal)
+    // Published correspondence is read only from the frozen mapping revision.
+    // Current upstream resources may contain newer fields and must not enrich it.
+    if (item.status !== 'PUBLISHED') await loadOntologyAssets(item.ontology_id, controller.signal)
     if (controller.signal.aborted || selectedMappingId.value !== value) return
     const revision =
       item.status === 'PUBLISHED'
         ? await mappingsApi.published(item.id, controller.signal)
         : await mappingsApi.draft(item.id, controller.signal)
     if (controller.signal.aborted || selectedMappingId.value !== value) return
+    if (item.status === 'PUBLISHED' && !revision) throw { code: 'KG.REVISION_NOT_FOUND' }
     if (item.status === 'PUBLISHED') publishedRevision.value = revision
     else draftRevision.value = revision
     if (revision) {
       mappings.value = mappings.value.map((mapping) =>
         mapping.id === value ? { ...mapping, edit_revision: revision.edit_revision } : mapping,
       )
-      entityMaps.value = revision.entity_maps.map(normalizeEntityMap)
+      entityMaps.value = revision.entity_maps.map((map) =>
+        normalizeEntityMap(map, item.status !== 'PUBLISHED'),
+      )
       relationMaps.value = revision.rel_maps.map(normalizeRelationMap)
+      savedContentSignature.value = JSON.stringify(serializeDraft())
     }
     step.value = item.status === 'PUBLISHED' ? 5 : 3
   } catch (error: unknown) {
-    if (!controller.signal.aborted && !isCanceled(error)) actionError.value = describeError(error)
+    if (!controller.signal.aborted && !isCanceled(error)) {
+      actionError.value = describeError(error)
+      selectionFailed.value = true
+    }
+  } finally {
+    if (!controller.signal.aborted) selectionLoading.value = false
   }
 }
 
@@ -771,6 +888,7 @@ function copyPublishedMapping(): void {
   const mapping = selectedMapping.value
   if (
     !mapping ||
+    !canWrite.value ||
     mapping.status !== 'PUBLISHED' ||
     working.value ||
     loading.value ||
@@ -788,6 +906,24 @@ function copyPublishedMapping(): void {
   actionError.value = ''
   notice.value = t('dataAccess.mapping.copiedDraft')
   step.value = 1
+  const generation = selectionGeneration
+  void loadOntologyAssets(
+    mapping.ontology_id,
+    lifecycleController?.signal ?? new AbortController().signal,
+  )
+    .then(() => {
+      if (generation !== selectionGeneration) return
+      // A new draft may target the current ontology. Add its new properties only
+      // after the user has explicitly copied out of the frozen revision.
+      entityMaps.value = entityMaps.value.map((map) => ({
+        ...normalizeEntityMap(map),
+        localId: map.localId,
+      }))
+    })
+    .catch((error: unknown) => {
+      if (generation === selectionGeneration && !isCanceled(error))
+        actionError.value = describeError(error)
+    })
 }
 function serializeDraft(): S['MappingRevisionCreate'] {
   return {
@@ -854,6 +990,7 @@ async function saveDraft(): Promise<MappingRevision | null> {
   }
   const generation = selectionGeneration
   const draft = serializeDraft()
+  const contentSignature = JSON.stringify(draft)
   let mapping = selectedMapping.value
   let revision: MappingRevision | null
   if (!mapping) {
@@ -893,11 +1030,12 @@ async function saveDraft(): Promise<MappingRevision | null> {
     item.id === mapping.id ? { ...item, edit_revision: revision.edit_revision } : item,
   )
   draftRevision.value = revision
+  savedContentSignature.value = contentSignature
   notice.value = t('dataAccess.mapping.draftSaved')
   return revision
 }
 async function handleSaveDraft(): Promise<void> {
-  if (working.value) return
+  if (readOnly.value || working.value) return
   const generation = selectionGeneration
   working.value = true
   actionError.value = ''
@@ -913,15 +1051,21 @@ async function handleSaveDraft(): Promise<void> {
 }
 async function loadLatestMetadata(datasourceId: number): Promise<void> {
   const generation = selectionGeneration
+  const sourceGeneration = datasourceGeneration
   const data = await metadataApi.latest(datasourceId, lifecycleController?.signal)
-  if (generation !== selectionGeneration || selectedDatasourceId.value !== datasourceId) return
+  if (
+    generation !== selectionGeneration ||
+    sourceGeneration !== datasourceGeneration ||
+    selectedDatasourceId.value !== datasourceId
+  )
+    return
   catalog.value = loadCatalog(data.catalog)
   metadataRevision.value = data.revision
   selectedSampleTable.value = null
   samplePreview.value = null
 }
 async function captureMetadata(): Promise<void> {
-  if (!selectedDatasourceId.value || working.value) return
+  if (!canWrite.value || !selectedDatasourceId.value || working.value) return
   const generation = selectionGeneration
   const datasourceId = selectedDatasourceId.value
   working.value = true
@@ -942,6 +1086,7 @@ async function captureMetadata(): Promise<void> {
 }
 async function chooseDatasource(value: number | null): Promise<void> {
   const generation = selectionGeneration
+  const sourceGeneration = ++datasourceGeneration
   selectedDatasourceId.value = value
   catalog.value = null
   metadataRevision.value = null
@@ -953,18 +1098,25 @@ async function chooseDatasource(value: number | null): Promise<void> {
   try {
     await loadLatestMetadata(value)
   } catch (error: unknown) {
-    if (generation === selectionGeneration && !isCanceled(error)) {
+    if (
+      generation === selectionGeneration &&
+      sourceGeneration === datasourceGeneration &&
+      !isCanceled(error)
+    ) {
       if (errorCode(error) === 'KG.RESOURCE_NOT_FOUND')
         notice.value = t('dataAccess.mapping.metadataMissing')
       else actionError.value = describeError(error)
     }
   } finally {
-    if (generation === selectionGeneration) working.value = false
+    if (generation === selectionGeneration && sourceGeneration === datasourceGeneration)
+      working.value = false
   }
 }
 async function fetchSamplePreview(): Promise<void> {
   if (!selectedDatasourceId.value || !selectedSampleTable.value || working.value) return
   const generation = selectionGeneration
+  const datasourceId = selectedDatasourceId.value
+  const sampleTable = selectedSampleTable.value
   working.value = true
   actionError.value = ''
   try {
@@ -979,7 +1131,12 @@ async function fetchSamplePreview(): Promise<void> {
       },
       lifecycleController?.signal,
     )
-    if (generation !== selectionGeneration) return
+    if (
+      generation !== selectionGeneration ||
+      datasourceId !== selectedDatasourceId.value ||
+      sampleTable !== selectedSampleTable.value
+    )
+      return
     samplePreview.value = result
   } catch (error: unknown) {
     if (generation === selectionGeneration && !isCanceled(error))
@@ -989,7 +1146,13 @@ async function fetchSamplePreview(): Promise<void> {
   }
 }
 async function runCompile(): Promise<void> {
-  if (!selectedDatasourceId.value || !canSaveDraft.value || working.value) return
+  if (
+    !canWrite.value ||
+    !selectedDatasourceId.value ||
+    (!isPublished.value && !canSaveDraft.value) ||
+    working.value
+  )
+    return
   const generation = selectionGeneration
   const datasourceId = selectedDatasourceId.value
   const signature = draftSignature()
@@ -1014,6 +1177,7 @@ async function runCompile(): Promise<void> {
     if (generation !== selectionGeneration || signature !== draftSignature()) return
     previewSignature.value = signature
     preview.value = result
+    previewInvalidated.value = false
     step.value = 4
   } catch (error: unknown) {
     if (generation === selectionGeneration && !isCanceled(error))
@@ -1034,6 +1198,7 @@ async function publishMapping(): Promise<void> {
     const saved = await saveDraft()
     if (
       !saved ||
+      !canWrite.value ||
       generation !== selectionGeneration ||
       signature !== draftSignature() ||
       !currentPreviewIsClean.value
@@ -1095,6 +1260,7 @@ function gotoStep(target: number): void {
 function nextStep(): void {
   if (step.value === 1 && selectedOntologyId.value && mappingName.value.trim()) step.value = 2
   else if (step.value === 2 && selectedDatasourceId.value && catalog.value) step.value = 3
+  else if (step.value === 3 && readOnly.value) step.value = 4
   else if (step.value === 3) void runCompile()
   else if (step.value === 4 && preview.value) step.value = 5
 }
@@ -1147,15 +1313,28 @@ function previewTitle(name: string, table: string) {
   return `${name} · ${table}`
 }
 watch(
-  [entityMaps, relationMaps, selectedDatasourceId, selectedOntologyId],
-  () => {
-    preview.value = null
-  },
+  [
+    entityMaps,
+    relationMaps,
+    selectedDatasourceId,
+    selectedOntologyId,
+    metadataRevision,
+    sampleLimit,
+  ],
+  invalidatePreview,
   { deep: true, flush: 'sync' },
 )
-onMounted(() => void loadInitial())
+watch(selectedSampleTable, () => {
+  samplePreview.value = null
+})
+onMounted(() => {
+  void loadInitial()
+  if (typeof window !== 'undefined') window.addEventListener('beforeunload', beforeUnload)
+})
 onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('beforeunload', beforeUnload)
   selectionGeneration += 1
+  ontologyGeneration++
   lifecycleController?.abort()
   selectionController?.abort()
   assetController?.abort()
@@ -1177,33 +1356,47 @@ onBeforeUnmount(() => {
           class="mapping-picker"
           @update:value="selectMapping"
         />
-        <n-button secondary :disabled="working" @click="newMapping">{{
+        <n-button type="primary" :disabled="!canWrite || working" @click="newMapping">{{
           t('dataAccess.mapping.newMapping')
         }}</n-button>
         <NButton
           v-if="selectedMapping?.status === 'PUBLISHED'"
-          :disabled="working || loading || publishedRevision?.mapping_id !== selectedMapping.id"
+          :disabled="
+            !canWrite || working || loading || publishedRevision?.mapping_id !== selectedMapping.id
+          "
           @click="copyPublishedMapping"
           >{{ t('dataAccess.mapping.copyDraft') }}</NButton
         >
         <n-button
-          v-if="selectedMapping && selectedMapping.status !== 'PUBLISHED'"
+          v-if="selectedMapping && !readOnly"
           :disabled="!canSaveDraft || working"
           :loading="working"
           @click="handleSaveDraft"
           >{{ t('dataAccess.mapping.saveDraft') }}</n-button
         >
-        <n-button v-if="selectedMapping && selectedDatasourceId" @click="showAi = true">{{
-          t('ai.mappingTitle')
-        }}</n-button>
+        <n-button
+          v-if="selectedMapping && selectedDatasourceId && !readOnly"
+          :disabled="working || hasUnsavedChanges"
+          :title="hasUnsavedChanges ? t('extractionUi.aiSaveFirst') : undefined"
+          @click="showAi = true"
+          >{{ t('ai.mappingTitle') }}</n-button
+        >
       </template>
     </PageHeader>
 
-    <n-alert v-if="loadError" type="error" :show-icon="true">{{ loadError }}</n-alert>
-    <n-alert v-if="actionError" type="error" :show-icon="true">{{ actionError }}</n-alert>
+    <n-alert v-if="loadError" type="error" :show-icon="true"
+      >{{ loadError }}<NButton @click="loadInitial">{{ t('extractionUi.retry') }}</NButton></n-alert
+    >
+    <NAlert v-if="!canWrite" type="info">{{ t('extractionUi.viewer') }}</NAlert>
+    <n-alert v-if="actionError" type="error" :show-icon="true"
+      >{{ actionError
+      }}<NButton v-if="selectionFailed" @click="selectMapping(selectedMappingId)">{{
+        t('extractionUi.retry')
+      }}</NButton></n-alert
+    >
     <n-alert v-if="notice" type="info" :show-icon="true">{{ notice }}</n-alert>
 
-    <n-spin :show="loading">
+    <n-spin :show="loading || selectionLoading" :aria-busy="loading || selectionLoading">
       <div class="wizard-shell">
         <div class="wizard-heading">
           <div class="wizard-title">
@@ -1215,10 +1408,7 @@ onBeforeUnmount(() => {
               :type="selectedMapping?.status === 'PUBLISHED' ? 'success' : 'warning'"
               >{{ savedRevisionLabel }}</n-tag
             >
-            <n-popconfirm
-              v-if="selectedMapping && selectedMapping.status !== 'PUBLISHED'"
-              @positive-click="removeMapping"
-            >
+            <n-popconfirm v-if="selectedMapping && !readOnly" @positive-click="removeMapping">
               <template #trigger>
                 <n-button
                   size="small"
@@ -1246,14 +1436,39 @@ onBeforeUnmount(() => {
               ><span>{{ t('dataAccess.mapping.steps.' + number) }}</span>
             </button>
           </div>
-          <div v-if="selectedOntology" class="ontology-version">
-            {{ t('dataAccess.mapping.ontology') }}: {{ resourceLabel(selectedOntology) }}
-            <span class="mono">{{ selectedOntology.current_revision }}</span>
-            <span v-if="selectedOntology.status === 'PUBLISHED'"
-              >· {{ t('dataAccess.mapping.publishedStatus') }}</span
+          <div class="object-context" aria-live="polite">
+            <span
+              >{{ t('dataAccess.mapping.ontology') }}:
+              {{
+                selectedOntology ? resourceLabel(selectedOntology) : (selectedOntologyId ?? '—')
+              }}</span
             >
-            <span v-else>· {{ t('dataAccess.mapping.ontologyNotPublished') }}</span>
+            <NTag :type="isPublished ? 'info' : 'default'">{{
+              isPublished
+                ? t('extractionUi.frozenVersion', {
+                    version: publishedRevision?.onto_version ?? '—',
+                  })
+                : t('extractionUi.workingVersion', {
+                    version: selectedOntology?.current_revision ?? '—',
+                  })
+            }}</NTag>
+            <span
+              >{{ t('tasks.datasource') }}:
+              {{
+                datasources.find((item) => item.id === selectedDatasourceId)?.name ??
+                t('dataAccess.mapping.unselected')
+              }}</span
+            >
+            <span v-if="metadataRevision !== null">{{
+              t('dataAccess.mapping.snapshotRevision', { revision: metadataRevision })
+            }}</span>
           </div>
+          <NAlert v-if="isPublished" type="info">{{
+            t('dataAccess.mapping.publishedImmutable')
+          }}</NAlert>
+          <NAlert v-if="previewInvalidated" type="warning">{{
+            t('extractionUi.previewInvalidated')
+          }}</NAlert>
         </div>
 
         <div v-if="step === 1" class="step-content">
@@ -1263,7 +1478,7 @@ onBeforeUnmount(() => {
                 ><span>{{ t('dataAccess.mapping.mappingName') }}</span
                 ><n-input
                   v-model:value="mappingName"
-                  :disabled="Boolean(selectedMapping)"
+                  :disabled="!canWrite || Boolean(selectedMapping)"
                   :placeholder="t('dataAccess.mapping.mappingNamePlaceholder')"
               /></label>
               <label class="field-group"
@@ -1272,28 +1487,36 @@ onBeforeUnmount(() => {
                   :value="selectedOntologyId"
                   :options="ontologies.map(ontologyOption)"
                   :placeholder="t('dataAccess.mapping.chooseOntology')"
-                  :disabled="Boolean(selectedMapping)"
+                  :disabled="!canWrite || Boolean(selectedMapping)"
                   filterable
                   @update:value="chooseOntology"
                 />
               </label>
             </div>
             <div
-              v-if="selectedOntologyId && !entityTypes.length && !relationTypes.length"
+              v-if="
+                selectedOntologyId && !isPublished && !entityTypes.length && !relationTypes.length
+              "
               class="inline-empty"
             >
               <n-empty :description="t('dataAccess.mapping.noOntologyResources')" size="small" />
             </div>
             <div v-else-if="selectedOntologyId" class="resource-summary">
               <span>{{
-                t('dataAccess.mapping.entityResources', { count: entityTypes.length })
+                t('dataAccess.mapping.entityResources', {
+                  count: isPublished ? entityMaps.length : entityTypes.length,
+                })
               }}</span>
               <span>{{
-                t('dataAccess.mapping.relationResources', { count: relationTypes.length })
+                t('dataAccess.mapping.relationResources', {
+                  count: isPublished ? relationMaps.length : relationTypes.length,
+                })
               }}</span>
-              <span v-if="selectedOntology?.status !== 'PUBLISHED'" class="warning-copy">{{
-                t('dataAccess.mapping.publishOntologyFirst')
-              }}</span>
+              <span
+                v-if="!isPublished && selectedOntology?.status !== 'PUBLISHED'"
+                class="warning-copy"
+                >{{ t('dataAccess.mapping.publishOntologyFirst') }}</span
+              >
             </div>
           </n-card>
           <n-empty
@@ -1328,7 +1551,7 @@ onBeforeUnmount(() => {
                   }}</span>
                   <n-button
                     size="small"
-                    :disabled="!selectedDatasourceId || working"
+                    :disabled="!canWrite || !selectedDatasourceId || working"
                     :loading="working"
                     @click="captureMetadata"
                     >{{ t('dataAccess.mapping.captureMetadata') }}</n-button
@@ -1391,6 +1614,10 @@ onBeforeUnmount(() => {
           </n-card>
         </div>
 
+        <div v-else-if="step === 3 && isPublished" class="step-content">
+          <FrozenMapping v-if="publishedRevision" :revision="publishedRevision" />
+          <NEmpty v-else :description="t('extractionUi.frozenUnavailable')" />
+        </div>
         <div v-else-if="step === 3" class="step-content">
           <n-card size="small">
             <template #header
@@ -1468,37 +1695,6 @@ onBeforeUnmount(() => {
               :description="t('dataAccess.mapping.noEntityMaps')"
               size="small"
             />
-            <div v-else-if="viewMode === 'table'" class="table-scroll overview-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>{{ t('dataAccess.mapping.targetType') }}</th>
-                    <th>{{ t('dataAccess.mapping.sourceTable') }}</th>
-                    <th>{{ t('dataAccess.mapping.mappingProgress') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="map in entityMaps" :key="'overview-' + map.localId">
-                    <td>{{ map.entity_type }}</td>
-                    <td>
-                      {{
-                        map.table
-                          ? map.schema + '.' + map.table
-                          : t('dataAccess.mapping.unselected')
-                      }}
-                    </td>
-                    <td>
-                      {{
-                        t('dataAccess.mapping.configuredFields', {
-                          ready: map.field_maps.filter((field) => field.source_field).length,
-                          total: map.field_maps.length,
-                        })
-                      }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </n-card>
 
           <n-card :title="t('dataAccess.mapping.entityMappings')" size="small">
@@ -1524,7 +1720,7 @@ onBeforeUnmount(() => {
                     }}</span>
                   </div>
                   <n-button
-                    v-if="selectedMapping?.status !== 'PUBLISHED'"
+                    v-if="!readOnly"
                     size="small"
                     quaternary
                     type="error"
@@ -1540,7 +1736,7 @@ onBeforeUnmount(() => {
                       data-testid="entity-type"
                       :aria-label="t('dataAccess.mapping.targetType')"
                       :options="entityOptions"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       @update:value="(value) => changeEntityType(map, value)"
                   /></label>
                   <label class="field-group"
@@ -1550,7 +1746,7 @@ onBeforeUnmount(() => {
                       data-testid="entity-source-table"
                       :aria-label="t('dataAccess.mapping.sourceTable')"
                       :options="tableOptions"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       :placeholder="t('dataAccess.mapping.chooseTable')"
                       filterable
                       @update:value="(value) => setEntityTable(map, value)"
@@ -1568,7 +1764,23 @@ onBeforeUnmount(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="field in map.field_maps" :key="field.target_attr">
+                      <tr
+                        v-for="field in map.field_maps"
+                        :key="field.target_attr"
+                        :ref="
+                          (element) => {
+                            if (element)
+                              fieldRows.set(
+                                fieldKey(map, field.target_attr),
+                                element as HTMLElement,
+                              )
+                            else fieldRows.delete(fieldKey(map, field.target_attr))
+                          }
+                        "
+                        :class="{
+                          'focused-field': focusedField === fieldKey(map, field.target_attr),
+                        }"
+                      >
                         <td>
                           <span class="mono">{{ field.target_attr }}</span>
                         </td>
@@ -1578,7 +1790,7 @@ onBeforeUnmount(() => {
                             data-testid="field-source"
                             :aria-label="`${t('dataAccess.mapping.sourceField')} ${field.target_attr}`"
                             :options="fieldOptions(map.schema, map.table)"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.chooseSourceField')"
                             clearable
                             filterable
@@ -1589,7 +1801,7 @@ onBeforeUnmount(() => {
                           <n-select
                             v-model:value="field.transform"
                             :options="transformOptions()"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             @update:value="invalidatePreview"
                           />
                         </td>
@@ -1597,7 +1809,7 @@ onBeforeUnmount(() => {
                           <n-select
                             v-model:value="field.null_policy"
                             :options="nullPolicyOptions()"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             @update:value="invalidatePreview"
                           />
                         </td>
@@ -1605,7 +1817,7 @@ onBeforeUnmount(() => {
                           <n-input
                             v-if="field.null_policy === 'DEFAULT'"
                             v-model:value="field.default_value"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.defaultValue')"
                             @update:value="invalidatePreview"
                           /><span v-else class="muted-copy">{{
@@ -1627,7 +1839,7 @@ onBeforeUnmount(() => {
                       :checked="map.key_fields.includes(column.name)"
                       data-testid="entity-row-key"
                       :aria-label="`${t('dataAccess.mapping.keyFields')} ${column.name}`"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       @change="
                         toggleKeyField(
                           map,
@@ -1651,7 +1863,7 @@ onBeforeUnmount(() => {
                         .filter((column) => /INT/i.test(column.type))
                         .map((column) => ({ label: column.name, value: column.name }))
                     "
-                    :disabled="selectedMapping?.status === 'PUBLISHED'"
+                    :disabled="readOnly || working"
                     clearable
                     :aria-label="t('dataAccess.mapping.incrementalField')"
                   />
@@ -1668,7 +1880,7 @@ onBeforeUnmount(() => {
                       :checked="map.match_keys.includes(column.name)"
                       data-testid="entity-match-key"
                       :aria-label="`${t('dataAccess.mapping.matchKeys')} ${column.name}`"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       @change="
                         toggleMatchKey(
                           map,
@@ -1684,12 +1896,12 @@ onBeforeUnmount(() => {
                 <FusionPolicyEditor
                   v-if="map.match_keys.length"
                   v-model="map.fusion"
-                  :disabled="selectedMapping?.status === 'PUBLISHED'"
+                  :disabled="readOnly || working"
                 />
               </section>
             </div>
             <n-button
-              v-if="entityTypes.length && selectedMapping?.status !== 'PUBLISHED'"
+              v-if="entityTypes.length && !readOnly"
               secondary
               :disabled="!entityTypes.length"
               data-testid="add-entity-mapping"
@@ -1708,14 +1920,21 @@ onBeforeUnmount(() => {
               <section
                 v-for="map in relationMaps"
                 :key="map.localId"
+                :ref="
+                  (element) => {
+                    if (element) relationRows.set(map.localId, element as HTMLElement)
+                    else relationRows.delete(map.localId)
+                  }
+                "
                 class="editor-card relation-editor"
+                tabindex="-1"
               >
                 <div class="editor-heading">
                   <strong>{{
                     t('dataAccess.mapping.relationTarget', { name: map.relation_type })
                   }}</strong
                   ><n-button
-                    v-if="selectedMapping?.status !== 'PUBLISHED'"
+                    v-if="!readOnly"
                     size="small"
                     quaternary
                     type="error"
@@ -1729,7 +1948,7 @@ onBeforeUnmount(() => {
                     ><n-select
                       :value="map.relation_type"
                       :options="relationOptions"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       @update:value="(value) => changeRelationType(map, value)"
                   /></label>
                   <label class="field-group"
@@ -1737,7 +1956,7 @@ onBeforeUnmount(() => {
                     ><n-select
                       :value="map.mode"
                       :options="relationModeOptions()"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       @update:value="
                         (value) => {
                           map.mode = value
@@ -1750,7 +1969,7 @@ onBeforeUnmount(() => {
                     ><n-select
                       :value="tableValue(map.schema, map.table)"
                       :options="tableOptions"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       :placeholder="t('dataAccess.mapping.chooseTable')"
                       filterable
                       @update:value="(value) => setRelationTable(map, value)"
@@ -1762,7 +1981,7 @@ onBeforeUnmount(() => {
                     ><n-select
                       v-model:value="map.fk_field"
                       :options="relationFieldOptions(map)"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       :placeholder="t('dataAccess.mapping.chooseSourceField')"
                       clearable
                       @update:value="invalidatePreview"
@@ -1776,7 +1995,7 @@ onBeforeUnmount(() => {
                       ><n-select
                         v-model:value="map.source_field"
                         :options="relationFieldOptions(map)"
-                        :disabled="selectedMapping?.status === 'PUBLISHED'"
+                        :disabled="readOnly || working"
                         :placeholder="t('dataAccess.mapping.chooseSourceField')"
                         clearable
                         @update:value="invalidatePreview" /></label
@@ -1785,14 +2004,14 @@ onBeforeUnmount(() => {
                       ><n-select
                         v-model:value="map.source_ref_table"
                         :options="refTableOptions()"
-                        :disabled="selectedMapping?.status === 'PUBLISHED'"
+                        :disabled="readOnly || working"
                         filterable
                         @update:value="invalidatePreview" /></label
                     ><label class="field-group"
                       ><span>{{ t('dataAccess.mapping.referencedField') }}</span
                       ><n-input
                         v-model:value="map.source_ref_field"
-                        :disabled="selectedMapping?.status === 'PUBLISHED'"
+                        :disabled="readOnly || working"
                         @update:value="invalidatePreview"
                     /></label>
                     <details class="poly-editor">
@@ -1801,7 +2020,7 @@ onBeforeUnmount(() => {
                         ><span>{{ t('dataAccess.mapping.discriminator') }}</span
                         ><n-input
                           v-model:value="map.source_type_field"
-                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :disabled="readOnly || working"
                           :placeholder="t('dataAccess.mapping.discriminatorHint')"
                           @update:value="invalidatePreview"
                       /></label>
@@ -1810,7 +2029,7 @@ onBeforeUnmount(() => {
                         ><n-select
                           v-model:value="map.source_via_table"
                           :options="refTableOptions()"
-                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :disabled="readOnly || working"
                           clearable
                           filterable
                           @update:value="invalidatePreview" /></label
@@ -1818,9 +2037,7 @@ onBeforeUnmount(() => {
                         ><span>{{ t('dataAccess.mapping.viaField') }}</span
                         ><n-input
                           v-model:value="map.source_via_field"
-                          :disabled="
-                            selectedMapping?.status === 'PUBLISHED' || !map.source_via_table
-                          "
+                          :disabled="readOnly || working || !map.source_via_table"
                           @update:value="invalidatePreview"
                       /></label>
                       <div class="candidate-rows">
@@ -1833,28 +2050,28 @@ onBeforeUnmount(() => {
                           <n-select
                             v-model:value="candidate.field"
                             :options="candidateFieldOptions(map, map.source_via_table)"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.endpointField')"
                             @update:value="invalidatePreview"
                           />
                           <n-select
                             v-model:value="candidate.ref_table"
                             :options="refTableOptions()"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.referencedTable')"
                             filterable
                             @update:value="invalidatePreview"
                           />
                           <n-input
                             v-model:value="candidate.when"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.whenValue')"
                             @update:value="invalidatePreview"
                           />
                           <n-button
                             quaternary
                             size="tiny"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             @click="removeEndpointCandidate(map, 'source', candidateIndex)"
                             >{{ t('dataAccess.mapping.removeCandidate') }}</n-button
                           >
@@ -1862,7 +2079,7 @@ onBeforeUnmount(() => {
                         <n-button
                           size="tiny"
                           secondary
-                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :disabled="readOnly || working"
                           @click="addEndpointCandidate(map, 'source')"
                           >{{ t('dataAccess.mapping.addCandidate') }}</n-button
                         >
@@ -1876,7 +2093,7 @@ onBeforeUnmount(() => {
                       ><n-select
                         v-model:value="map.target_field"
                         :options="relationFieldOptions(map)"
-                        :disabled="selectedMapping?.status === 'PUBLISHED'"
+                        :disabled="readOnly || working"
                         :placeholder="t('dataAccess.mapping.chooseSourceField')"
                         clearable
                         @update:value="invalidatePreview" /></label
@@ -1885,14 +2102,14 @@ onBeforeUnmount(() => {
                       ><n-select
                         v-model:value="map.target_ref_table"
                         :options="refTableOptions()"
-                        :disabled="selectedMapping?.status === 'PUBLISHED'"
+                        :disabled="readOnly || working"
                         filterable
                         @update:value="invalidatePreview" /></label
                     ><label class="field-group"
                       ><span>{{ t('dataAccess.mapping.referencedField') }}</span
                       ><n-input
                         v-model:value="map.target_ref_field"
-                        :disabled="selectedMapping?.status === 'PUBLISHED'"
+                        :disabled="readOnly || working"
                         @update:value="invalidatePreview"
                     /></label>
                     <details class="poly-editor">
@@ -1901,7 +2118,7 @@ onBeforeUnmount(() => {
                         ><span>{{ t('dataAccess.mapping.discriminator') }}</span
                         ><n-input
                           v-model:value="map.target_type_field"
-                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :disabled="readOnly || working"
                           :placeholder="t('dataAccess.mapping.discriminatorHint')"
                           @update:value="invalidatePreview"
                       /></label>
@@ -1910,7 +2127,7 @@ onBeforeUnmount(() => {
                         ><n-select
                           v-model:value="map.target_via_table"
                           :options="refTableOptions()"
-                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :disabled="readOnly || working"
                           clearable
                           filterable
                           @update:value="invalidatePreview" /></label
@@ -1918,9 +2135,7 @@ onBeforeUnmount(() => {
                         ><span>{{ t('dataAccess.mapping.viaField') }}</span
                         ><n-input
                           v-model:value="map.target_via_field"
-                          :disabled="
-                            selectedMapping?.status === 'PUBLISHED' || !map.target_via_table
-                          "
+                          :disabled="readOnly || working || !map.target_via_table"
                           @update:value="invalidatePreview"
                       /></label>
                       <div class="candidate-rows">
@@ -1933,28 +2148,28 @@ onBeforeUnmount(() => {
                           <n-select
                             v-model:value="candidate.field"
                             :options="candidateFieldOptions(map, map.target_via_table)"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.endpointField')"
                             @update:value="invalidatePreview"
                           />
                           <n-select
                             v-model:value="candidate.ref_table"
                             :options="refTableOptions()"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.referencedTable')"
                             filterable
                             @update:value="invalidatePreview"
                           />
                           <n-input
                             v-model:value="candidate.when"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             :placeholder="t('dataAccess.mapping.whenValue')"
                             @update:value="invalidatePreview"
                           />
                           <n-button
                             quaternary
                             size="tiny"
-                            :disabled="selectedMapping?.status === 'PUBLISHED'"
+                            :disabled="readOnly || working"
                             @click="removeEndpointCandidate(map, 'target', candidateIndex)"
                             >{{ t('dataAccess.mapping.removeCandidate') }}</n-button
                           >
@@ -1962,7 +2177,7 @@ onBeforeUnmount(() => {
                         <n-button
                           size="tiny"
                           secondary
-                          :disabled="selectedMapping?.status === 'PUBLISHED'"
+                          :disabled="readOnly || working"
                           @click="addEndpointCandidate(map, 'target')"
                           >{{ t('dataAccess.mapping.addCandidate') }}</n-button
                         >
@@ -1985,7 +2200,7 @@ onBeforeUnmount(() => {
                     ><n-select
                       :value="attribute.field || null"
                       :options="relationFieldOptions(map)"
-                      :disabled="selectedMapping?.status === 'PUBLISHED'"
+                      :disabled="readOnly || working"
                       :placeholder="t('dataAccess.mapping.chooseSourceField')"
                       clearable
                       @update:value="
@@ -1999,7 +2214,7 @@ onBeforeUnmount(() => {
               </section>
             </div>
             <n-button
-              v-if="relationTypes.length && selectedMapping?.status !== 'PUBLISHED'"
+              v-if="relationTypes.length && !readOnly"
               secondary
               :disabled="relationMaps.length >= relationTypes.length"
               @click="addRelationMap"
@@ -2020,7 +2235,9 @@ onBeforeUnmount(() => {
                 ><n-input-number v-model:value="sampleLimit" :min="1" :max="100" /></label
               ><n-button
                 type="primary"
-                :disabled="!canSaveDraft || !selectedDatasourceId || working"
+                :disabled="
+                  !canWrite || (!isPublished && !canSaveDraft) || !selectedDatasourceId || working
+                "
                 :loading="working"
                 @click="runCompile"
                 >{{ t('dataAccess.mapping.runPreview') }}</n-button
@@ -2088,7 +2305,16 @@ onBeforeUnmount(() => {
                       :class="'cell-' + cell.status"
                       :title="statusLabel(cell.status)"
                     >
-                      {{ displayCell(cell.value) }}
+                      <NButton
+                        v-if="cell.status === 'error' && !readOnly"
+                        text
+                        type="error"
+                        @click="correctField(entity.entity_type, entity.table, cell.target_attr)"
+                      >
+                        {{ displayCell(cell.value) }} ·
+                        {{ t('extractionUi.correctField', { field: cell.target_attr }) }}
+                      </NButton>
+                      <span v-else>{{ displayCell(cell.value) }}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -2102,6 +2328,15 @@ onBeforeUnmount(() => {
                 ><span>{{
                   recordOf(item).field ?? recordOf(item).level ?? entity.entity_type
                 }}</span>
+                <NButton
+                  v-if="!readOnly && recordOf(item).field"
+                  text
+                  type="primary"
+                  @click="
+                    correctField(entity.entity_type, entity.table, String(recordOf(item).field))
+                  "
+                  >{{ t('extractionUi.correctField', { field: recordOf(item).field }) }}</NButton
+                >
               </div>
             </div>
           </n-card>
@@ -2121,13 +2356,32 @@ onBeforeUnmount(() => {
               ><span v-if="relation.errors.length" class="warning-copy">{{
                 t('dataAccess.mapping.previewErrorCount', { count: relation.errors.length })
               }}</span>
+            </div>
+            <div v-if="relation.errors.length" class="error-list">
+              <div v-for="(issue, index) in relation.errors" :key="index">
+                <NTag type="error">{{
+                  recordOf(issue).code ?? t('dataAccess.mapping.fieldError')
+                }}</NTag>
+                <span>{{ recordOf(issue).field ?? relation.relation_type }}</span>
+                <NButton
+                  v-if="!readOnly"
+                  text
+                  type="primary"
+                  @click="correctRelation(relation.relation_type, relation.table)"
+                  >{{
+                    t('extractionUi.correctField', {
+                      field: recordOf(issue).field ?? relation.relation_type,
+                    })
+                  }}</NButton
+                >
+              </div>
             </div></n-card
           >
         </div>
 
         <div v-else class="step-content">
           <n-card :title="t('dataAccess.mapping.publishAndRun')" size="small">
-            <div v-if="selectedMapping?.status !== 'PUBLISHED'" class="publish-panel">
+            <div v-if="!isPublished" class="publish-panel">
               <p>{{ t('dataAccess.mapping.publishHint') }}</p>
               <div class="publish-facts">
                 <span>{{
@@ -2165,12 +2419,11 @@ onBeforeUnmount(() => {
                 >{{ t('dataAccess.mapping.publishMapping') }}</n-button
               >
             </div>
-            <div v-else class="publish-panel">
+            <div v-else-if="publishedRevision" class="publish-panel">
               <n-alert type="success" :show-icon="true">{{
                 t('dataAccess.mapping.mappingPublished', {
-                  revision: publishedRevision?.revision ?? selectedMapping.current_revision,
-                  ontologyRevision:
-                    publishedRevision?.onto_version ?? selectedOntology?.current_revision ?? 0,
+                  revision: publishedRevision.revision,
+                  ontologyRevision: publishedRevision.onto_version,
                 })
               }}</n-alert>
               <p>{{ t('dataAccess.mapping.publishedImmutable') }}</p>
@@ -2222,13 +2475,15 @@ onBeforeUnmount(() => {
               :disabled="
                 (step === 1 && (!selectedOntologyId || !mappingName.trim())) ||
                 (step === 2 && (!selectedDatasourceId || !catalog)) ||
-                (step === 3 && (!canSaveDraft || working)) ||
+                (step === 3 && ((!readOnly && !canSaveDraft) || working)) ||
                 (step === 4 && !preview)
               "
               :loading="step === 3 && working"
               @click="nextStep"
               >{{
-                step === 3 ? t('dataAccess.mapping.saveAndPreview') : t('dataAccess.mapping.next')
+                step === 3 && !readOnly
+                  ? t('dataAccess.mapping.saveAndPreview')
+                  : t('dataAccess.mapping.next')
               }}</n-button
             >
           </div>
@@ -2236,10 +2491,13 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- AI 映射建议（V-EX-07）：逐条人工确认后并入映射草稿 -->
-      <n-drawer v-model:show="showAi" :width="480" placement="right">
+      <n-drawer v-model:show="showAi" :width="'min(560px, 100vw)'" placement="right">
         <n-drawer-content :title="t('ai.mappingTitle')" closable>
-          <AiSuggestions
-            v-if="selectedMappingId !== null && selectedDatasourceId !== null"
+          <ExtractionSuggestions
+            v-if="
+              showAi && !readOnly && selectedMappingId !== null && selectedDatasourceId !== null
+            "
+            :key="`${selectedMappingId}:${selectedDatasourceId}`"
             kind="MAPPING_SUGGEST"
             :title="t('ai.mappingTitle')"
             :target-id="selectedMappingId"
@@ -2261,13 +2519,15 @@ onBeforeUnmount(() => {
   width: 260px;
 }
 .wizard-shell {
-  overflow: hidden;
+  min-width: 0;
   border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  background: var(--bg-base);
-  box-shadow: var(--elev-2);
+  border-radius: var(--radius-medium);
+  background: var(--bg-surface);
 }
 .wizard-heading {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: grid;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-5);
@@ -2733,6 +2993,10 @@ onBeforeUnmount(() => {
   color: var(--s-pass);
 }
 .wizard-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  background: var(--bg-surface);
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
   border-top: 1px solid var(--border-subtle);
@@ -2745,6 +3009,9 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .step-content,
   .wizard-heading {
+    position: sticky;
+    top: 0;
+    z-index: 3;
     padding: var(--space-3);
   }
   .form-grid,
@@ -2764,5 +3031,26 @@ onBeforeUnmount(() => {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+.object-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  color: var(--text-secondary);
+}
+.focused-field {
+  outline: 2px solid var(--pri);
+  outline-offset: -2px;
+}
+.wizard-step {
+  min-height: 36px;
+}
+.wizard-step:focus-visible {
+  outline: 2px solid var(--pri);
+  outline-offset: 3px;
+}
+.mapping-page :deep(.n-card) {
+  box-shadow: none;
 }
 </style>

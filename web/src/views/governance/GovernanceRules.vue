@@ -24,8 +24,11 @@ import { useI18n } from 'vue-i18n'
 import type { Rule, RuleInput, RuleTest } from '@/api/governance'
 import { rulesApi } from '@/api/governance'
 import PageHeader from '@/components/PageHeader.vue'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useGovernanceAccess } from '@/views/governance/composables/useGovernanceAccess'
 
 const { t, te, locale } = useI18n()
+const { canWrite } = useGovernanceAccess()
 const items = ref<Rule[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -43,6 +46,16 @@ const tab = ref('metadata')
 const form = ref<RuleInput>(emptyRule())
 let readController: AbortController | undefined
 let alive = true
+let testGeneration = 0
+
+watch(
+  form,
+  () => {
+    testGeneration++
+    testResult.value = null
+  },
+  { deep: true, flush: 'sync' },
+)
 
 function emptyRule(): RuleInput {
   return {
@@ -80,6 +93,13 @@ function payload(rule: Rule): RuleInput {
 
 const dirty = computed(
   () => !saved.value || JSON.stringify(form.value) !== JSON.stringify(payload(saved.value)),
+)
+// Saving keeps the editor open for testing; compare with the accepted revision after each save.
+const editorVisible = useDraftGuard(
+  showEditor,
+  () =>
+    JSON.stringify(form.value) !== JSON.stringify(saved.value ? payload(saved.value) : emptyRule()),
+  () => canWrite.value,
 )
 const needsExamples = computed(() => form.value.language === 'SHACL')
 const expressionValid = computed(() => {
@@ -159,7 +179,7 @@ const columns = computed(() => [
           disabled: busy.value,
           onClick: () => editRule(row),
         },
-        { default: () => t('common.edit') },
+        { default: () => t(canWrite.value ? 'common.edit' : 'governanceUi.details') },
       ),
   },
 ])
@@ -187,6 +207,7 @@ async function load() {
   readController = controller
   loading.value = true
   error.value = ''
+  items.value = []
   try {
     const result = await rulesApi.list(
       {
@@ -218,6 +239,7 @@ onBeforeUnmount(() => {
 })
 
 function createRule() {
+  if (!canWrite.value || busy.value) return
   saved.value = null
   form.value = emptyRule()
   testResult.value = null
@@ -228,6 +250,7 @@ function createRule() {
 }
 
 async function editRule(rule: Rule) {
+  if (busy.value) return
   busy.value = true
   error.value = ''
   notice.value = ''
@@ -247,7 +270,7 @@ async function editRule(rule: Rule) {
 }
 
 async function save() {
-  if (busy.value || !canSave.value) return
+  if (!canWrite.value || busy.value || !canSave.value) return
   busy.value = true
   error.value = ''
   notice.value = ''
@@ -280,18 +303,22 @@ async function runTest() {
   error.value = ''
   notice.value = ''
   testResult.value = null
+  const generation = ++testGeneration
+  const rule = saved.value
   try {
-    const result = await rulesApi.test(saved.value)
-    if (alive) testResult.value = result
+    const result = await rulesApi.test(rule)
+    if (alive && generation === testGeneration && saved.value?.id === rule.id && !dirty.value) {
+      testResult.value = result
+    }
   } catch (err) {
-    if (alive) error.value = errorText(err)
+    if (alive && generation === testGeneration) error.value = errorText(err)
   } finally {
     if (alive) busy.value = false
   }
 }
 
 async function remove() {
-  if (!saved.value || busy.value) return
+  if (!canWrite.value || !saved.value || busy.value) return
   busy.value = true
   error.value = ''
   try {
@@ -312,12 +339,16 @@ async function remove() {
   <section class="rules-page">
     <PageHeader :title="t('page.governanceRules')" :description="t('rules.intro')">
       <template #actions>
-        <NButton type="primary" :disabled="busy" @click="createRule">{{
+        <NButton type="primary" :disabled="busy || !canWrite" @click="createRule">{{
           t('rules.create')
         }}</NButton>
       </template>
     </PageHeader>
-    <NAlert v-if="error && !showEditor" type="error" role="alert">{{ error }}</NAlert>
+    <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.rulesReadOnly') }}</NAlert>
+    <NAlert v-if="error && !showEditor" type="error" role="alert"
+      >{{ error }}
+      <NButton size="small" @click="load">{{ t('governanceUi.retry') }}</NButton>
+    </NAlert>
     <NAlert v-if="notice && !showEditor" type="success" role="status">{{ notice }}</NAlert>
     <NCard size="small">
       <NSpace class="filters" align="center">
@@ -343,7 +374,9 @@ async function remove() {
         /></NFormItem>
         <NButton :loading="loading" @click="load">{{ t('graph.refresh') }}</NButton>
       </NSpace>
+      <p v-if="loading" role="status">{{ t('common.loading') }}</p>
       <NDataTable
+        v-else-if="!error"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -353,7 +386,7 @@ async function remove() {
         <template #empty><NEmpty :description="t('rules.empty')" /></template>
       </NDataTable>
       <NPagination
-        v-if="total > 20"
+        v-if="!loading && !error && total > 20"
         v-model:page="page"
         :page-size="20"
         :item-count="total"
@@ -361,7 +394,7 @@ async function remove() {
       />
     </NCard>
     <NDrawer
-      v-model:show="showEditor"
+      v-model:show="editorVisible"
       width="min(800px, 100vw)"
       :auto-focus="true"
       :mask-closable="false"
@@ -369,14 +402,16 @@ async function remove() {
     >
       <NDrawerContent :title="saved ? t('rules.edit') : t('rules.create')" :closable="!busy">
         <NSpace vertical size="large">
+          <NAlert v-if="!canWrite" type="info">{{ t('governanceUi.rulesReadOnly') }}</NAlert>
           <NAlert v-if="error" type="error" role="alert">{{ error }}</NAlert>
           <NAlert v-if="notice" type="success" role="status">{{ notice }}</NAlert>
           <NAlert v-if="saved" type="info">{{
             t('rules.editingRevision', { revision: saved.revision })
           }}</NAlert>
-          <NForm label-placement="top" :disabled="busy">
+          <NForm label-placement="top" :disabled="busy || !canWrite">
             <NTabs v-model:value="tab" type="line" animated>
               <NTabPane name="metadata" :tab="t('rules.metadata')">
+                <h3 class="section-title">{{ t('governanceUi.ruleDefinition') }}</h3>
                 <div class="form-grid">
                   <NFormItem :label="t('rules.identifier')" required
                     ><NInput
@@ -405,6 +440,7 @@ async function remove() {
                     ><NSelect v-model:value="form.severity" :options="severityOptions"
                   /></NFormItem>
                 </div>
+                <h3 class="section-title">{{ t('governanceUi.ruleTarget') }}</h3>
                 <NFormItem :label="t('rules.reference')" required
                   ><NInput
                     v-model:value="form.source_reference"
@@ -418,6 +454,7 @@ async function remove() {
                 /></NFormItem>
               </NTabPane>
               <NTabPane name="expression" :tab="t('rules.expressionTab')">
+                <h3 class="section-title">{{ t('governanceUi.ruleLogic') }}</h3>
                 <div class="form-grid">
                   <NFormItem :label="t('rules.language')"
                     ><NSelect v-model:value="form.language" :options="languageOptions"
@@ -511,22 +548,22 @@ async function remove() {
         </NSpace>
         <template #footer>
           <NSpace justify="space-between" class="editor-footer">
-            <NPopconfirm v-if="saved" :disabled="busy" @positive-click="remove">
+            <NPopconfirm v-if="saved" :disabled="busy || !canWrite" @positive-click="remove">
               <template #trigger
-                ><NButton type="error" secondary :disabled="busy">{{
+                ><NButton type="error" secondary :disabled="busy || !canWrite">{{
                   t('common.delete')
                 }}</NButton></template
               >
               {{ t('rules.confirmDelete', { identifier: saved.identifier }) }}
             </NPopconfirm>
             <NSpace
-              ><NButton :disabled="busy" @click="showEditor = false">{{
+              ><NButton :disabled="busy" @click="editorVisible = false">{{
                 t('common.cancel')
               }}</NButton
               ><NButton
                 type="primary"
                 :loading="busy"
-                :disabled="!canSave || !dirty"
+                :disabled="busy || !canWrite || !canSave || !dirty"
                 @click="save"
                 >{{ t('common.save') }}</NButton
               ></NSpace
@@ -542,6 +579,17 @@ async function remove() {
 .rules-page {
   display: grid;
   gap: 16px;
+}
+.rules-page :deep(.n-card) {
+  background: var(--bg-surface);
+  border-color: var(--border);
+  border-radius: var(--radius-medium);
+}
+.section-title {
+  border-left: 3px solid var(--pri);
+  padding-left: 12px;
+  margin: 8px 0 20px;
+  font-size: 15px;
 }
 h2 {
   margin: 0;

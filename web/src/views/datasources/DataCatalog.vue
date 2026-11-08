@@ -12,6 +12,10 @@ import type {
 import { datasourcesApi, metadataApi } from '@/api/datasources'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 
 type DiffKind = 'added' | 'removed' | 'modified'
 
@@ -333,6 +337,14 @@ function chooseTable(schemaName: string, tableName: string) {
   selectedColumn.value = ''
   expandedSchemas.value = new Set([...expandedSchemas.value, schemaName])
   void loadReferences(tableName)
+  void router.replace({
+    query: {
+      ...route.query,
+      datasourceId: datasourceId.value,
+      schema: schemaName,
+      table: tableName,
+    },
+  })
 }
 
 function toggleSchema(schemaName: string) {
@@ -404,6 +416,21 @@ async function loadDatasourceCatalog(id: number) {
     ])
     if (!alive || generation !== catalogGeneration) return
     snapshots.value = snapshotItems
+    const requestedSnapshot = Number(route.query.snapshot)
+    if (
+      snapshotItems.some((item) => item.id === requestedSnapshot) &&
+      requestedSnapshot !== latestResult?.id
+    ) {
+      const result = await metadataApi.get(requestedSnapshot)
+      if (!alive || generation !== catalogGeneration) return
+      snapshot.value = result
+      snapshotId.value = result.id
+      hasSnapshot.value = true
+      catalog.value = parseCatalog(result.catalog)
+      diff.value = parseDiff(result.diff)
+      selectInitialTable()
+      return
+    }
     if (!latestResult) {
       snapshotId.value = snapshotItems[0]?.id ?? null
       if (snapshotItems[0]) {
@@ -432,6 +459,7 @@ async function loadDatasourceCatalog(id: number) {
 }
 
 async function captureMetadata() {
+  if (!canWrite.value) return
   if (datasourceId.value === null) return
   const id = datasourceId.value
   const generation = ++catalogGeneration
@@ -505,6 +533,7 @@ function openPreview() {
       datasourceId: String(datasourceId.value),
       schema: activeSchema.value.name,
       table: activeTable.value.name,
+      snapshot: snapshotId.value,
     },
   })
 }
@@ -555,7 +584,7 @@ onBeforeUnmount(() => {
           </select>
           <button
             class="button button-primary"
-            :disabled="datasourceId === null || capturing || loadingCatalog"
+            :disabled="!canWrite || datasourceId === null || capturing || loadingCatalog"
             @click="captureMetadata"
           >
             {{

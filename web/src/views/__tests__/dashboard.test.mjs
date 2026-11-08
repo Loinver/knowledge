@@ -189,14 +189,7 @@ test('one cancellable aggregate request renders totals beyond the list page limi
   pending.resolve({ data: populated })
   await settle()
   assert.equal(calls.length, 1)
-  assert.deepEqual(byClass(root, 'pipe-count').map(textContent), [
-    '57',
-    '58',
-    '59',
-    '60',
-    '64',
-    '61',
-  ])
+  assert.deepEqual(byClass(root, 'pipe-count').map(textContent), ['60', '61', '205', '64', '61'])
   assert.deepEqual(byClass(root, 'asset-value').map(textContent), [
     '57',
     '58',
@@ -214,15 +207,12 @@ test('one cancellable aggregate request renders totals beyond the list page limi
   assert.deepEqual(
     byClass(root, 'pipe-step').map((element) => element.props.href),
     [
-      'entity-types',
-      'relation-types',
-      'domains',
-      'ontologies',
       'designer',
-      'governance-rules',
       'datasources',
+      'mapping-wizard',
+      'extraction-runs',
       'graph-browse',
-      'graph-evidence',
+      'graph-reports',
     ],
   )
 })
@@ -262,15 +252,15 @@ for (const locale of ['zh-CN', 'en-US']) {
     requests[1].resolve({ data: empty })
     await settle()
     assert.deepEqual(byClass(root, 'metric').map(textContent), ['0', '0'])
-    assert.equal(byClass(root, 'pipe-step').length, 9)
-    assert.equal(byClass(root, 'pipe-action').length, 3)
+    assert.equal(byClass(root, 'pipe-step').length, 6)
+    assert.equal(byClass(root, 'pipe-action').length, 1)
     for (const link of byClass(root, 'pipe-step')) {
       if (byClass(link, 'pipe-action').length) {
         assert.equal(byClass(link, 'empty').length, 0)
         assert.equal(byClass(link, 'pipe-count').length, 0)
       }
     }
-    assert.ok(textContent(root).includes(i18n.global.t('dashboard.noIssues')))
+    assert.ok(textContent(root).includes(i18n.global.t('appUi.noPending')))
     assert.ok(textContent(root).includes(i18n.global.t('dashboard.noCurrentGraph')))
     assert.doesNotMatch(textContent(root), /(?:dashboard|common)\.[A-Za-z]+/)
     if (locale === 'en-US') assert.doesNotMatch(textContent(root), /[\u4e00-\u9fff]/)

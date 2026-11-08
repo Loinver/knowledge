@@ -114,7 +114,7 @@ export async function compile(entry, stubs = {}, expose = '', transform = (s) =>
   return { mod, cleanup: () => delete globalThis[id] }
 }
 
-export async function mount(entry, stubs, expose, start = '/', transform) {
+export async function mount(entry, stubs, expose, start = '/', transform, role = 'EDITOR') {
   const built = await compile(entry, stubs, expose, transform)
   const router = createRouter({
     history: createMemoryHistory(),
@@ -131,11 +131,14 @@ export async function mount(entry, stubs, expose, start = '/', transform) {
       'en-US': JSON.parse(await readFile(path.join(root, 'web/src/locales/en-US.json'), 'utf8')),
     },
   })
+  // Business behavior fixtures run as an explicit editor; callers can supply VIEWER for restrictions.
+  const pinia = createPinia()
+  pinia.state.value.auth = { user: { id: 1, role, status: 'ACTIVE', username: 'test_actor' } }
   const app = renderer
     .createApp({ ...built.mod.default, render: () => null })
     .use(router)
     .use(i18n)
-    .use(createPinia())
+    .use(pinia)
   const vm = app.mount({})
   await settle()
   return {

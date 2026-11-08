@@ -35,7 +35,7 @@ async function setup(api = {}, start = '/?graph=1') {
     applicable: async (id) => template(id),
     ...api,
   }
-  return mount(
+  const ctx = await mount(
     'views/graph/GraphBrowse.vue',
     {
       '@/api/graph': {
@@ -47,9 +47,12 @@ async function setup(api = {}, start = '/?graph=1') {
         viewTemplateApi,
       },
     },
-    'templates,semanticFields,semanticConfig,semanticContext,configureSemantics,applyTemplate,saveTemplate,templateName,selectedTemplateId,legacyTemplate,templateError,savingTemplate,applyingTemplate,replayBounds,selectLayout',
+    'auth,templates,semanticFields,semanticConfig,semanticContext,configureSemantics,applyTemplate,saveTemplate,templateName,selectedTemplateId,legacyTemplate,templateError,savingTemplate,applyingTemplate,replayBounds,selectLayout',
     start,
   )
+  ctx.vm.auth.user = { role: 'EDITOR' }
+  await settle()
+  return ctx
 }
 
 test('late catalog/list responses cannot replace the active graph and abort on unmount', async () => {

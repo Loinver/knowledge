@@ -10,7 +10,7 @@ defineProps<{ title: string; subtitle?: string }>()
 
 <template>
   <header class="auth-heading">
-    <h2>{{ title }}</h2>
+    <h1>{{ title }}</h1>
     <p v-if="subtitle">{{ subtitle }}</p>
   </header>
 </template>
@@ -20,10 +20,10 @@ defineProps<{ title: string; subtitle?: string }>()
   margin-bottom: var(--space-5);
 }
 
-.auth-heading h2 {
+.auth-heading h1 {
   margin: 0 0 6px;
-  font-size: 19px;
-  font-weight: 500;
+  font-size: 24px;
+  font-weight: 600;
   line-height: 1.4;
 }
 

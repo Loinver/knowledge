@@ -24,6 +24,9 @@ const router = useRouter()
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 60vh;
+  min-height: 100dvh;
+  padding: 24px;
+  box-sizing: border-box;
+  background: var(--bg-base);
 }
 </style>

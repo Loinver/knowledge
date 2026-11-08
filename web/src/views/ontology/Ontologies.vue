@@ -22,6 +22,8 @@ import type { Ontology } from '@/api/ontology'
 import { ontologyApi } from '@/api/ontology'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * 本体库。
@@ -31,9 +33,13 @@ import { useApiError } from '@/composables/useApiError'
  * 存在但从未被任何页面调用，设计器空态却写着「或直接创建一个本体」。
  */
 
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const router = useRouter()
+let listGeneration = 0
+onBeforeUnmount(() => listGeneration++)
 
 const loading = ref(false)
 const items = ref<Ontology[]>([])
@@ -150,14 +156,14 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
           { default: () => t('ontology.openDesigner') },
         ),
         // 草稿才能编辑/发布：发布即冻结，之后不可再改
-        row.status === 'DRAFT'
+        canWrite.value && row.status === 'DRAFT'
           ? h(
               NButton,
               { size: 'small', quaternary: true, onClick: () => openEdit(row) },
               { default: () => t('common.edit') },
             )
           : null,
-        row.status === 'DRAFT'
+        canWrite.value && row.status === 'DRAFT'
           ? h(
               NButton,
               {
@@ -184,7 +190,8 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
                   quaternary: true,
                   type: 'error',
                   loading: removingId.value === row.id,
-                  disabled: removingId.value !== null && removingId.value !== row.id,
+                  disabled:
+                    !canWrite.value || (removingId.value !== null && removingId.value !== row.id),
                 },
                 { default: () => t('common.delete') },
               ),
@@ -195,19 +202,24 @@ const columns = computed<DataTableColumns<Ontology>>(() => [
 ])
 
 async function loadList() {
+  const generation = ++listGeneration
   loading.value = true
   error.value = ''
   try {
-    items.value = await ontologyApi.list({ q: searchQuery.value })
+    const next = await ontologyApi.list({ q: searchQuery.value })
+    if (generation === listGeneration) items.value = next
   } catch (err) {
-    items.value = []
-    error.value = toMessage(err)
+    if (generation === listGeneration) {
+      items.value = []
+      error.value = toMessage(err)
+    }
   } finally {
-    loading.value = false
+    if (generation === listGeneration) loading.value = false
   }
 }
 
 async function publish(row: Ontology) {
+  if (!canWrite.value) return
   if (publishingId.value !== null) return
   publishingId.value = row.id
   error.value = ''
@@ -224,6 +236,7 @@ async function publish(row: Ontology) {
 }
 
 async function remove(row: Ontology) {
+  if (!canWrite.value) return
   if (removingId.value !== null) return
   removingId.value = row.id
   error.value = ''
@@ -250,6 +263,7 @@ function emptyForm() {
 
 /** 打开抽屉即重置表单与校验态，避免上一轮报错残留。 */
 function openCreate() {
+  if (!canWrite.value) return
   creating.value = false
   editGeneration += 1
   detailReady.value = true
@@ -267,6 +281,7 @@ function openCreate() {
  * —— 本体建好之后标签与定义就再也改不了，与实体类型同一类缺口。
  */
 function openEdit(row: Ontology) {
+  if (!canWrite.value) return
   creating.value = false
   editGeneration += 1
   detailReady.value = false
@@ -322,6 +337,7 @@ onBeforeUnmount(() => {
 })
 
 async function handleSubmit() {
+  if (!canWrite.value) return
   if (!detailReady.value || creating.value) return
   const generation = editGeneration
   createError.value = ''
@@ -375,17 +391,24 @@ async function handleSubmit() {
 }
 
 onMounted(() => void loadList())
+
+const editorVisible = useDraftGuard(showCreate, () => formData.value)
 </script>
 
 <template>
   <section class="page">
     <PageHeader :title="t('page.ontologies')" :description="t('ontology.description')">
       <template #actions>
-        <NButton type="primary" @click="openCreate">{{ t('ontology.create') }}</NButton>
+        <NButton type="primary" :disabled="!canWrite" @click="openCreate">{{
+          t('ontology.create')
+        }}</NButton>
       </template>
     </PageHeader>
+    <NAlert v-if="!canWrite" type="info" class="alert">{{ t('ui.readonly') }}</NAlert>
 
-    <NAlert v-if="error" type="error" role="alert" class="feedback">{{ error }}</NAlert>
+    <NAlert v-if="error" type="error" role="alert" class="feedback"
+      >{{ error }} <NButton @click="loadList">{{ t('ui.retry') }}</NButton></NAlert
+    >
     <NAlert v-if="notice" type="success" role="status" class="feedback">{{ notice }}</NAlert>
 
     <div class="toolbar">
@@ -433,7 +456,7 @@ onMounted(() => void loadList())
     </NSpin>
 
     <NDrawer
-      v-model:show="showCreate"
+      v-model:show="editorVisible"
       :width="520"
       :mask-closable="!creating"
       :close-on-esc="!creating"
@@ -498,7 +521,7 @@ onMounted(() => void loadList())
         <p v-if="mode === 'create'" class="create-hint">{{ t('ontology.createHint') }}</p>
         <template #footer>
           <div class="drawer-actions">
-            <NButton :disabled="creating" @click="showCreate = false">
+            <NButton :disabled="creating" @click="editorVisible = false">
               {{ t('common.cancel') }}
             </NButton>
             <NButton

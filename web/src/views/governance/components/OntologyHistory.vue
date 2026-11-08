@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .detail {
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border);
   margin-top: 20px;
   padding-top: 12px;
 }
@@ -276,7 +276,9 @@ onBeforeUnmount(() => {
 pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: var(--bg-secondary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-medium);
   padding: 12px;
 }
 p,

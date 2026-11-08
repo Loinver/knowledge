@@ -18,11 +18,14 @@ import {
 } from 'naive-ui'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 import type { DatasourceBrief, DatasourceCreate, TestConnectionResponse } from '@/api/datasources'
 import { datasourcesApi } from '@/api/datasources'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
 
 interface SourceForm {
   name: string
@@ -37,6 +40,8 @@ interface SourceForm {
 const { t } = useI18n()
 const { toMessage } = useApiError()
 const message = useMessage()
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const items = ref<DatasourceBrief[]>([])
 const query = ref('')
 const kindFilter = ref<string | null>(null)
@@ -113,6 +118,7 @@ function resetForm() {
 }
 
 function openCreate() {
+  if (!canWrite.value) return
   resetForm()
   showCreate.value = true
 }
@@ -150,6 +156,7 @@ async function load() {
 }
 
 async function testConnection() {
+  if (testing.value || saving.value) return
   if (!validateForm()) return
   testing.value = true
   testResult.value = null
@@ -163,6 +170,7 @@ async function testConnection() {
 }
 
 async function createSource() {
+  if (!canWrite.value || saving.value || testing.value) return
   if (!validateForm()) return
   saving.value = true
   try {
@@ -179,6 +187,7 @@ async function createSource() {
 }
 
 async function removeSource(item: DatasourceBrief) {
+  if (!canWrite.value) return
   try {
     await datasourcesApi.remove(item.id)
     message.success(t('dataAccess.sources.states.deleted'))
@@ -197,6 +206,7 @@ const editError = ref('')
 const testingId = ref<number | null>(null)
 
 function openEdit(item: DatasourceBrief) {
+  if (!canWrite.value) return
   editingId.value = item.id
   editForm.value = { name: item.name, credential: '' }
   editError.value = ''
@@ -205,6 +215,7 @@ function openEdit(item: DatasourceBrief) {
 
 /** 用库里保存的参数与凭据测试连接；后端会把结果写回 status。 */
 async function testStored(item: DatasourceBrief) {
+  if (!canWrite.value || testingId.value !== null) return
   testingId.value = item.id
   error.value = ''
   try {
@@ -220,6 +231,7 @@ async function testStored(item: DatasourceBrief) {
 }
 
 async function saveEdit() {
+  if (!canWrite.value || savingEdit.value) return
   if (editingId.value === null) return
   if (!editForm.value.name.trim()) {
     editError.value = t('dataAccess.sources.validation.name')
@@ -248,6 +260,10 @@ onBeforeUnmount(() => {
   alive = false
   controller?.abort()
 })
+
+const createVisible = useDraftGuard(showCreate, () => form.value)
+
+const editVisible = useDraftGuard(showEdit, () => editForm.value)
 </script>
 
 <template>
@@ -257,7 +273,7 @@ onBeforeUnmount(() => {
       :description="t('dataAccess.sources.description')"
     >
       <template #actions>
-        <NButton type="primary" @click="openCreate">{{
+        <NButton type="primary" :disabled="!canWrite" @click="openCreate">{{
           t('dataAccess.sources.actions.create')
         }}</NButton>
       </template>
@@ -279,7 +295,10 @@ onBeforeUnmount(() => {
     </div>
 
     <NAlert type="info" :show-icon="false">{{ t('dataAccess.sources.security') }}</NAlert>
-    <NAlert v-if="error" type="error" closable @close="error = ''">{{ error }}</NAlert>
+    <NAlert v-if="!canWrite" type="info">{{ t('ui.readonly') }}</NAlert>
+    <NAlert v-if="error" type="error"
+      >{{ error }} <NButton @click="load">{{ t('ui.retry') }}</NButton></NAlert
+    >
 
     <NCard class="list-card" :title="t('dataAccess.sources.listTitle')">
       <template #header-extra>
@@ -307,7 +326,7 @@ onBeforeUnmount(() => {
       </template>
       <NSpin :show="loading">
         <NEmpty
-          v-if="!loading && visible.length === 0"
+          v-if="!loading && !error && visible.length === 0"
           :description="
             query || kindFilter || statusFilter
               ? t('dataAccess.sources.states.noMatch')
@@ -317,7 +336,8 @@ onBeforeUnmount(() => {
         <div v-else class="source-list">
           <article v-for="item in visible" :key="item.id" class="source-row">
             <div>
-              <strong>{{ item.name }}</strong
+              <RouterLink :to="{ name: 'data-catalog', query: { datasourceId: item.id } }"
+                ><strong>{{ item.name }}</strong></RouterLink
               ><small>{{ item.id }}</small>
             </div>
             <NTag size="small">{{ displayKind(item.kind) }}</NTag>
@@ -329,32 +349,39 @@ onBeforeUnmount(() => {
                   : t('dataAccess.sources.status.disconnected')
               }}
             </NTag>
-            <NPopconfirm @positive-click="removeSource(item)">
-              <template #trigger
-                ><NButton quaternary type="error" size="small">{{
-                  t('dataAccess.sources.actions.delete')
-                }}</NButton></template
+            <div class="row-actions">
+              <RouterLink :to="{ name: 'data-catalog', query: { datasourceId: item.id } }"
+                ><NButton size="small" type="primary" secondary>{{
+                  t('page.dataCatalog')
+                }}</NButton></RouterLink
               >
-              {{ t('dataAccess.sources.deleteConfirm', { name: item.name }) }}
-            </NPopconfirm>
-            <NButton
-              size="small"
-              :loading="testingId === item.id"
-              :disabled="testingId !== null && testingId !== item.id"
-              @click="testStored(item)"
-            >
-              {{ t('dataAccess.sources.actions.testStored') }}
-            </NButton>
-            <NButton size="small" @click="openEdit(item)">
-              {{ t('dataAccess.sources.actions.edit') }}
-            </NButton>
+              <NPopconfirm v-if="canWrite" @positive-click="removeSource(item)">
+                <template #trigger
+                  ><NButton quaternary type="error" size="small">{{
+                    t('dataAccess.sources.actions.delete')
+                  }}</NButton></template
+                >
+                {{ t('dataAccess.sources.deleteConfirm', { name: item.name }) }}
+              </NPopconfirm>
+              <NButton
+                size="small"
+                :loading="testingId === item.id"
+                :disabled="!canWrite || (testingId !== null && testingId !== item.id)"
+                @click="testStored(item)"
+              >
+                {{ t('dataAccess.sources.actions.testStored') }}
+              </NButton>
+              <NButton size="small" :disabled="!canWrite" @click="openEdit(item)">
+                {{ t('dataAccess.sources.actions.edit') }}
+              </NButton>
+            </div>
           </article>
         </div>
       </NSpin>
     </NCard>
 
     <NModal
-      v-model:show="showEdit"
+      v-model:show="editVisible"
       preset="card"
       class="source-modal"
       :title="t('dataAccess.sources.editTitle')"
@@ -381,13 +408,13 @@ onBeforeUnmount(() => {
           <NButton type="primary" :loading="savingEdit" @click="saveEdit">{{
             t('common.save')
           }}</NButton>
-          <NButton @click="showEdit = false">{{ t('common.cancel') }}</NButton>
+          <NButton @click="editVisible = false">{{ t('common.cancel') }}</NButton>
         </NSpace>
       </template>
     </NModal>
 
     <NModal
-      v-model:show="showCreate"
+      v-model:show="createVisible"
       preset="card"
       class="source-modal"
       :title="t('dataAccess.sources.createTitle')"
@@ -499,7 +526,7 @@ onBeforeUnmount(() => {
 }
 .source-row {
   display: grid;
-  grid-template-columns: minmax(160px, 1.2fr) 110px minmax(180px, 2fr) 130px auto;
+  grid-template-columns: minmax(140px, 1fr) 90px minmax(120px, 1fr) 90px auto;
   gap: 12px;
   align-items: center;
   padding: 14px 0;
@@ -509,6 +536,14 @@ onBeforeUnmount(() => {
   display: flex;
   min-width: 0;
   flex-direction: column;
+}
+.source-row .row-actions {
+  flex-direction: row;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.source-row strong {
+  overflow-wrap: anywhere;
 }
 .source-row code {
   overflow: hidden;

@@ -25,16 +25,21 @@ const loading = ref(false)
  */
 const resetEnabled = ref(false)
 const configLoaded = ref(false)
+const configError = ref('')
 
-onMounted(async () => {
+async function loadConfig() {
+  configLoaded.value = false
+  configError.value = ''
   try {
     resetEnabled.value = (await authApi.config()).password_reset_enabled
-  } catch {
+  } catch (cause) {
     resetEnabled.value = false
+    configError.value = toMessage(cause)
   } finally {
     configLoaded.value = true
   }
-})
+}
+onMounted(loadConfig)
 
 const rules = computed<FormRules>(() => ({
   email: [
@@ -44,13 +49,14 @@ const rules = computed<FormRules>(() => ({
 }))
 
 async function submit() {
-  if (!resetEnabled.value) return
+  if (!resetEnabled.value || loading.value) return
   error.value = ''
   try {
     await formRef.value?.validate()
   } catch {
     return
   }
+  if (loading.value || sent.value) return
   loading.value = true
   try {
     const result = await authApi.forgotPassword(model.value.email)
@@ -73,8 +79,15 @@ async function submit() {
 
 <template>
   <NForm ref="formRef" :model="model" :rules="rules" label-placement="top" @submit.prevent="submit">
-    <AuthHeading :title="t('auth.forgotTitle')" :subtitle="t('auth.forgotHint')" />
-    <NAlert v-if="configLoaded && !resetEnabled" type="info" role="status" class="form-alert">
+    <AuthHeading
+      :title="t('auth.forgotTitle')"
+      :subtitle="resetEnabled ? t('auth.forgotHint') : undefined"
+    />
+    <p v-if="!configLoaded" role="status">{{ t('common.loading') }}</p>
+    <NAlert v-else-if="configError" type="error" class="form-alert"
+      >{{ configError }} <NButton @click="loadConfig">{{ t('ui.retry') }}</NButton></NAlert
+    >
+    <NAlert v-else-if="!resetEnabled" type="info" role="status" class="form-alert">
       {{ t('auth.resetUnavailable') }}
     </NAlert>
     <template v-else-if="configLoaded">
@@ -85,7 +98,7 @@ async function submit() {
       <NFormItem :label="t('auth.email')" path="email">
         <NInput v-model:value="model.email" autocomplete="email" @keyup.enter="submit" />
       </NFormItem>
-      <NButton type="primary" block attr-type="submit" :loading="loading">
+      <NButton type="primary" block attr-type="submit" :loading="loading" :disabled="sent">
         {{ t('auth.sendResetLink') }}
       </NButton>
     </template>

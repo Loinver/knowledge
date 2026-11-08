@@ -16,7 +16,7 @@ import {
   NTag,
   useMessage,
 } from 'naive-ui'
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -24,6 +24,7 @@ import type { AuthUser, Role, UserStatus } from '@/api/auth'
 import { authApi } from '@/api/auth'
 import PageHeader from '@/components/PageHeader.vue'
 import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
@@ -42,6 +43,8 @@ const roleFilter = ref<Role | null>(null)
 const statusFilter = ref<UserStatus | null>(null)
 const loading = ref(false)
 const error = ref('')
+let listGeneration = 0
+onBeforeUnmount(() => listGeneration++)
 
 const editing = ref<AuthUser | null>(null)
 const showEdit = computed({
@@ -65,6 +68,16 @@ const createForm = ref({
   role: 'EDITOR' as Role,
 })
 const createFormRef = ref<FormInst | null>(null)
+const editVisible = useDraftGuard(
+  showEdit,
+  () => editForm.value,
+  () => auth.isAdmin,
+)
+const createVisible = useDraftGuard(
+  showCreate,
+  () => createForm.value,
+  () => auth.isAdmin,
+)
 
 /** 与注册页同一套账号规则，文案复用 auth.rules.*，避免两处口径漂移。 */
 const createRules = computed<FormRules>(() => ({
@@ -88,6 +101,7 @@ const createRules = computed<FormRules>(() => ({
 }))
 
 function openCreate() {
+  if (!auth.isAdmin) return
   createForm.value = {
     username: '',
     email: '',
@@ -101,6 +115,7 @@ function openCreate() {
 }
 
 async function submitCreate() {
+  if (!auth.isAdmin || creating.value) return
   createError.value = ''
   try {
     await createFormRef.value?.validate()
@@ -142,6 +157,7 @@ const statusOptions = computed(() =>
 )
 
 async function load() {
+  const generation = ++listGeneration
   loading.value = true
   error.value = ''
   try {
@@ -152,13 +168,14 @@ async function load() {
       page: page.value,
       page_size: pageSize,
     })
+    if (generation !== listGeneration) return
     items.value = result.items
     total.value = result.total
     if (!items.value.length && page.value > 1) page.value--
   } catch (err) {
-    error.value = toMessage(err)
+    if (generation === listGeneration) error.value = toMessage(err)
   } finally {
-    loading.value = false
+    if (generation === listGeneration) loading.value = false
   }
 }
 
@@ -169,11 +186,13 @@ function search() {
 }
 
 function openEdit(user: AuthUser) {
+  if (!auth.isAdmin) return
   editing.value = user
   editForm.value = { role: user.role, status: user.status }
 }
 
 async function save() {
+  if (!auth.isAdmin || saving.value) return
   if (!editing.value) return
   saving.value = true
   try {
@@ -202,6 +221,7 @@ const showResetLink = computed({
 })
 
 async function issueResetLink(user: AuthUser) {
+  if (!auth.isAdmin) return
   resetIssuing.value = user.id
   try {
     const issued = await authApi.issuePasswordReset(user.id)
@@ -288,7 +308,7 @@ onMounted(load)
   <section>
     <PageHeader :title="t('page.systemUsers')" :description="t('system.usersHint')">
       <template #actions>
-        <NButton type="primary" @click="openCreate">
+        <NButton type="primary" :disabled="!auth.isAdmin" @click="openCreate">
           {{ t('system.createUser') }}
         </NButton>
       </template>
@@ -339,7 +359,11 @@ onMounted(load)
         </NFormItem>
         <NButton :loading="loading" @click="load">{{ t('graph.refresh') }}</NButton>
       </NSpace>
+      <NAlert v-if="error" type="error"
+        >{{ error }} <NButton @click="load">{{ t('ui.retry') }}</NButton></NAlert
+      >
       <NDataTable
+        v-else
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -347,7 +371,7 @@ onMounted(load)
         :scroll-x="720"
       >
         <template #empty>
-          <NEmpty :description="error || t('common.empty')" />
+          <NEmpty :description="t('common.empty')" />
         </template>
       </NDataTable>
       <NPagination
@@ -361,11 +385,13 @@ onMounted(load)
     </NCard>
 
     <NModal
-      v-model:show="showEdit"
+      v-model:show="editVisible"
       preset="card"
       :title="t('system.editUser')"
       class="edit-modal"
       :mask-closable="!saving"
+      :close-on-esc="!saving"
+      :closable="!saving"
     >
       <NFormItem :label="t('auth.username')">{{ editing?.username }}</NFormItem>
       <NFormItem :label="t('account.role')">
@@ -376,7 +402,9 @@ onMounted(load)
       </NFormItem>
       <template #footer>
         <NSpace justify="end">
-          <NButton :disabled="saving" @click="editing = null">{{ t('common.cancel') }}</NButton>
+          <NButton :disabled="saving" @click="editVisible = false">{{
+            t('common.cancel')
+          }}</NButton>
           <NButton type="primary" :loading="saving" @click="save">{{ t('common.save') }}</NButton>
         </NSpace>
       </template>
@@ -405,11 +433,13 @@ onMounted(load)
     </NModal>
 
     <NModal
-      v-model:show="showCreate"
+      v-model:show="createVisible"
       preset="card"
       :title="t('system.createUser')"
       class="edit-modal"
       :mask-closable="!creating"
+      :close-on-esc="!creating"
+      :closable="!creating"
     >
       <NAlert v-if="createError" type="error" role="alert" class="modal-alert">
         {{ createError }}
@@ -448,7 +478,7 @@ onMounted(load)
       </NForm>
       <template #footer>
         <NSpace justify="end">
-          <NButton :disabled="creating" @click="showCreate = false">
+          <NButton :disabled="creating" @click="createVisible = false">
             {{ t('common.cancel') }}
           </NButton>
           <NButton type="primary" :loading="creating" @click="submitCreate">

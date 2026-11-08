@@ -146,7 +146,7 @@ with sqlite3.connect(sys.argv[1]) as conn:
   await expect(evidence).not.toContainText('unmapped-secret')
   await evidence.screenshot({ path: testInfo.outputPath('fusion-evidence-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.locator('.mobile-backdrop').click({ position: { x: 350, y: 300 } })
+  await expect(page.locator('.app-sider')).toHaveClass(/n-layout-sider--collapsed/)
   await evidence.scrollIntoViewIfNeeded()
   expect((await evidence.boundingBox())!.width).toBeLessThanOrEqual(390)
   const candidates = evidence.locator('.candidate-scroll')
