@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = ""
     llm_timeout_seconds: float = Field(default=30.0, ge=1)
+    # Independent embedding capability. Unconfigured means unavailable, never
+    # simulated. Changing endpoint/model/version invalidates old semantic indexes.
+    embedding_base_url: str = ""
+    embedding_api_key: str = ""
+    embedding_model: str = ""
+    embedding_version: str = "1"
+    embedding_timeout_seconds: float = Field(default=30.0, ge=1, le=120)
+    knowledge_workers_enabled: bool = True
 
     # 前置反向代理的层数。0 表示直连，忽略 X-Forwarded-For，
     # 否则客户端可以伪造来源地址绕过限流并污染审计。

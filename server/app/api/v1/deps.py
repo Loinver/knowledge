@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 from fastapi import Depends, Request, Response
@@ -90,6 +91,8 @@ def _is_read_only_operation(method: str, path: str) -> bool:
     if method != "POST":
         return False
     if path in _READ_ONLY_POST_PATHS:
+        return True
+    if re.fullmatch(r"/api/v1/knowledge-bases/[1-9][0-9]*/(?:search|answer)", path):
         return True
     return path.startswith("/api/v1/governance/rules/") and path.endswith("/test")
 

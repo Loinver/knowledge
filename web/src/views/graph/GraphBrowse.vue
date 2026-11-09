@@ -43,6 +43,7 @@ import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
 import { LAYOUTS } from '@/views/graph/components/graphLayout'
 import { relationLabels as frozenRelationLabels } from '@/views/graph/components/graphPresentation'
 import { edgeKey, entityName, mergeNeighborhoods } from '@/views/graph/components/graphWorkspace'
+import KnowledgeGraphReferences from '@/views/graph/components/KnowledgeGraphReferences.vue'
 import {
   hasSemanticConfig,
   nodeTime,
@@ -54,6 +55,12 @@ const { t, locale } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
+const knowledgeReturn = computed(() =>
+  typeof route.query.kbReturn === 'string' &&
+  /^\/knowledge-bases\/[1-9]\d*\/search(?:\?|$)/.test(route.query.kbReturn)
+    ? route.query.kbReturn
+    : null,
+)
 const auth = useAuthStore()
 const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const center = computed(() => (typeof route.query.center === 'string' ? route.query.center : ''))
@@ -897,6 +904,9 @@ function onExport(kind: string) {
           ></template
         >
         <template #actions>
+          <RouterLink v-if="knowledgeReturn" :to="knowledgeReturn">{{
+            t('kb.backToSearch')
+          }}</RouterLink>
           <NButton size="small" @click="showHistory = true">{{ t('graph.history') }}</NButton>
           <RouterLink :to="{ name: 'graph-entities', query: { graph: data?.graph_revision_id } }">{{
             t('page.graphEntities')
@@ -1093,6 +1103,12 @@ function onExport(kind: string) {
                 :description="t('graphUi.noEvidence')"
             /></template>
           </template>
+          <KnowledgeGraphReferences
+            v-if="data && (selectedNode || selectedEdge?.kind === 'DIRECT')"
+            :graph-id="data.graph_revision_id"
+            :entity-iri="selectedNode?.iri ?? selectedEdge!.subject"
+            :fact-id="selectedEdge?.kind === 'DIRECT' ? selectedEdge.id : undefined"
+          />
         </div>
       </aside>
     </div>

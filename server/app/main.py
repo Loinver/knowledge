@@ -14,8 +14,10 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from sqlalchemy.orm import sessionmaker
 
 from app.api.errors import install_error_handler
+from app.api.knowledge_runtime import KnowledgeRuntime
 from app.api.v1.accounts import router as accounts_router
 from app.api.v1.ai import router as ai_router
 from app.api.v1.auth import router as auth_router
@@ -33,6 +35,8 @@ from app.api.v1.enum_dictionaries import (
 from app.api.v1.extraction import router as extraction_router
 from app.api.v1.governance import router as governance_router
 from app.api.v1.graph_templates import router as graph_templates_router
+from app.api.v1.knowledge import router as knowledge_router
+from app.api.v1.knowledge_retrieval import router as knowledge_retrieval_router
 from app.api.v1.mapping_preview import router as mapping_preview_router
 from app.api.v1.mappings import router as mappings_router
 from app.api.v1.metadata import router as metadata_router
@@ -57,12 +61,18 @@ WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """开发态按配置建表，并在正常退出或启动失败时释放数据库连接。"""
     engine = get_engine()
+    runtime = KnowledgeRuntime(sessionmaker(bind=engine, expire_on_commit=False))
     try:
         if get_settings().create_tables_on_startup:
             Base.metadata.create_all(engine)
+        if get_settings().knowledge_workers_enabled:
+            await runtime.start()
         yield
     finally:
-        engine.dispose()
+        try:
+            await runtime.stop()
+        finally:
+            engine.dispose()
 
 
 app = FastAPI(
@@ -96,6 +106,8 @@ business_router.include_router(relations_router)
 business_router.include_router(validation_router)
 business_router.include_router(extraction_router)
 business_router.include_router(graph_templates_router)
+business_router.include_router(knowledge_retrieval_router)
+business_router.include_router(knowledge_router)
 business_router.include_router(ai_router)
 business_router.include_router(governance_router)
 business_router.include_router(clauses_router)

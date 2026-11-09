@@ -11,11 +11,18 @@ import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
 import GraphFactTable from '@/views/graph/components/GraphFactTable.vue'
+import { useFrozenRelationLabels } from '@/views/graph/composables/useFrozenRelationLabels'
 
 const { t } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
+const kbReturn = computed(() =>
+  typeof route.query.kbReturn === 'string' &&
+  /^\/knowledge-bases\/[1-9]\d*\/search(?:\?|$)/.test(route.query.kbReturn)
+    ? route.query.kbReturn
+    : undefined,
+)
 const { data, error, loading, reload } = useAsyncData(async (signal) => {
   const iri = String(route.params.id)
   const graphId = route.query.graph ? Number(route.query.graph) : undefined
@@ -30,6 +37,15 @@ const evidence = useAsyncData((signal) =>
         signal,
       )
     : Promise.resolve(null),
+)
+const frozenLabels = useFrozenRelationLabels(
+  () => data.value?.detail.entity.graph_revision_id,
+  () => [
+    ...(data.value?.detail.out_edges ?? []).map((edge) => edge.predicate),
+    ...(data.value?.detail.in_edges ?? []).map((edge) => edge.predicate),
+    ...(data.value?.detail.derived_edges ?? []).map((edge) => edge.predicate),
+    ...(evidence.data.value?.evidences ?? []).map((item) => item.predicate),
+  ],
 )
 const attrs = computed(() =>
   Object.entries(data.value?.detail.entity.attrs ?? {}).map(([key, value]) => ({
@@ -85,8 +101,10 @@ function openChain(item: EvidenceItem) {
     name: 'graph-evidence',
     query: {
       ...route.query,
+      kbReturn: kbReturn.value,
       graph: data.value?.detail.entity.graph_revision_id,
       returnEntity: route.params.id,
+      iri: undefined,
       subject: item.subject,
       predicate: item.predicate,
       object: item.object,
@@ -127,11 +145,13 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
   <section class="graph-page">
     <PageHeader :title="t('page.graphEntityDetail')">
       <template #actions>
+        <RouterLink v-if="kbReturn" :to="kbReturn">{{ t('kb.backToSearch') }}</RouterLink>
         <RouterLink
           :to="{
             name: 'graph-entities',
             query: {
               ...route.query,
+              kbReturn,
               graph: data?.detail.entity.graph_revision_id ?? route.query.graph,
             },
           }"
@@ -148,6 +168,10 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
       <p class="iri">{{ data.detail.entity.iri }}</p>
       <p>{{ t('graph.type') }}: {{ data.detail.entity.type_iri }}</p>
       <p>{{ t('graph.resultSet', { id: data.detail.entity.graph_revision_id }) }}</p>
+      <NAlert v-if="frozenLabels.error.value" type="warning">
+        {{ frozenLabels.error.value }}
+        <NButton @click="frozenLabels.reload">{{ t('ui.retry') }}</NButton>
+      </NAlert>
       <!-- G-30 实体 360 画像：分区跳转到各形态与追溯 -->
       <NSpace align="center" class="views-360">
         <span>{{ t('graph.views360') }}</span>
@@ -162,6 +186,7 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
                 graph: data.detail.entity.graph_revision_id,
                 center: data.detail.entity.iri,
                 layout,
+                kbReturn,
               },
             })
           "
@@ -173,6 +198,7 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
             name: 'graph-evidence',
             query: {
               ...route.query,
+              kbReturn,
               graph: data.detail.entity.graph_revision_id,
               iri: data.detail.entity.iri,
               returnEntity: data.detail.entity.iri,
@@ -195,12 +221,16 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
         <NTabPane name="out" :tab="t('graph.outgoing')">
           <GraphFactTable
             :items="data.detail.out_edges"
+            :kb-return="kbReturn"
+            :relation-labels="frozenLabels.labels.value"
             :graph-revision-id="data.detail.entity.graph_revision_id"
           />
         </NTabPane>
         <NTabPane name="in" :tab="t('graph.incoming')">
           <GraphFactTable
             :items="data.detail.in_edges"
+            :kb-return="kbReturn"
+            :relation-labels="frozenLabels.labels.value"
             :graph-revision-id="data.detail.entity.graph_revision_id"
           />
         </NTabPane>
@@ -208,6 +238,8 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
           <NAlert type="info" class="notice">{{ t('graph.derivedHint') }}</NAlert>
           <GraphFactTable
             :items="data.detail.derived_edges"
+            :kb-return="kbReturn"
+            :relation-labels="frozenLabels.labels.value"
             :graph-revision-id="data.detail.entity.graph_revision_id"
             derived
           />
@@ -228,6 +260,7 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
           <EvidenceTable
             v-else-if="evidence.data.value"
             :items="evidence.data.value.evidences"
+            :relation-labels="frozenLabels.labels.value"
             @chain="openChain"
           />
         </NTabPane>

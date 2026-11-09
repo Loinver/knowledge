@@ -11,6 +11,7 @@ dependencies = [
   "alembic>=1.14",
   "pydantic>=2.10",
   "pydantic-settings>=2.7",
+  "httpx>=0.28",
   "rdflib>=7.1",
   "pyshacl>=0.30",
   "owlrl>=7.1",
@@ -18,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6.0", "httpx>=0.28", "pip-licenses>=5.0"]
+dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6.0", "pip-licenses>=5.0"]
 production = ["pg8000>=1.31,<2"]  # PostgreSQL 驱动，BSD-3-Clause
 # 兼容已有的 .[semantic] 安装命令；当前语义实现已是必需的运行依赖。
 semantic = []

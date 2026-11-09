@@ -2,9 +2,16 @@ import type { GraphView, SemanticViewFields } from '@/api/graph'
 
 export const iriName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
 
+type RelationLabelContext = Pick<
+  GraphView,
+  'ontology_id' | 'ontology_revision' | 'instance_namespace'
+> & {
+  edges: ReadonlyArray<{ predicate: string }>
+}
+
 /** Resolve labels only inside the result set's frozen ontology version. */
 export function relationLabels(
-  graph: GraphView | null,
+  graph: RelationLabelContext | null,
   catalog: SemanticViewFields | null,
   locale: string,
   untranslated: string,

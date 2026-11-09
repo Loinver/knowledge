@@ -37,6 +37,23 @@ pnpm run commit  # 交互式提交（Conventional Commits）
 
 贡献前请先读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
+## 知识库 MVP
+
+导航中的「知识库」支持创建、上传 UTF-8 TXT / Markdown / CSV、查看处理任务、关键词检索、原文定位和可恢复归档。所有登录用户可读，ADMIN / EDITOR 可维护，沿用全局权限；尚无逐库 ACL。单文件最多 2 MiB，每库最多 100 份文档（含归档）、10,000 个活动片段，每文档最多 2,000 个片段。PDF / Word / OCR 未支持。
+
+语义与混合检索使用 SQL 中保存的 embedding 做有界精确余弦检索；混合排序为 BM25 + RRF。证据摘录问答只返回本次检索证据中的原文引用。图谱人工关联固定结果集和事实版本，不会自动创建事实，也不冒充已有抽取证据。
+
+在后端环境变量或 `server/.env` 配置兼容模型服务；密钥不得提交或放入前端：
+
+- 对话：`KG_LLM_BASE_URL`、`KG_LLM_API_KEY`、`KG_LLM_MODEL`、`KG_LLM_TIMEOUT_SECONDS`。
+- Embedding：`KG_EMBEDDING_BASE_URL`、`KG_EMBEDDING_API_KEY`、`KG_EMBEDDING_MODEL`、`KG_EMBEDDING_VERSION`、`KG_EMBEDDING_TIMEOUT_SECONDS`。
+- Base URL 是协议前缀，客户端追加 `chat/completions` 或 `embeddings`。更换 embedding 模型/部署时递增版本并重新处理文档，旧向量会标为过期。未配置时仍可上传和关键词检索，其他能力明确禁用。
+- `KG_KNOWLEDGE_WORKERS_ENABLED` 默认 `true`；进程生命周期管理持久化队列，失败重处理保留旧活动索引。文档和历史索引保留，归档不释放文档额度，尚无物理删除或历史清理策略。
+
+已有数据库需在备份并确认目标库后，于 `server/` 执行 `.venv/bin/alembic upgrade head`，新增迁移为 `0020_knowledge_bases`。降级到 `0019_asset_audit` 会删除全部新知识库表和数据，必须先备份；代码回退可以保留这些表。不要在生产环境使用启动时自动建表代替迁移。
+
+本地 SQLite、浏览器和本地模型协议夹具已验证；真实 AI 效果、生产 PostgreSQL 与并发容量仍需环境验收。1 万片段 / 384 维的本地合成样本精确语义检索中位约 5.35 秒，不代表生产延迟承诺。协议回归运行 `pnpm exec playwright test --config e2e/knowledge-ai.config.ts`，不调用真实模型。
+
 ## 目录
 
 ```

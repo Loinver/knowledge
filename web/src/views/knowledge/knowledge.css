@@ -1,0 +1,125 @@
+.kb-page {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.kb-page .page-header {
+  margin-bottom: 0;
+}
+.kb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+.kb-toolbar > .n-input {
+  flex: 1 1 240px;
+}
+.kb-toolbar > .n-select {
+  width: 160px;
+}
+.kb-panel {
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-surface);
+  min-width: 0;
+}
+.kb-muted {
+  color: var(--text-secondary);
+  font-size: var(--font-small);
+}
+.kb-wrap {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.kb-stack {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.kb-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.kb-metric {
+  border-left: 3px solid var(--border-strong);
+  padding-left: var(--space-3);
+}
+.kb-metric strong {
+  display: block;
+  font-size: var(--font-display);
+  font-weight: 500;
+}
+.kb-table-scroll {
+  overflow-x: auto;
+}
+.kb-table-scroll table {
+  min-width: 680px;
+}
+.kb-name {
+  max-width: 360px;
+  overflow-wrap: anywhere;
+}
+.kb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.kb-empty {
+  padding: var(--space-6);
+}
+.kb-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+.kb-source {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  padding: var(--space-4);
+  max-height: 55vh;
+  overflow: auto;
+}
+.kb-source mark {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.kb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-small);
+}
+.kb-file {
+  max-width: 100%;
+  font: inherit;
+}
+.kb-file::file-selector-button {
+  padding: var(--space-2) var(--space-3);
+  margin-right: var(--space-3);
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+@media (max-width: 1100px) {
+  .kb-panel {
+    padding: var(--space-4);
+  }
+  .kb-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .kb-name {
+    max-width: 260px;
+  }
+}

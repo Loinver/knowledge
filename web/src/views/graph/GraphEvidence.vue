@@ -22,11 +22,18 @@ import { useApiError } from '@/composables/useApiError'
 import { useAsyncData } from '@/composables/useAsyncData'
 import EvidenceTable from '@/views/graph/components/EvidenceTable.vue'
 import FusionEvidence from '@/views/graph/components/FusionEvidence.vue'
+import { useFrozenRelationLabels } from '@/views/graph/composables/useFrozenRelationLabels'
 
 const { t } = useI18n()
 const { toMessage } = useApiError()
 const route = useRoute()
 const router = useRouter()
+const kbReturn = computed(() =>
+  typeof route.query.kbReturn === 'string' &&
+  /^\/knowledge-bases\/[1-9]\d*\/search(?:\?|$)/.test(route.query.kbReturn)
+    ? route.query.kbReturn
+    : undefined,
+)
 const mode = ref<'entity' | 'fact' | 'reverse'>('entity')
 const iri = ref('')
 const subject = ref('')
@@ -37,7 +44,8 @@ const reverseTable = ref('')
 const reverseRowKey = ref('')
 const advancedOpen = ref(!route.query.iri && !route.query.subject)
 const listContext = computed(() => ({
-  graph: route.query.graph,
+  graph: resolvedGraph.value ?? route.query.graph,
+  kbReturn: kbReturn.value,
   q: route.query.q,
   page: route.query.page,
   size: route.query.size,
@@ -88,6 +96,16 @@ const fusion = useAsyncData((signal) => {
 const reverseResult = ref<ReverseTrace | null>(null)
 const reverseError = ref('')
 const reverseLoading = ref(false)
+const resolvedGraph = computed(() =>
+  mode.value === 'reverse' ? reverseResult.value?.graph_revision_id : data.value?.graph_revision_id,
+)
+const frozenLabels = useFrozenRelationLabels(
+  () => resolvedGraph.value,
+  () =>
+    mode.value === 'reverse'
+      ? (reverseResult.value?.facts ?? []).map((fact) => fact.predicate)
+      : (data.value?.evidences ?? []).map((item) => item.predicate),
+)
 let reverseController: AbortController | null = null
 watch(
   [sourceId, reverseTable, reverseRowKey, mode, () => route.query.graph],
@@ -134,6 +152,7 @@ async function search() {
     name: 'graph-evidence',
     query: {
       ...route.query,
+      kbReturn: kbReturn.value,
       returnEntity: route.query.returnEntity,
       graph: route.query.graph,
       ...(mode.value === 'entity'
@@ -195,7 +214,10 @@ const frozenChain = computed(() => {
   const item = chainItem.value
   if (!item) return []
   return [
-    { label: t('graph.chainFact'), value: `${item.subject} ${item.predicate} ${item.object}` },
+    {
+      label: t('graph.chainFact'),
+      value: `${item.subject} ${frozenLabels.name(item.predicate)} (${item.predicate}) ${item.object}`,
+    },
     {
       label: t('graph.chainSource'),
       value: `${item.source_name ?? item.source_id} · ${item.table_name} · ${item.row_key}`,
@@ -242,6 +264,7 @@ const canSubmit = computed(() =>
   <section class="graph-page">
     <PageHeader :title="t('page.graphEvidence')" :description="t('graph.traceHint')">
       <template #actions>
+        <RouterLink v-if="kbReturn" :to="kbReturn">{{ t('kb.backToSearch') }}</RouterLink>
         <RouterLink
           v-if="typeof route.query.returnEntity === 'string'"
           :to="{
@@ -334,6 +357,10 @@ const canSubmit = computed(() =>
     <NAlert v-if="error" type="error"
       >{{ error }} <NButton @click="reload">{{ t('ui.retry') }}</NButton></NAlert
     >
+    <NAlert v-if="frozenLabels.error.value" type="warning">
+      {{ frozenLabels.error.value }}
+      <NButton @click="frozenLabels.reload">{{ t('ui.retry') }}</NButton>
+    </NAlert>
     <template v-if="mode === 'reverse'">
       <NAlert v-if="reverseError" type="error"
         >{{ reverseError }} <NButton @click="runReverse">{{ t('ui.retry') }}</NButton></NAlert
@@ -351,7 +378,9 @@ const canSubmit = computed(() =>
         </p>
         <ol class="reverse-facts">
           <li v-for="fact in reverseResult.facts" :key="fact.evidence_id">
-            {{ fact.subject }} · {{ fact.predicate }} · {{ fact.object }}
+            {{ fact.subject }} ·
+            <span :title="fact.predicate">{{ frozenLabels.name(fact.predicate) }}</span>
+            · {{ fact.object }}
           </li>
         </ol>
         <ul class="reverse-entities">
@@ -360,7 +389,7 @@ const canSubmit = computed(() =>
               :to="{
                 name: 'graph-entity-detail',
                 params: { id: entity },
-                query: { graph: route.query.graph },
+                query: { ...listContext, graph: reverseResult.graph_revision_id },
               }"
               >{{ entity }}</RouterLink
             >
@@ -377,7 +406,12 @@ const canSubmit = computed(() =>
       <NAlert v-if="data.quarantined_count" type="warning">{{
         t('graph.quarantineWarning')
       }}</NAlert>
-      <EvidenceTable v-if="data.total_count" :items="data.evidences" @chain="showChain" />
+      <EvidenceTable
+        v-if="data.total_count"
+        :items="data.evidences"
+        :relation-labels="frozenLabels.labels.value"
+        @chain="showChain"
+      />
       <NEmpty v-else :description="t('graph.noEvidence')" />
       <template v-if="mode === 'entity'">
         <p v-if="fusion.loading.value" role="status">{{ t('common.loading') }}</p>

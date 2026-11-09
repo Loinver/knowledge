@@ -413,6 +413,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   const menuLabels = await sider.locator('.n-menu-item-content-header').allTextContents()
   expect(menuLabels).toEqual([
     '工作台',
+    '知识库',
     '本体与资源',
     '数据接入',
     '映射与抽取',

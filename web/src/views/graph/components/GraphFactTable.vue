@@ -12,6 +12,7 @@ const props = defineProps<{
   graphRevisionId: number
   derived?: boolean
   relationLabels?: Record<string, string>
+  kbReturn?: string
 }>()
 const { t } = useI18n()
 const formatProps = (value: GraphFact['props']) =>
@@ -37,7 +38,7 @@ const columns = computed<DataTableColumns<GraphFact>>(() => [
               to: {
                 name: 'graph-entity-detail',
                 params: { id: row[key] },
-                query: { graph: props.graphRevisionId },
+                query: { graph: props.graphRevisionId, kbReturn: props.kbReturn },
               },
             },
             () => row[key],
@@ -63,6 +64,7 @@ const columns = computed<DataTableColumns<GraphFact>>(() => [
                   name: 'graph-evidence',
                   query: {
                     graph: props.graphRevisionId,
+                    kbReturn: props.kbReturn,
                     subject: row.subject,
                     predicate: row.predicate,
                     object: row.object_,

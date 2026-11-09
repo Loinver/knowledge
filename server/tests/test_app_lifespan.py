@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from app import main
@@ -24,7 +24,9 @@ def test_lifespan_creates_tables_only_when_enabled_and_disposes(
     monkeypatch.setattr(
         main,
         "get_settings",
-        lambda: SimpleNamespace(create_tables_on_startup=create_tables),
+        lambda: SimpleNamespace(
+            create_tables_on_startup=create_tables, knowledge_workers_enabled=False
+        ),
     )
 
     async def run() -> None:
@@ -49,7 +51,11 @@ def test_lifespan_disposes_on_startup_or_application_failure(
     monkeypatch.setattr(main, "get_engine", lambda: engine)
     monkeypatch.setattr(main.Base.metadata, "create_all", create_all)
     monkeypatch.setattr(
-        main, "get_settings", lambda: SimpleNamespace(create_tables_on_startup=True)
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            create_tables_on_startup=True, knowledge_workers_enabled=False
+        ),
     )
 
     async def run() -> None:
@@ -79,3 +85,29 @@ def test_http_error_adapter_preserves_headers_and_envelope() -> None:
     assert response.headers["www-authenticate"] == "Bearer"
     assert response.json()["code"] == "AUTH.TOKEN_EXPIRED"
     assert response.json()["data"] is None
+
+
+def test_lifespan_owns_workers_and_disposes_even_when_stop_fails(monkeypatch) -> None:
+    engine = Mock()
+    runtime = SimpleNamespace(
+        start=AsyncMock(), stop=AsyncMock(side_effect=RuntimeError("stop"))
+    )
+    monkeypatch.setattr(main, "get_engine", lambda: engine)
+    monkeypatch.setattr(main, "KnowledgeRuntime", lambda factory: runtime)
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            create_tables_on_startup=False,
+            knowledge_workers_enabled=True,
+        ),
+    )
+
+    async def run() -> None:
+        async with main.lifespan(FastAPI()):
+            runtime.start.assert_awaited_once()
+            runtime.stop.assert_not_awaited()
+
+    with pytest.raises(RuntimeError, match="stop"):
+        asyncio.run(run())
+    engine.dispose.assert_called_once()

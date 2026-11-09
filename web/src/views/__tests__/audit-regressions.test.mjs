@@ -249,6 +249,7 @@ test('entity fusion reloads for the current entity', async () => {
     {
       '@/api/graph': {
         graphApi: {
+          view: async () => ({ graph_revision_id: 1, ontology_id: null, ontology_revision: null }),
           detail: async (iri) => ({ entity: { iri, graph_revision_id: 1, attrs: {} } }),
           entityEvidence: async () => ({ evidences: [] }),
           entityFusion: async (iri) => {
@@ -256,6 +257,7 @@ test('entity fusion reloads for the current entity', async () => {
             return { iri, source_rows: [{ row_key: iri }], conflicts: [] }
           },
         },
+        viewTemplateApi: {},
       },
     },
     'data,fusion,activeTab,loadFusion',

@@ -24,6 +24,13 @@ const isolatedEnv = {
   KG_EXPOSE_RESET_TOKEN: 'false',
   KG_PASSWORD_ITERATIONS: '1000',
   KG_API_PROXY_TARGET: 'http://127.0.0.1:8123',
+  // Default browser tests must never inherit a developer's real model endpoint.
+  KG_LLM_BASE_URL: '',
+  KG_LLM_API_KEY: '',
+  KG_LLM_MODEL: '',
+  KG_EMBEDDING_BASE_URL: '',
+  KG_EMBEDDING_API_KEY: '',
+  KG_EMBEDDING_MODEL: '',
 }
 
 export default defineConfig({

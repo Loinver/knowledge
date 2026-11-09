@@ -47,6 +47,25 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', name: 'dashboard', component: () => import('@/views/Dashboard.vue') },
 
+      {
+        path: 'knowledge-bases',
+        name: 'knowledge-bases',
+        component: () => import('@/views/knowledge/KnowledgeBases.vue'),
+        meta: { title: 'kb.title' },
+      },
+      {
+        path: 'knowledge-bases/:id',
+        name: 'knowledge-base-detail',
+        component: () => import('@/views/knowledge/KnowledgeBaseDetail.vue'),
+        meta: { title: 'kb.detail' },
+      },
+      {
+        path: 'knowledge-bases/:id/search',
+        name: 'knowledge-base-search',
+        component: () => import('@/views/knowledge/KnowledgeSearch.vue'),
+        meta: { title: 'kb.searchTitle' },
+      },
+
       { path: 'ontology', redirect: { name: 'entity-types' } },
       {
         path: 'ontology/ontologies',

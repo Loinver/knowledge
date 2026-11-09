@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { EvidenceItem } from '@/api/graph'
 
-const props = defineProps<{ items: EvidenceItem[] }>()
+const props = defineProps<{ items: EvidenceItem[]; relationLabels?: Record<string, string> }>()
 const emit = defineEmits<{ chain: [item: EvidenceItem] }>()
 const { t } = useI18n()
 const columns = computed<DataTableColumns<EvidenceItem>>(() => [
@@ -15,6 +15,12 @@ const columns = computed<DataTableColumns<EvidenceItem>>(() => [
     title: t(`graph.${key}`),
     width: 230,
     ellipsis: { tooltip: true },
+    render: (row: EvidenceItem) => {
+      const label = key === 'predicate' ? props.relationLabels?.[row.predicate] : undefined
+      return label
+        ? h('span', { title: row.predicate, 'aria-label': `${label} · ${row.predicate}` }, label)
+        : row[key]
+    },
   })),
   {
     key: 'source_name',
@@ -58,7 +64,6 @@ const columns = computed<DataTableColumns<EvidenceItem>>(() => [
       h(NButton, { size: 'tiny', onClick: () => emit('chain', row) }, () => t('graph.chainView')),
   },
 ])
-void props
 </script>
 
 <template>

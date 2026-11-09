@@ -54,6 +54,14 @@ from app.models.extraction import (
     Quarantine,
 )
 from app.models.governance import Rule
+from app.models.knowledge import (
+    KnowledgeBase,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeIndex,
+    KnowledgeTask,
+)
+from app.models.knowledge_links import KnowledgeGraphLink
 from app.models.resource import (
     ModelResource,
     Namespace,
@@ -84,6 +92,12 @@ __all__ = [
     "FactEvidence",
     "GraphRevision",
     "GraphTriple",
+    "KnowledgeBase",
+    "KnowledgeChunk",
+    "KnowledgeDocument",
+    "KnowledgeGraphLink",
+    "KnowledgeIndex",
+    "KnowledgeTask",
     "Mapping",
     "MappingPreview",
     "MappingRevision",

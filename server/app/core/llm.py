@@ -7,15 +7,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
-import httpx
-
+from app.core.ai_client import CompatibleModel, ModelEndpoint
 from app.core.config import get_settings
 from app.core.error_codes import ErrorCode
 from app.core.errors import KGError
-
-_MAX_RESPONSE_CHARS = 200_000
 
 
 def is_configured() -> bool:
@@ -50,7 +48,7 @@ def _extract_json(content: str) -> list[dict]:
         raise KGError(ErrorCode.LLM_RESPONSE_INVALID, {"reason": "no_json_array"})
     try:
         parsed = json.loads(text[start : end + 1])
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:
         raise KGError(
             ErrorCode.LLM_RESPONSE_INVALID, {"reason": "invalid_json"}
         ) from exc
@@ -64,38 +62,12 @@ def _extract_json(content: str) -> list[dict]:
 def chat_json(system: str, user: str) -> list[dict]:
     """调用 chat/completions 并解析 JSON 数组输出。"""
     base_url, api_key, model, timeout = _require_configured()
-    url = f"{base_url}/chat/completions"
-    try:
-        response = httpx.post(
-            url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                "temperature": 0.2,
-            },
-            timeout=timeout,
-        )
-    except httpx.HTTPError as exc:
-        raise KGError(
-            ErrorCode.LLM_UNAVAILABLE, {"reason": "llm_request_failed"}
-        ) from exc
-    if response.status_code >= 400:
-        raise KGError(
-            ErrorCode.LLM_UNAVAILABLE,
-            {"reason": "llm_http_error", "status": response.status_code},
-        )
-    if len(response.text) > _MAX_RESPONSE_CHARS:
+    # Existing synchronous suggestion endpoints keep their public JSON-array
+    # contract and share the same bounded, secret-safe transport as knowledge QA.
+    client = CompatibleModel(
+        ModelEndpoint(base_url, api_key, model, timeout_seconds=timeout)
+    )
+    content = asyncio.run(client.chat(system, user, temperature=0.2, max_tokens=None))
+    if len(content) > 200_000:
         raise KGError(ErrorCode.LLM_RESPONSE_INVALID, {"reason": "response_too_large"})
-    try:
-        content = response.json()["choices"][0]["message"]["content"]
-    except (ValueError, KeyError, IndexError) as exc:
-        raise KGError(
-            ErrorCode.LLM_RESPONSE_INVALID, {"reason": "unexpected_response_shape"}
-        ) from exc
-    if not isinstance(content, str):
-        raise KGError(ErrorCode.LLM_RESPONSE_INVALID, {"reason": "content_not_text"})
     return _extract_json(content)

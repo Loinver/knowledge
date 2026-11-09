@@ -22,6 +22,8 @@ const detailFallback: Record<string, string> = {
   'entity-detail': 'entity-types',
   'relation-detail': 'relation-types',
   'graph-entity-detail': 'graph-entities',
+  'knowledge-base-detail': 'knowledge-bases',
+  'knowledge-base-search': 'knowledge-bases',
 }
 
 interface NavGroup {
@@ -44,6 +46,12 @@ export function useNavigation() {
 
   const groups = computed<NavGroup[]>(() => {
     const tree: NavGroup[] = [
+      {
+        group: 'knowledge',
+        icon: 'datasource',
+        label: t('kb.title'),
+        items: [{ key: 'knowledge-bases', label: t('kb.title') }],
+      },
       {
         group: 'resources',
         icon: 'ontology',
