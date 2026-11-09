@@ -7,6 +7,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+docs/
 *.tsbuildinfo
 
 # 本地 demo 与原始素材：不入库（版权/体积/非源码）
