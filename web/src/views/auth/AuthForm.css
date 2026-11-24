@@ -1,0 +1,50 @@
+.auth-flow {
+  min-width: 0;
+}
+.form-alert {
+  margin-bottom: 20px;
+  overflow-wrap: anywhere;
+}
+.form-links {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.form-links a {
+  color: var(--accent);
+  text-decoration: none;
+  line-height: 1.6;
+}
+.form-links a:hover {
+  text-decoration: underline;
+}
+.form-links a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.auth-flow :deep(.ui-field-label) {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.auth-flow :deep(.ui-button) {
+  min-height: 44px;
+  margin-top: 8px;
+}
+.auth-flow :deep(.ui-input) {
+  min-height: 40px;
+}
+@media (max-width: 480px) {
+  .form-links a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .auth-flow :deep(.ui-input) {
+    min-height: 44px;
+  }
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "License": "Mozilla Public License 2.0 (MPL 2.0)",
+    "Name": "certifi",
+    "Version": "2026.7.22"
+  },
+  {
+    "License": "MIT-0",
+    "Name": "cffi",
+    "Version": "2.1.1"
+  },
+  {
+    "License": "W3C-20150513",
+    "Name": "owlrl",
+    "Version": "7.6.2"
+  },
+  {
+    "License": "Mozilla Public License 2.0 (MPL 2.0)",
+    "Name": "pathspec",
+    "Version": "1.1.1"
+  }
+]

@@ -1,0 +1,1016 @@
+<script setup lang="ts">
+import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
+
+import type { DomainBrief } from '@/api/domains'
+import { domainsApi } from '@/api/domains'
+import type { EntityTypeBrief, EntityTypeStats, ResourceStatus } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
+import type { Namespace } from '@/api/namespaces'
+import { namespacesApi } from '@/api/namespaces'
+import PageHeader from '@/components/PageHeader.vue'
+import type { DataTableColumns, FormInst, FormRules } from '@/components/ui'
+import {
+  FormContainer,
+  FormField,
+  UiAlert,
+  UiButton,
+  UiDrawer,
+  UiDrawerContent,
+  UiEmpty,
+  UiInput,
+  UiPopconfirm,
+  UiSelect,
+  UiSpace,
+  UiSpin,
+  UiTag,
+} from '@/components/ui'
+import { SearchPanel, SearchTable } from '@/components/ui'
+import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useOwnedMutation } from '@/composables/useOwnedMutation'
+import { useAuthStore } from '@/stores/auth'
+
+import NamespaceCreateModal from '../components/NamespaceCreateModal.vue'
+
+const { t, locale } = useI18n()
+const { toMessage } = useApiError()
+const router = useRouter()
+const route = useRoute()
+const auth = useAuthStore()
+const canWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
+
+const loading = ref(false)
+const items = ref<EntityTypeBrief[]>([])
+const loadError = ref('')
+const searchQuery = ref(typeof route.query.q === 'string' ? route.query.q : '')
+const appliedQuery = ref(searchQuery.value)
+const showCreate = ref(false)
+const namespaces = ref<Namespace[]>([])
+const domains = ref<DomainBrief[]>([])
+const stats = ref<EntityTypeStats | null>(null)
+const removingId = ref<number | null>(null)
+const notice = ref('')
+
+/** 空串表示「全部」。统计条本身即筛选入口，不额外占一行控件。 */
+const statusFilter = ref<ResourceStatus | ''>(
+  ['DRAFT', 'PUBLISHED', 'ARCHIVED'].includes(String(route.query.status))
+    ? (route.query.status as ResourceStatus)
+    : '',
+)
+/** 第四张卡：只看最近一次资产层校验里判为违反的类型。 */
+const violationOnly = ref(route.query.violation === '1')
+const domainFilter = ref<number | null>(Number(route.query.domain) || null)
+const view = ref<'table' | 'card'>(route.query.view === 'card' ? 'card' : 'table')
+const page = ref(Math.max(1, Number(route.query.page) || 1))
+const selected = computed(() => items.value.find((item) => item.id === Number(route.query.preview)))
+const showPreview = computed({
+  get: () => Boolean(selected.value),
+  set: (open: boolean) => {
+    if (!open) void router.replace({ query: { ...route.query, preview: undefined } })
+  },
+})
+let listController: AbortController | undefined
+onUnmounted(() => listController?.abort())
+watch([appliedQuery, statusFilter, violationOnly, domainFilter, view, page], () => {
+  void router.replace({
+    query: {
+      ...route.query,
+      q: appliedQuery.value || undefined,
+      status: statusFilter.value || undefined,
+      violation: violationOnly.value ? '1' : undefined,
+      domain: domainFilter.value || undefined,
+      view: view.value === 'card' ? 'card' : undefined,
+      page: page.value > 1 ? page.value : undefined,
+    },
+  })
+})
+function preview(id: number) {
+  void router.replace({ query: { ...route.query, preview: id } })
+}
+function clearFilters() {
+  searchQuery.value = ''
+  appliedQuery.value = ''
+  statusFilter.value = ''
+  violationOnly.value = false
+  domainFilter.value = null
+  page.value = 1
+  void loadList()
+}
+
+/** 统计条点击即筛选：三个状态卡与「校验违反」互斥，统一在这里收口。 */
+function selectAllStatuses() {
+  statusFilter.value = ''
+  violationOnly.value = false
+}
+
+function selectStatus(status: ResourceStatus) {
+  violationOnly.value = false
+  statusFilter.value = statusFilter.value === status ? '' : status
+}
+
+function toggleViolationOnly() {
+  statusFilter.value = ''
+  violationOnly.value = !violationOnly.value
+}
+
+/** 状态色取自设计令牌，与校验四态同一套语义（已发布=pass / 草稿=notrun / 归档=na）。 */
+const STATUS_VAR: Record<ResourceStatus, string> = {
+  PUBLISHED: 'var(--s-pass)',
+  DRAFT: 'var(--s-notrun)',
+  ARCHIVED: 'var(--s-na)',
+}
+
+function displayLabel(row: EntityTypeBrief): string {
+  const labels = row.label_i18n ?? {}
+  return labels[locale.value]?.trim() || t('enumDictionaries.untranslated')
+}
+
+const filtered = computed(() =>
+  items.value.filter((row) => {
+    if (statusFilter.value && row.status !== statusFilter.value) return false
+    if (violationOnly.value && !row.has_violation) return false
+    return true
+  }),
+)
+
+const domainOptions = computed(() =>
+  domains.value.map((domain) => ({
+    label: domain.label_i18n?.[locale.value]?.trim() || t('enumDictionaries.untranslated'),
+    value: domain.id,
+  })),
+)
+
+/** 列表只到分钟；跨天数据看的是「最近改过没有」，不需要秒。 */
+function formatUpdated(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat(locale.value, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
+  {
+    title: t('common.displayName'),
+    key: 'name',
+    // 固定列宽合计 + 这两列的 minWidth 就是 scroll-x：窗口变窄时表格在容器内
+    // 横向滚动，而不是把「名称」列压到只剩几十像素、逐字换行。
+    minWidth: 200,
+    render(row) {
+      const label = displayLabel(row)
+      return h('div', { class: 'cell-name' }, [
+        h('button', { type: 'button', class: 'name-link', onClick: () => preview(row.id) }, label),
+        label === row.name ? null : h('span', { class: 'cell-sub mono' }, row.name),
+      ])
+    },
+  },
+  {
+    title: t('common.iri'),
+    key: 'iri',
+    minWidth: 300,
+    render: (row) => h('span', { class: 'iri', title: row.iri }, row.iri),
+  },
+  {
+    title: t('entityType.propCount'),
+    key: 'data_prop_count',
+    width: 80,
+    render: (row) => h('span', { class: 'mono count' }, String(row.data_prop_count ?? 0)),
+  },
+  {
+    title: t('entityType.relationCount'),
+    key: 'relation_count',
+    width: 80,
+    render: (row) => h('span', { class: 'mono count' }, String(row.relation_count ?? 0)),
+  },
+  {
+    title: t('common.status'),
+    key: 'status',
+    width: 150,
+    render: (row) =>
+      h('div', { class: 'status-cell' }, [
+        renderStatus(row.status),
+        // 状态与校验是两个维度：状态照常显示，违反另起一个徽标
+        row.has_violation
+          ? h('span', { class: 'status-tag', style: { '--dot': 'var(--s-violation)' } }, [
+              h('i', { class: 'status-dot' }),
+              t('entityType.violation'),
+            ])
+          : null,
+      ]),
+  },
+  {
+    title: t('common.revision'),
+    key: 'current_revision',
+    width: 90,
+    render: (row) => h('span', { class: 'mono rev' }, `v${row.current_revision}`),
+  },
+  {
+    title: t('entityType.updatedAt'),
+    key: 'updated_at',
+    width: 110,
+    render: (row) => h('span', { class: 'mono rev' }, formatUpdated(row.updated_at)),
+  },
+  {
+    title: t('common.actions'),
+    key: 'actions',
+    width: 150,
+    fixed: 'right',
+    render: (row) =>
+      h(UiSpace, { size: 4, wrap: false }, () => [
+        h(
+          UiButton,
+          { size: 'small', quaternary: true, onClick: () => goToDetail(row.id) },
+          { default: () => t('ui.view') },
+        ),
+        canDelete(row)
+          ? h(
+              UiPopconfirm,
+              { onPositiveClick: () => void remove(row) },
+              {
+                default: () => t('entityType.deleteConfirm', { name: displayLabel(row) }),
+                trigger: () =>
+                  h(
+                    UiButton,
+                    {
+                      size: 'small',
+                      quaternary: true,
+                      type: 'error',
+                      loading: removingId.value === row.id,
+                      disabled: removingId.value !== null && removingId.value !== row.id,
+                    },
+                    { default: () => t('common.delete') },
+                  ),
+              },
+            )
+          : null,
+      ]),
+  },
+])
+
+function canDelete(row: EntityTypeBrief): boolean {
+  return canWrite.value && row.status === 'DRAFT' && row.current_revision === 0
+}
+
+function renderStatus(status: ResourceStatus) {
+  return h('span', { class: 'status-tag', style: { '--dot': STATUS_VAR[status] } }, [
+    h('i', { class: 'status-dot' }),
+    t(`resourceStatus.${status}`),
+  ])
+}
+
+const formData = ref({ name: '', namespace_id: null as number | null, labelZh: '', labelEn: '' })
+const formRef = ref<FormInst | null>(null)
+const createSession = ref(0)
+const {
+  busy: creating,
+  error: createError,
+  run: createRun,
+} = useOwnedMutation(
+  () => [showCreate.value, createSession.value],
+  (error) =>
+    error instanceof Error && ['FORM_INVALID', 'FORM_CONTEXT_CHANGED'].includes(error.message)
+      ? ''
+      : toMessage(error),
+)
+
+/**
+ * 字段级校验：错误贴着字段显示，blur 即校验，校验不通过不发请求。
+ * 机读名沿用后端的 PascalCase 约定（与属性编辑器同一套规则）。
+ */
+const rules = computed<FormRules>(() => ({
+  name: [
+    { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+    {
+      pattern: /^[A-Z][A-Za-z0-9]*$/,
+      message: t('entityType.namePattern'),
+      trigger: ['blur', 'input'],
+    },
+  ],
+  namespace_id: {
+    required: true,
+    type: 'number',
+    message: t('common.required'),
+    trigger: ['blur', 'change'],
+  },
+  labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+}))
+
+const nsOptions = computed(() => namespaces.value.map((ns) => ({ label: ns.prefix, value: ns.id })))
+const showNamespaceCreate = ref(false)
+
+/** 就地登记的命名空间直接选中，空库也能在一个抽屉里完成第一个类型的创建。 */
+function onNamespaceCreated(ns: Namespace) {
+  namespaces.value = [...namespaces.value, ns]
+  formData.value.namespace_id = ns.id
+  // 程序赋值不会触发字段校验；只重校这一项，清掉此前残留的「必填」提示。
+  void formRef.value?.validate(undefined, ['namespace_id']).catch(() => undefined)
+}
+
+function goToDetail(id: number) {
+  void router.push({ name: 'entity-detail', params: { id }, query: route.query })
+}
+
+async function loadList() {
+  listController?.abort()
+  const controller = new AbortController()
+  listController = controller
+  loading.value = true
+  loadError.value = ''
+  try {
+    const next = await entityTypesApi.list(
+      {
+        q: appliedQuery.value,
+        domain_id: domainFilter.value ?? undefined,
+      },
+      controller.signal,
+    )
+    if (!controller.signal.aborted) items.value = next
+  } catch (err) {
+    if (controller.signal.aborted) return
+    // 加载失败静默清空会让用户以为「没有数据」；至少给出可见的错误提示
+    items.value = []
+    loadError.value = toMessage(err)
+  } finally {
+    // Aborting the predecessor is not a completed current load. Releasing the
+    // spinner on every old request lets a subsequent mounted read appear done
+    // before its response lands.
+    if (!controller.signal.aborted) loading.value = false
+    if (listController === controller) listController = undefined
+  }
+}
+
+/** 统计条走库级统计接口，不能拿当前页去数（分页后会失真）。 */
+async function loadStats() {
+  try {
+    stats.value = await entityTypesApi.stats()
+  } catch {
+    stats.value = null
+  }
+}
+
+async function remove(row: EntityTypeBrief) {
+  if (!canDelete(row) || removingId.value !== null) return
+  removingId.value = row.id
+  loadError.value = ''
+  notice.value = ''
+  try {
+    await entityTypesApi.remove(row.id)
+    notice.value = t('entityType.deleted', { name: displayLabel(row) })
+    await Promise.all([loadList(), loadStats()])
+  } catch (err) {
+    loadError.value = toMessage(err)
+  } finally {
+    removingId.value = null
+  }
+}
+
+async function loadDomains() {
+  try {
+    domains.value = await domainsApi.list()
+  } catch {
+    domains.value = []
+  }
+}
+
+async function loadNamespaces() {
+  try {
+    namespaces.value = await namespacesApi.list()
+  } catch {
+    namespaces.value = []
+  }
+}
+
+async function handleCreate() {
+  if (!canWrite.value || creating.value || !showCreate.value) return
+  const draft = { ...formData.value }
+  const result = await createRun(async (signal) => {
+    await formRef.value?.validate()
+    if (signal.aborted) throw new Error('FORM_CONTEXT_CHANGED')
+    return entityTypesApi.create({
+      name: draft.name,
+      namespace_id: draft.namespace_id as number,
+      label_i18n: {
+        'zh-CN': draft.labelZh.trim(),
+        ...(draft.labelEn.trim() ? { 'en-US': draft.labelEn.trim() } : {}),
+      },
+    })
+  })
+  if (result) {
+    showCreate.value = false
+    formData.value = { name: '', namespace_id: null, labelZh: '', labelEn: '' }
+    formRef.value?.restoreValidation()
+    await Promise.all([loadList(), loadStats()])
+  }
+}
+
+/** 打开抽屉即重置表单与校验态，避免上一轮的报错残留到下一次新建。 */
+watch(
+  showCreate,
+  (open) => {
+    createSession.value++
+    if (!open) return
+    formData.value = { name: '', namespace_id: null, labelZh: '', labelEn: '' }
+    formRef.value?.restoreValidation()
+  },
+  { flush: 'sync' },
+)
+
+onMounted(async () => {
+  await Promise.all([loadList(), loadStats(), loadNamespaces(), loadDomains()])
+})
+
+watch([statusFilter, violationOnly, domainFilter], () => {
+  page.value = 1
+})
+watch(domainFilter, () => void loadList())
+watch(
+  () => route.query.q,
+  (value) => {
+    const next = typeof value === 'string' ? value : ''
+    if (next !== appliedQuery.value) {
+      appliedQuery.value = next
+      searchQuery.value = next
+      void loadList()
+    }
+  },
+)
+function submitSearch(query: string) {
+  appliedQuery.value = query
+  page.value = 1
+  void loadList()
+}
+function clearSearch() {
+  appliedQuery.value = ''
+  page.value = 1
+  void loadList()
+}
+
+const createVisible = useDraftGuard(showCreate, () => formData.value)
+</script>
+
+<template>
+  <section class="page asset-page">
+    <PageHeader :title="t('page.entityTypes')" :description="t('entityType.description')">
+      <template #actions>
+        <UiButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('common.create')
+        }}</UiButton>
+      </template>
+    </PageHeader>
+    <UiAlert v-if="!canWrite" type="info" class="list-error">{{ t('ui.readonly') }}</UiAlert>
+
+    <UiAlert v-if="notice" type="success" role="status">{{ notice }}</UiAlert>
+
+    <!-- 统计条：本身就是筛选入口，点击即过滤。数值取库级统计，不受分页影响 -->
+    <div class="ledger-workspace">
+      <div class="stats">
+        <button
+          type="button"
+          class="stat"
+          :class="{ active: statusFilter === '' && !violationOnly }"
+          @click="selectAllStatuses"
+        >
+          <span class="stat-value mono">{{ stats?.total ?? '—' }}</span>
+          <span class="stat-label">{{ t('entityType.total') }}</span>
+        </button>
+        <button
+          v-for="s in ['PUBLISHED', 'DRAFT'] as ResourceStatus[]"
+          :key="s"
+          type="button"
+          class="stat"
+          :class="{ active: statusFilter === s && !violationOnly }"
+          @click="selectStatus(s)"
+        >
+          <span
+            class="stat-value mono"
+            :style="{ color: statusFilter === s ? STATUS_VAR[s] : undefined }"
+          >
+            {{ s === 'PUBLISHED' ? (stats?.published ?? '—') : (stats?.draft ?? '—') }}
+          </span>
+          <span class="stat-label">
+            {{ s === 'DRAFT' ? t('entityType.draftUnpublished') : t(`resourceStatus.${s}`) }}
+          </span>
+        </button>
+        <!-- 第四项按设计稿是「校验违反」：取最近一次资产层校验报告的结果 -->
+        <button
+          type="button"
+          class="stat"
+          :class="{ active: violationOnly }"
+          @click="toggleViolationOnly"
+        >
+          <span
+            class="stat-value mono"
+            :style="{ color: stats?.violation ? 'var(--s-violation)' : undefined }"
+          >
+            {{ stats?.violation ?? '—' }}
+          </span>
+          <span class="stat-label">{{ t('entityType.violation') }}</span>
+        </button>
+      </div>
+
+      <div class="ledger-main">
+        <SearchPanel
+          v-model:query="searchQuery"
+          class="toolbar"
+          :loading="loading"
+          @submit="submitSearch"
+          @clear="clearSearch"
+          @reset="clearFilters"
+        >
+          <template #filters>
+            <FormField :label="t('page.domains')" :show-feedback="false">
+              <UiSelect
+                v-model:value="domainFilter"
+                :options="domainOptions"
+                clearable
+                :placeholder="t('entityType.allDomains')"
+                class="domain-filter"
+              />
+            </FormField>
+          </template>
+          <template #actions>
+            <UiButton attr-type="submit">{{ t('common.search') }}</UiButton>
+            <UiButton quaternary @click="clearFilters">{{ t('ui.clearFilters') }}</UiButton>
+            <div class="seg" role="group" :aria-label="t('common.viewMode')">
+              <button type="button" :class="{ on: view === 'table' }" @click="view = 'table'">
+                {{ t('common.viewTable') }}
+              </button>
+              <button type="button" :class="{ on: view === 'card' }" @click="view = 'card'">
+                {{ t('common.viewCard') }}
+              </button>
+            </div>
+          </template>
+        </SearchPanel>
+
+        <UiSpin :show="loading" :aria-busy="loading" :description="t('ui.loading')">
+          <UiAlert v-if="loadError" type="error" class="list-error" role="alert">
+            {{ loadError }}
+            <UiButton :disabled="loading" @click="loadList">{{ t('ui.retry') }}</UiButton>
+          </UiAlert>
+          <div v-else-if="view === 'table'" class="card">
+            <header class="ledger-caption">
+              <h2>{{ t('page.entityTypes') }}</h2>
+              <span>{{
+                t('assetLedger.resultCount', {
+                  count: loading
+                    ? t('common.noneValue')
+                    : new Intl.NumberFormat(locale).format(filtered.length),
+                })
+              }}</span>
+            </header>
+            <SearchTable
+              mode="local"
+              :searchable="false"
+              :columns="columns"
+              :rows="filtered"
+              :loading="loading"
+              :bordered="false"
+              size="small"
+              :max-height="600"
+              :pagination="{ page, pageSize: 20, onChange: (value: number) => (page = value) }"
+              :scroll-x="1150"
+              :row-key="(row: EntityTypeBrief) => row.id"
+            >
+              <template #toolbar />
+              <template #empty>
+                <UiEmpty
+                  v-if="!loading"
+                  :description="
+                    t(
+                      searchQuery || statusFilter || domainFilter || violationOnly
+                        ? 'ui.emptyFiltered'
+                        : 'ui.emptyStart',
+                    )
+                  "
+                />
+                <span v-else role="status">{{ t('ui.loading') }}</span>
+              </template>
+            </SearchTable>
+          </div>
+
+          <!-- 卡片视图：同一份数据换一种扫读方式，IRI 仍然可见 -->
+          <div v-else-if="filtered.length" class="cards">
+            <button
+              v-for="row in filtered"
+              :key="row.id"
+              type="button"
+              class="type-card"
+              @click="preview(row.id)"
+            >
+              <span class="type-head">
+                <i class="type-dot" :style="{ background: STATUS_VAR[row.status] }" />
+                <span class="cell-primary">{{ displayLabel(row) }}</span>
+                <span class="mono rev">{{ `v${row.current_revision}` }}</span>
+              </span>
+              <span class="cell-sub mono">{{ row.name }}</span>
+              <!-- IRI 在窄卡片里会被截断，用 title 保留完整值可悬停查看 -->
+              <span class="iri type-iri" :title="row.iri">{{ row.iri }}</span>
+              <span class="status-tag" :style="{ '--dot': STATUS_VAR[row.status] }">
+                <i class="status-dot" />
+                {{ t(`resourceStatus.${row.status}`) }}
+              </span>
+            </button>
+          </div>
+
+          <div v-else class="card empty-card">
+            <UiEmpty v-if="!loading" :description="t('ui.emptyFiltered')" />
+          </div>
+        </UiSpin>
+      </div>
+    </div>
+
+    <UiDrawer
+      v-model:show="showPreview"
+      width="min(360px, 100vw)"
+      :show-mask="false"
+      :block-scroll="false"
+      :trap-focus="false"
+    >
+      <UiDrawerContent
+        v-if="selected"
+        class="asset-editor"
+        :title="displayLabel(selected)"
+        closable
+      >
+        <div class="object-context">
+          <UiTag>{{ t(`resourceStatus.${selected.status}`) }}</UiTag>
+          <span class="mono">{{ `v${selected.current_revision}` }}</span>
+        </div>
+        <UiAlert type="info">{{
+          t(selected.status === 'PUBLISHED' ? 'ui.frozen' : 'ui.working')
+        }}</UiAlert>
+        <dl class="preview-meta">
+          <dt>{{ t('common.name') }}</dt>
+          <dd>{{ selected.name }}</dd>
+          <dt>{{ t('common.iri') }}</dt>
+          <dd class="mono">{{ selected.iri }}</dd>
+          <dt>{{ t('entityType.propCount') }}</dt>
+          <dd>{{ selected.data_prop_count ?? '—' }}</dd>
+          <dt>{{ t('entityType.relationCount') }}</dt>
+          <dd>{{ selected.relation_count ?? '—' }}</dd>
+        </dl>
+        <template #footer
+          ><UiButton type="primary" @click="goToDetail(selected.id)">{{
+            t('ui.view')
+          }}</UiButton></template
+        >
+      </UiDrawerContent>
+    </UiDrawer>
+
+    <UiDrawer
+      v-model:show="createVisible"
+      width="min(460px, 100vw)"
+      :mask-closable="!creating"
+      :close-on-esc="!creating"
+    >
+      <UiDrawerContent class="asset-editor" :title="t('entityType.create')" :closable="!creating">
+        <FormContainer
+          id="entity-create-form"
+          ref="formRef"
+          :model="formData"
+          :rules="rules"
+          :disabled="creating"
+          label-placement="top"
+          @submit="handleCreate"
+        >
+          <fieldset class="form-section">
+            <legend>{{ t('common.name') }}</legend>
+            <FormField :label="t('common.name')" path="name">
+              <UiInput v-model:value="formData.name" placeholder="Employee" />
+              <template #feedback>{{ t('entityType.nameHint') }}</template>
+            </FormField>
+            <FormField :label="t('common.namespace')" path="namespace_id">
+              <div class="ns-field">
+                <UiSelect
+                  v-model:value="formData.namespace_id"
+                  :options="nsOptions"
+                  :aria-label="t('common.namespace')"
+                />
+                <UiButton @click="showNamespaceCreate = true">{{
+                  t('namespace.createShort')
+                }}</UiButton>
+              </div>
+            </FormField>
+            <UiAlert v-if="!namespaces.length" type="info" class="ns-hint">
+              {{ t('namespace.emptyHint') }}
+            </UiAlert>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>{{ t('common.label') }}</legend>
+            <div class="form-grid">
+              <FormField :label="t('common.labelZh')" path="labelZh">
+                <UiInput v-model:value="formData.labelZh" />
+              </FormField>
+              <FormField :label="t('common.labelEn')" path="labelEn">
+                <UiInput v-model:value="formData.labelEn" />
+              </FormField>
+            </div></fieldset
+        ></FormContainer>
+        <UiAlert v-if="createError" type="error" class="create-error">{{ createError }}</UiAlert>
+        <template #footer>
+          <div class="drawer-actions">
+            <UiButton :disabled="creating" @click="createVisible = false">{{
+              t('common.cancel')
+            }}</UiButton>
+            <UiButton
+              type="primary"
+              attr-type="submit"
+              form="entity-create-form"
+              :loading="creating"
+            >
+              {{ t('common.save') }}
+            </UiButton>
+          </div>
+        </template>
+      </UiDrawerContent>
+    </UiDrawer>
+    <NamespaceCreateModal v-model:show="showNamespaceCreate" @created="onNamespaceCreated" />
+  </section>
+</template>
+
+<style scoped>
+.page {
+  padding-bottom: var(--space-5);
+}
+
+/* ── 统计条 ─────────────────────────────────────────────── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.stat {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 14px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-surface);
+  border: 0;
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-1);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+.stat:hover {
+  box-shadow: var(--elev-2);
+}
+
+.stat.active {
+  background: var(--accent-soft);
+  /*
+   * 用 1px 实描边而不是 --glow。--glow 带 14px 扩散光晕，那是图谱节点/画布
+   * 的「星图」语义色，用在卡片上会向外晕开、压到上方页面说明文字上。
+   */
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.stat-label {
+  color: var(--text-tertiary);
+  font-size: var(--font-caption);
+}
+
+/* ── 工具条 ─────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.search-field {
+  min-width: 0;
+}
+
+.search {
+  max-width: 280px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-inset);
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+.seg button {
+  padding: 3px 11px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.seg button.on {
+  color: var(--text);
+  background: var(--bg-active);
+}
+
+/* ── 容器 ───────────────────────────────────────────────── */
+.card {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+}
+
+.empty-card {
+  padding: var(--space-6);
+}
+
+/* 表格内的单元格样式（SearchTable 的 render 里用 class，必须非 scoped 才生效，见下方 :deep） */
+:deep(.cell-name) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+:deep(.cell-primary) {
+  font-weight: 500;
+}
+
+:deep(.name-link) {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  text-align: left;
+}
+
+.preview-meta {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+.preview-meta dt {
+  color: var(--text-secondary);
+}
+.preview-meta dd {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+:deep(.cell-sub) {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+:deep(.rev) {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+:deep(.count) {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* 状态列可能同时放「状态」与「校验违反」两个徽标 */
+:deep(.status-cell) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.domain-filter {
+  width: 200px;
+}
+
+:deep(.status-tag) {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-pill);
+}
+
+:deep(.status-dot) {
+  width: 6px;
+  height: 6px;
+  background: var(--dot);
+  border-radius: 50%;
+}
+
+/* ── 卡片视图 ───────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: var(--space-3);
+}
+
+.type-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--bg-surface);
+  border: 0;
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.type-card:hover {
+  box-shadow: var(--glow);
+  transform: translateY(-1px);
+}
+
+.type-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.type-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.type-head .rev {
+  margin-left: auto;
+}
+
+.type-iri {
+  max-width: 100%;
+}
+
+/* ── 抽屉 ───────────────────────────────────────────────── */
+.ns-field {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.ns-hint {
+  margin-bottom: var(--space-3);
+}
+
+.create-error {
+  margin-bottom: var(--space-3);
+}
+
+.list-error {
+  margin-bottom: var(--space-3);
+}
+
+.drawer-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>
+
+<style scoped src="../styles/observatory.css"></style>

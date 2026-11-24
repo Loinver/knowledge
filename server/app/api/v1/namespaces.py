@@ -1,0 +1,86 @@
+"""命名空间与 IRI 治理路由（H-03）。"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.api.v1.asset_audit_context import audit_asset, audit_created
+from app.core.db import get_session
+from app.domain.iri_service import (
+    delete_namespace,
+    namespace_usage,
+    register_namespace,
+    scan_rename_impact,
+)
+from app.domain.iri_service import (
+    list_namespaces as list_registered_namespaces,
+)
+from app.iri import build_iri, is_valid_name, is_valid_namespace
+from app.models.asset_audit import AssetAuditAction, AssetType
+from app.models.resource import Namespace
+from app.schemas.common import (
+    ImpactResponse,
+    IriBuildRequest,
+    IriBuildResponse,
+    IriValidateResponse,
+    NamespaceCreate,
+    NamespaceOut,
+)
+from app.schemas.response import ApiResponse
+
+router = APIRouter(prefix="/namespaces", tags=["namespaces"])
+
+
+@router.get("", response_model=ApiResponse[list[NamespaceOut]])
+def list_namespaces(session: Session = Depends(get_session)) -> list[NamespaceOut]:
+    usage = namespace_usage(session)
+    return [
+        NamespaceOut.model_validate(ns).model_copy(
+            update={"resource_count": usage.get(ns.id, 0)}
+        )
+        for ns in list_registered_namespaces(session)
+    ]
+
+
+@router.post("", response_model=ApiResponse[NamespaceOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.NAMESPACE)
+def create_namespace(
+    payload: NamespaceCreate, session: Session = Depends(get_session)
+) -> Namespace:
+    ns = register_namespace(
+        session, payload.prefix, payload.iri, payload.protected, payload.label_i18n
+    )
+    audit_created(session, ns.id)
+    session.commit()
+    return ns
+
+
+@router.delete("/{namespace_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.NAMESPACE, "namespace_id")
+def remove_namespace(
+    namespace_id: int, session: Session = Depends(get_session)
+) -> None:
+    delete_namespace(session, namespace_id)
+    session.commit()
+
+
+@router.get("/iri/build", response_model=ApiResponse[IriBuildResponse])
+def build_iri_endpoint(payload: IriBuildRequest) -> IriBuildResponse:
+    """直接按命名空间 IRI + 机读名拼接，不查库。"""
+    return IriBuildResponse(iri=build_iri(payload.namespace, payload.name))
+
+
+@router.get("/iri/validate", response_model=ApiResponse[IriValidateResponse])
+def validate_iri_endpoint(name: str, namespace: str = "") -> IriValidateResponse:
+    return IriValidateResponse(
+        name=is_valid_name(name), namespace=is_valid_namespace(namespace)
+    )
+
+
+@router.get("/iri/impact/{resource_id}", response_model=ApiResponse[ImpactResponse])
+def rename_impact(
+    resource_id: int, session: Session = Depends(get_session)
+) -> ImpactResponse:
+    refs = scan_rename_impact(session, resource_id)
+    return ImpactResponse(resource_id=resource_id, references=refs)

@@ -1,0 +1,1162 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import type { DomainBrief, DomainDetail, DomainMember, PublishCheckResult } from '@/api/domains'
+import { domainsApi } from '@/api/domains'
+import type { EntityTypeBrief } from '@/api/entity-types'
+import { entityTypesApi } from '@/api/entity-types'
+import type { RelationTypeBrief } from '@/api/relations'
+import { relationsApi } from '@/api/relations'
+import PageHeader from '@/components/PageHeader.vue'
+import type { DataTableColumns, FormInst, FormRules, TreeOption } from '@/components/ui'
+import {
+  FormContainer,
+  FormField,
+  UiAlert,
+  UiButton,
+  UiCheckbox,
+  UiDataTable,
+  UiDrawer,
+  UiDrawerContent,
+  UiEmpty,
+  UiInput,
+  UiPopconfirm,
+  UiSelect,
+  UiSpace,
+  UiSpin,
+  UiTree,
+} from '@/components/ui'
+import { useApiError } from '@/composables/useApiError'
+import { useDraftGuard } from '@/composables/useDraftGuard'
+import { useAuthStore } from '@/stores/auth'
+
+import AssetIdentity from '../components/AssetIdentity.vue'
+
+const auth = useAuthStore()
+const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
+const { t, locale } = useI18n()
+const { toMessage } = useApiError()
+
+const loading = ref(true)
+const items = ref<DomainBrief[]>([])
+const typeList = ref<EntityTypeBrief[]>([])
+const relationList = ref<RelationTypeBrief[]>([])
+const selected = ref<DomainBrief | null>(null)
+/**
+ * 选中域的详情。列表接口只返回 brief（没有 definition_i18n），
+ * 编辑标签与定义需要详情，所以与成员一起按需拉取，保持同代次更新。
+ */
+const detail = ref<DomainDetail | null>(null)
+const members = ref<DomainMember[]>([])
+const membersLoading = ref(false)
+const checking = ref(false)
+const working = ref(false)
+const addTypeId = ref<number | null>(null)
+/** 新成员是否作为「跨域引用」加入。核心类型归属本域，跨域引用只被引用。 */
+const addAsRef = ref(false)
+const checkResult = ref<PublishCheckResult | null>(null)
+const showCreate = ref(false)
+const creating = ref(false)
+let createGeneration = 0
+const createError = ref('')
+const notice = ref('')
+const showBasicEditor = ref(false)
+const basicSaving = ref(false)
+let basicGeneration = 0
+const basicError = ref('')
+const basicFormRef = ref<FormInst | null>(null)
+const basicForm = ref({
+  labelZh: '',
+  labelEn: '',
+  definitionZh: '',
+  definitionEn: '',
+  parentId: null as number | null,
+})
+const actionError = ref('')
+const listError = ref('')
+const membersError = ref('')
+const needsRefresh = ref(false)
+
+type DomainSelection = { id: number; controller: AbortController }
+let selection: DomainSelection | undefined
+let listController: AbortController | undefined
+let alive = true
+const pendingWrites = new Map<number, Promise<unknown>>()
+const canEdit = computed(
+  () =>
+    canWrite.value &&
+    !!selected.value &&
+    !loading.value &&
+    !listError.value &&
+    !membersLoading.value &&
+    !membersError.value &&
+    !working.value &&
+    !checking.value &&
+    !needsRefresh.value,
+)
+
+function isCurrentSelection(context: DomainSelection) {
+  return (
+    alive &&
+    selection === context &&
+    selected.value?.id === context.id &&
+    !context.controller.signal.aborted
+  )
+}
+
+function pickLabel(labels: Record<string, string> | null | undefined, fallback: string): string {
+  return labels?.[locale.value]?.trim() || `${fallback} (${t('enumDictionaries.untranslated')})`
+}
+
+const resourceById = computed(() => {
+  const map: Record<number, EntityTypeBrief | RelationTypeBrief> = {}
+  for (const resource of [...typeList.value, ...relationList.value]) map[resource.id] = resource
+  return map
+})
+
+const memberColumns = computed<DataTableColumns<DomainMember>>(() => [
+  { key: 'resource_id', title: t('domain.memberResource'), minWidth: 200 },
+  { key: 'iri', title: t('common.iri'), minWidth: 300 },
+  { key: 'role', title: t('domain.role'), width: 160 },
+  { key: 'actions', title: t('common.actions'), width: 110, fixed: 'right' },
+])
+
+const typeOptions = computed(() => [
+  ...typeList.value.map((tp) => ({ label: pickLabel(tp.label_i18n, tp.name), value: tp.id })),
+  ...relationList.value.map((r) => ({ label: pickLabel(r.label_i18n, r.name), value: r.id })),
+])
+
+/** 发布检查的四项子检查，逐项列出比只给一句「未通过」有用得多。 */
+const checkItems = computed(() => {
+  const r = checkResult.value
+  if (!r) return []
+  return [
+    { key: 'memberExists', ok: r.member_exists },
+    { key: 'versionsAvailable', ok: r.versions_available },
+    { key: 'dependenciesComplete', ok: r.dependencies_complete },
+    { key: 'noCircularRef', ok: r.no_circular_ref },
+  ]
+})
+
+const basicRules = computed<FormRules>(() => ({
+  labelZh: {
+    required: true,
+    message: t('domain.basicIncomplete'),
+    trigger: ['blur', 'input'],
+  },
+}))
+
+async function load() {
+  if (!alive) return null
+  listController?.abort()
+  const controller = new AbortController()
+  listController = controller
+  loading.value = true
+  listError.value = ''
+  try {
+    const [next, types, rels] = await Promise.all([
+      domainsApi.list({}, controller.signal),
+      entityTypesApi.list({}, controller.signal),
+      relationsApi.list({}, controller.signal),
+    ])
+    if (!alive || controller.signal.aborted) return null
+    items.value = next
+    typeList.value = types
+    relationList.value = rels
+    // 选中对象的编辑版本只与随后重新读取的成员一起更新。
+    return next
+  } catch (err) {
+    if (alive && !controller.signal.aborted) listError.value = toMessage(err)
+    return null
+  } finally {
+    if (alive && !controller.signal.aborted) loading.value = false
+  }
+}
+
+async function select(domain: DomainBrief | null) {
+  if (!alive) return false
+  if (showBasicEditor.value) {
+    basicVisible.value = false
+    if (showBasicEditor.value) return false
+  }
+  selection?.controller.abort()
+  selection = domain ? { id: domain.id, controller: new AbortController() } : undefined
+  selected.value = domain
+  members.value = []
+  detail.value = null
+  membersLoading.value = false
+  checking.value = false
+  working.value = false
+  checkResult.value = null
+  actionError.value = ''
+  membersError.value = ''
+  needsRefresh.value = false
+  notice.value = ''
+  addTypeId.value = null
+  addAsRef.value = false
+  return selection ? loadMembers(selection) : false
+}
+
+async function loadMembers(context: DomainSelection) {
+  if (!isCurrentSelection(context)) return false
+  membersLoading.value = true
+  membersError.value = ''
+  members.value = []
+  checkResult.value = null
+  try {
+    const pending = pendingWrites.get(context.id)
+    if (pending) {
+      await pending.catch(() => undefined)
+      if (!isCurrentSelection(context)) return false
+      const next = await load()
+      if (!next || !isCurrentSelection(context)) return false
+      const fresh = next.find((domain) => domain.id === context.id)
+      if (!fresh) {
+        await select(null)
+        return false
+      }
+      selected.value = fresh
+    }
+    if (!isCurrentSelection(context)) return false
+    const [next, info] = await Promise.all([
+      domainsApi.members(context.id, context.controller.signal),
+      domainsApi.get(context.id, context.controller.signal),
+    ])
+    if (!isCurrentSelection(context)) return false
+    members.value = next
+    detail.value = info
+    return true
+  } catch (err) {
+    if (isCurrentSelection(context)) membersError.value = toMessage(err)
+    return false
+  } finally {
+    if (isCurrentSelection(context)) membersLoading.value = false
+  }
+}
+
+async function refreshSelection() {
+  const context = selection
+  const next = await load()
+  if (next && context && isCurrentSelection(context)) {
+    await select(next.find((domain) => domain.id === context.id) ?? null)
+  }
+}
+
+async function updateDomain(write: (id: number, revision: number) => Promise<unknown>) {
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value || !selected.value) return false
+  const revision = selected.value.edit_revision
+  working.value = true
+  actionError.value = ''
+  checkResult.value = null
+  try {
+    const pending = write(context.id, revision)
+    pendingWrites.set(context.id, pending)
+    try {
+      await pending
+    } finally {
+      if (pendingWrites.get(context.id) === pending) pendingWrites.delete(context.id)
+    }
+    if (!isCurrentSelection(context)) return false
+    const next = await load()
+    if (!isCurrentSelection(context)) return false
+    if (!next) {
+      needsRefresh.value = true
+      return false
+    }
+    const fresh = next.find((domain) => domain.id === context.id)
+    if (!fresh) {
+      await select(null)
+      return false
+    }
+    selected.value = fresh
+    return await loadMembers(context)
+  } catch (err) {
+    if (isCurrentSelection(context)) {
+      actionError.value = toMessage(err)
+      needsRefresh.value = (err as { code?: string })?.code === 'KG.REVISION_CONFLICT'
+    }
+    return false
+  } finally {
+    if (isCurrentSelection(context)) working.value = false
+  }
+}
+
+async function addMember() {
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value) return
+  const resourceId = addTypeId.value
+  if (!resourceId) {
+    actionError.value = t('domain.addMemberIncomplete')
+    return
+  }
+  const updated = await updateDomain((id, revision) =>
+    domainsApi.addMember(id, resourceId, addAsRef.value, revision),
+  )
+  if (updated && isCurrentSelection(context)) {
+    addTypeId.value = null
+    addAsRef.value = false
+  }
+}
+
+async function removeMember(memberId: number) {
+  if (!members.value.some((member) => member.id === memberId)) return
+  await updateDomain((id, revision) => domainsApi.removeMember(id, memberId, revision))
+}
+
+async function removeDomain() {
+  const context = selection
+  const domain = selected.value
+  if (!context || !domain || !isCurrentSelection(context) || !canEdit.value) return
+  working.value = true
+  actionError.value = ''
+  notice.value = ''
+  try {
+    await domainsApi.remove(domain.id)
+    if (!isCurrentSelection(context)) return
+    await select(null)
+    await load()
+    notice.value = t('domain.deleted', { name: pickLabel(domain.label_i18n, domain.name) })
+  } catch (err) {
+    if (isCurrentSelection(context)) actionError.value = toMessage(err)
+  } finally {
+    if (isCurrentSelection(context)) working.value = false
+  }
+}
+
+async function publishCheck() {
+  const context = selection
+  if (!context || !isCurrentSelection(context) || !canEdit.value) return
+  checking.value = true
+  actionError.value = ''
+  checkResult.value = null
+  try {
+    const result = await domainsApi.publishCheck(context.id, context.controller.signal)
+    if (isCurrentSelection(context)) checkResult.value = result
+  } catch (err) {
+    if (isCurrentSelection(context)) actionError.value = toMessage(err)
+  } finally {
+    if (isCurrentSelection(context)) checking.value = false
+  }
+}
+
+async function publish() {
+  await updateDomain((id, revision) => domainsApi.publish(id, revision))
+}
+
+const formData = ref({
+  name: '',
+  iri: '',
+  labelZh: '',
+  labelEn: '',
+  parentId: null as number | null,
+})
+const createFormRef = ref<FormInst | null>(null)
+
+/**
+ * 域树：按 parent_id 组装。
+ *
+ * 父域不在当前列表里的（数据异常或权限过滤）按根节点处理，
+ * 否则那些域会从树里凭空消失。
+ */
+const domainTree = computed<TreeOption[]>(() => {
+  const ids = new Set(items.value.map((domain) => domain.id))
+  const byParent = new Map<number | null, DomainBrief[]>()
+  for (const domain of items.value) {
+    const parent = domain.parent_id != null && ids.has(domain.parent_id) ? domain.parent_id : null
+    const bucket = byParent.get(parent)
+    if (bucket) bucket.push(domain)
+    else byParent.set(parent, [domain])
+  }
+  const build = (parentId: number | null): TreeOption[] =>
+    (byParent.get(parentId) ?? []).map((domain) => {
+      const children = build(domain.id)
+      return {
+        key: domain.id,
+        label: pickLabel(domain.label_i18n, domain.name),
+        children: children.length ? children : undefined,
+        suffix: () => t(`resourceStatus.${domain.status}`),
+      }
+    })
+  return build(null)
+})
+
+const treeSelectedKeys = computed(() => (selected.value ? [selected.value.id] : []))
+
+function onTreeSelect(keys: Array<string | number>) {
+  const id = Number(keys[0])
+  const domain = items.value.find((item) => item.id === id)
+  if (domain) void select(domain)
+}
+
+/** 父域候选：排除自己与自己的后代，否则会形成环（后端也会拒绝）。 */
+const parentOptions = computed(() => {
+  const blocked = new Set<number>()
+  const current = detail.value?.id
+  if (current != null) {
+    blocked.add(current)
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const domain of items.value) {
+        if (domain.parent_id != null && blocked.has(domain.parent_id) && !blocked.has(domain.id)) {
+          blocked.add(domain.id)
+          grew = true
+        }
+      }
+    }
+  }
+  return items.value
+    .filter((domain) => !blocked.has(domain.id))
+    .map((domain) => ({ label: pickLabel(domain.label_i18n, domain.name), value: domain.id }))
+})
+
+/** 业务域的机读名同样走 PascalCase；IRI 必填，格式由后端校验。 */
+const createRules = computed<FormRules>(() => ({
+  name: [
+    { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+    {
+      pattern: /^[A-Z][A-Za-z0-9]*$/,
+      message: t('domain.namePattern'),
+      trigger: ['blur', 'input'],
+    },
+  ],
+  iri: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+  labelZh: { required: true, message: t('common.required'), trigger: ['blur', 'input'] },
+}))
+
+/** 打开抽屉即重置表单与校验态。 */
+watch(
+  showCreate,
+  (open) => {
+    createGeneration++
+    creating.value = false
+    createError.value = ''
+    if (!open) return
+    formData.value = { name: '', iri: '', labelZh: '', labelEn: '', parentId: null }
+    createFormRef.value?.restoreValidation()
+  },
+  { flush: 'sync' },
+)
+
+watch(
+  showBasicEditor,
+  () => {
+    basicGeneration++
+    basicSaving.value = false
+    basicFormRef.value?.restoreValidation()
+  },
+  { flush: 'sync' },
+)
+
+async function handleCreate() {
+  if (!canWrite.value || !alive || creating.value) return
+  const generation = createGeneration
+  const current = () => alive && generation === createGeneration
+  const f = { ...formData.value }
+  createError.value = ''
+  creating.value = true
+  try {
+    try {
+      await createFormRef.value?.validate()
+    } catch {
+      return
+    }
+    if (!current() || !canWrite.value) return
+    await domainsApi.create({
+      name: f.name,
+      iri: f.iri,
+      label_i18n: {
+        'zh-CN': f.labelZh,
+        ...(f.labelEn.trim() ? { 'en-US': f.labelEn } : {}),
+      },
+      ...(f.parentId === null ? {} : { parent_id: f.parentId }),
+    })
+    if (!current()) return
+    showCreate.value = false
+    formData.value = { name: '', iri: '', labelZh: '', labelEn: '', parentId: null }
+    await load()
+  } catch (err) {
+    if (current()) createError.value = toMessage(err)
+  } finally {
+    if (current()) creating.value = false
+  }
+}
+
+/** 打开基本信息编辑抽屉。机读名与 IRI 是业务域的身份，不在这里改。 */
+function openBasicEditor() {
+  const info = detail.value
+  if (!info || !canEdit.value || showBasicEditor.value) return
+  basicForm.value = {
+    labelZh: info.label_i18n?.['zh-CN'] ?? '',
+    labelEn: info.label_i18n?.['en-US'] ?? '',
+    definitionZh: info.definition_i18n?.['zh-CN'] ?? '',
+    definitionEn: info.definition_i18n?.['en-US'] ?? '',
+    parentId: info.parent_id ?? null,
+  }
+  basicError.value = ''
+  showBasicEditor.value = true
+}
+
+async function saveBasic() {
+  const context = selection
+  const info = detail.value
+  if (
+    !context ||
+    !info ||
+    !isCurrentSelection(context) ||
+    !canEdit.value ||
+    !showBasicEditor.value ||
+    basicSaving.value
+  )
+    return
+  const generation = basicGeneration
+  const revision = selected.value!.edit_revision
+  const f = { ...basicForm.value }
+  const current = () =>
+    isCurrentSelection(context) && showBasicEditor.value && generation === basicGeneration
+  basicSaving.value = true
+  basicError.value = ''
+  try {
+    try {
+      await basicFormRef.value?.validate()
+    } catch {
+      return
+    }
+    if (!current() || !canEdit.value || selected.value?.edit_revision !== revision) return
+    const labelZh = f.labelZh.trim()
+    const label: Record<string, string> = {
+      'zh-CN': labelZh,
+      ...(f.labelEn.trim() ? { 'en-US': f.labelEn.trim() } : {}),
+    }
+    const definition: Record<string, string> = {}
+    if (f.definitionZh.trim()) definition['zh-CN'] = f.definitionZh.trim()
+    if (f.definitionEn.trim()) definition['en-US'] = f.definitionEn.trim()
+
+    // 走统一的写入口，沿用它的选中代次校验与冲突处理。
+    // parent_id 显式传 null 表示解除父域（后端按 model_fields_set 区分「没传」）。
+    const updated = await updateDomain((id, revision) =>
+      domainsApi.update(id, {
+        label_i18n: label,
+        definition_i18n: definition,
+        parent_id: f.parentId,
+        if_match: info.current_revision,
+        if_edit_match: revision,
+      }),
+    )
+    if (updated && current()) {
+      showBasicEditor.value = false
+      notice.value = t('domain.basicSaved')
+    } else if (current()) {
+      basicError.value = actionError.value || membersError.value || listError.value
+    }
+  } finally {
+    if (current()) basicSaving.value = false
+  }
+}
+
+onMounted(() => void load())
+onBeforeUnmount(() => {
+  alive = false
+  createGeneration++
+  basicGeneration++
+  listController?.abort()
+  selection?.controller.abort()
+})
+
+const createVisible = useDraftGuard(showCreate, () => formData.value)
+const basicVisible = useDraftGuard(showBasicEditor, () => basicForm.value)
+</script>
+
+<template>
+  <section class="page asset-page">
+    <PageHeader :title="t('page.domains')" :description="t('domain.description')">
+      <template #actions>
+        <UiButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
+          t('common.create')
+        }}</UiButton>
+      </template>
+    </PageHeader>
+    <UiAlert v-if="!canWrite" type="info" class="alert">{{ t('ui.readonly') }}</UiAlert>
+
+    <UiAlert v-if="listError" type="error" role="alert">
+      {{ listError }}
+      <UiButton :loading="loading" @click="refreshSelection">{{ t('graph.refresh') }}</UiButton>
+    </UiAlert>
+    <UiAlert v-if="notice" type="success" role="status">{{ notice }}</UiAlert>
+    <UiSpin :show="loading">
+      <div class="split">
+        <!-- 左：域列表。业务域当前是平铺的（无父子），所以用列表而非树 -->
+        <aside class="list-card">
+          <header class="list-head">
+            <span>{{ t('domain.list') }}</span>
+            <span class="mono count">{{
+              loading || listError
+                ? t('common.noneValue')
+                : new Intl.NumberFormat(locale).format(items.length)
+            }}</span>
+          </header>
+          <div v-if="items.length" class="list-body">
+            <!-- 域树：父域 → 子域，状态作为后缀显示 -->
+            <UiTree
+              block-line
+              selectable
+              :data="domainTree"
+              :selected-keys="treeSelectedKeys"
+              :default-expand-all="true"
+              @update:selected-keys="onTreeSelect"
+            />
+          </div>
+          <div v-else-if="!loading && !listError" class="list-empty">
+            <UiEmpty :description="t('common.empty')" />
+          </div>
+        </aside>
+
+        <!-- 右：详情 -->
+        <section v-if="selected" class="detail">
+          <header class="detail-head">
+            <h3>{{ pickLabel(selected.label_i18n, selected.name) }}</h3>
+            <AssetIdentity
+              :name="selected.name"
+              :iri="selected.iri"
+              :revision="selected.current_revision"
+              :status="selected.status"
+            />
+            <UiAlert v-if="selected.status === 'PUBLISHED'" type="info">{{
+              t('ui.frozen')
+            }}</UiAlert>
+            <div class="detail-actions">
+              <UiButton size="small" :disabled="!canEdit" @click="openBasicEditor">
+                {{ t('common.edit') }}
+              </UiButton>
+              <UiButton size="small" :disabled="!canEdit" :loading="checking" @click="publishCheck">
+                {{ t('domain.publishCheck') }}
+              </UiButton>
+              <UiButton size="small" type="primary" :disabled="!canEdit" @click="publish">
+                {{ t('common.publish') }}
+              </UiButton>
+              <UiPopconfirm @positive-click="removeDomain">
+                <template #trigger>
+                  <UiButton size="small" type="error" secondary :disabled="!canEdit">
+                    {{ t('common.delete') }}
+                  </UiButton>
+                </template>
+                {{
+                  t('domain.deleteConfirm', { name: pickLabel(selected.label_i18n, selected.name) })
+                }}
+              </UiPopconfirm>
+            </div>
+          </header>
+
+          <!-- 发布检查结果：四项子检查逐项列出 -->
+          <div v-if="checkResult" class="check-panel">
+            <div class="check-head">
+              <span class="check-verdict" :class="checkResult.can_publish ? 'ok' : 'bad'">
+                {{ checkResult.can_publish ? t('domain.checkPassed') : t('domain.checkFailed') }}
+              </span>
+            </div>
+            <ul class="check-list">
+              <li v-for="c in checkItems" :key="c.key">
+                <i
+                  class="dot"
+                  :style="{ background: c.ok ? 'var(--s-pass)' : 'var(--s-violation)' }"
+                />
+                {{ t(`domain.${c.key}`) }}
+              </li>
+            </ul>
+            <ul v-if="checkResult.issues?.length" class="issue-list">
+              <li v-for="issue in checkResult.issues" :key="issue">{{ issue }}</li>
+            </ul>
+          </div>
+
+          <header class="ledger-caption">
+            <h2>{{ t('domain.memberResource') }}</h2>
+            <span>{{ t('assetLedger.resultCount', { count: members.length }) }}</span>
+          </header>
+          <div class="member-add">
+            <UiSelect
+              v-model:value="addTypeId"
+              :options="typeOptions"
+              filterable
+              clearable
+              :placeholder="t('domain.addMember')"
+              :disabled="!canEdit"
+              class="member-select"
+            />
+            <UiCheckbox v-model:checked="addAsRef" :disabled="!canEdit">
+              {{ t('domain.asRef') }}
+            </UiCheckbox>
+            <UiButton :disabled="!canEdit" @click="addMember">{{ t('domain.addMember') }}</UiButton>
+          </div>
+
+          <UiAlert v-if="actionError" type="error" role="alert">
+            {{ actionError }}
+            <UiButton :loading="loading || membersLoading" @click="refreshSelection">
+              {{ t('graph.refresh') }}
+            </UiButton>
+          </UiAlert>
+
+          <UiSpin :show="membersLoading || working">
+            <div class="member-card">
+              <UiDataTable
+                :rows="members"
+                :columns="memberColumns"
+                :row-key="(member: DomainMember) => member.id"
+                mode="none"
+                :loading="membersLoading || working"
+                :error="membersError"
+                :scroll-x="810"
+                @retry="refreshSelection"
+              >
+                <template #cell-resource_id="{ row: m }">
+                  <span class="member-name">
+                    {{ pickLabel(resourceById[m.resource_id]?.label_i18n, `#${m.resource_id}`) }}
+                  </span>
+                </template>
+                <template #cell-iri="{ row: m }">
+                  <span
+                    v-if="resourceById[m.resource_id]"
+                    class="iri"
+                    :title="resourceById[m.resource_id].iri"
+                  >
+                    {{ resourceById[m.resource_id].iri }}
+                  </span>
+                  <span v-else class="muted">{{ t('common.noneValue') }}</span>
+                </template>
+                <template #cell-role="{ row: m }">
+                  <span class="mini-tag">
+                    {{ m.as_ref ? t('domain.refMember') : t('domain.coreMember') }}
+                  </span>
+                </template>
+                <template #actions="{ row: m }">
+                  <UiPopconfirm @positive-click="removeMember(m.id)">
+                    <template #trigger>
+                      <UiButton size="tiny" quaternary type="error" :disabled="!canEdit">
+                        {{ t('common.delete') }}
+                      </UiButton>
+                    </template>
+                    {{ t('domain.removeMemberConfirm') }}
+                  </UiPopconfirm>
+                </template>
+                <template #empty>
+                  <UiEmpty :description="t('domain.noMembers')" />
+                </template>
+              </UiDataTable>
+            </div>
+          </UiSpin>
+        </section>
+
+        <section v-else-if="!loading && !listError" class="detail detail-empty">
+          <UiEmpty :description="t('domain.selectHint')" />
+        </section>
+      </div>
+    </UiSpin>
+
+    <!-- 基本信息编辑。机读名与 IRI 是业务域的身份，只读展示。 -->
+    <UiDrawer
+      v-model:show="basicVisible"
+      width="min(480px, 100vw)"
+      :mask-closable="!working && !basicSaving"
+      :close-on-esc="!working && !basicSaving"
+    >
+      <UiDrawerContent
+        class="asset-editor"
+        :title="t('domain.edit')"
+        :closable="!working && !basicSaving"
+      >
+        <UiAlert v-if="basicError" type="error" role="alert">{{ basicError }}</UiAlert>
+        <FormContainer
+          ref="basicFormRef"
+          :model="basicForm"
+          :rules="basicRules"
+          :disabled="working || basicSaving || !canWrite"
+          :submitting="working || basicSaving"
+          label-placement="top"
+        >
+          <fieldset class="form-section">
+            <legend>{{ t('common.name') }}</legend>
+            <FormField :label="t('common.name')">
+              <UiInput :value="detail?.name ?? ''" disabled />
+              <template #feedback>{{ t('domain.nameImmutable') }}</template>
+            </FormField>
+            <FormField :label="t('common.iri')">
+              <UiInput :value="detail?.iri ?? ''" disabled />
+            </FormField>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>{{ t('common.definition') }}</legend>
+            <fieldset class="form-section">
+              <legend>{{ t('common.definition') }}</legend>
+              <FormField :label="t('common.labelZh')" path="labelZh">
+                <UiInput v-model:value="basicForm.labelZh" />
+              </FormField>
+              <FormField :label="t('common.labelEn')" path="labelEn">
+                <UiInput v-model:value="basicForm.labelEn" />
+              </FormField>
+            </fieldset>
+            <FormField :label="t('domain.parent')" path="parentId">
+              <UiSelect
+                v-model:value="basicForm.parentId"
+                :options="parentOptions"
+                clearable
+                :placeholder="t('domain.noParent')"
+              />
+            </FormField>
+            <FormField :label="t('common.definitionZh')" path="definitionZh">
+              <UiInput
+                v-model:value="basicForm.definitionZh"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 4 }"
+              />
+            </FormField>
+            <FormField :label="t('common.definitionEn')" path="definitionEn">
+              <UiInput
+                v-model:value="basicForm.definitionEn"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 4 }"
+              />
+            </FormField></fieldset
+        ></FormContainer>
+        <template #footer>
+          <UiSpace justify="end">
+            <UiButton :disabled="working || basicSaving" @click="basicVisible = false">
+              {{ t('common.cancel') }}
+            </UiButton>
+            <UiButton type="primary" :loading="working || basicSaving" @click="saveBasic">
+              {{ t('common.save') }}
+            </UiButton>
+          </UiSpace>
+        </template>
+      </UiDrawerContent>
+    </UiDrawer>
+
+    <UiDrawer
+      v-model:show="createVisible"
+      width="min(480px, 100vw)"
+      :mask-closable="!creating"
+      :close-on-esc="!creating"
+    >
+      <UiDrawerContent class="asset-editor" :title="t('domain.create')" :closable="!creating">
+        <FormContainer
+          ref="createFormRef"
+          :model="formData"
+          :rules="createRules"
+          label-placement="top"
+          :disabled="creating || !canWrite"
+          :submitting="creating"
+        >
+          <fieldset class="form-section">
+            <legend>{{ t('common.name') }}</legend>
+            <FormField :label="t('common.name')" path="name">
+              <UiInput v-model:value="formData.name" placeholder="HumanResources" />
+              <template #feedback>{{ t('domain.nameHint') }}</template>
+            </FormField>
+            <FormField :label="t('common.iri')" path="iri">
+              <UiInput v-model:value="formData.iri" placeholder="urn:knowledge:domain:hr" />
+            </FormField>
+          </fieldset>
+          <fieldset class="form-section">
+            <legend>{{ t('common.label') }}</legend>
+            <FormField :label="t('common.labelZh')" path="labelZh">
+              <UiInput v-model:value="formData.labelZh" />
+            </FormField>
+            <FormField :label="t('common.labelEn')" path="labelEn">
+              <UiInput v-model:value="formData.labelEn" />
+            </FormField>
+            <FormField :label="t('domain.parent')" path="parentId">
+              <UiSelect
+                v-model:value="formData.parentId"
+                :options="parentOptions"
+                clearable
+                :placeholder="t('domain.noParent')"
+              />
+            </FormField></fieldset
+        ></FormContainer>
+        <UiAlert v-if="createError" type="error" class="action-error">{{ createError }}</UiAlert>
+        <template #footer>
+          <div class="drawer-actions">
+            <UiButton :disabled="creating" @click="createVisible = false">
+              {{ t('common.cancel') }}
+            </UiButton>
+            <UiButton type="primary" :loading="creating" @click="handleCreate">
+              {{ t('common.save') }}
+            </UiButton>
+          </div>
+        </template>
+      </UiDrawerContent>
+    </UiDrawer>
+  </section>
+</template>
+
+<style scoped>
+.page {
+  padding-bottom: var(--space-5);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 262px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/* ── 左侧列表 ───────────────────────────────────────────── */
+.list-card {
+  overflow: hidden;
+  background: var(--bg-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+}
+
+.list-head {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  font-size: var(--font-caption);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.list-head .count {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.list-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.domain-item {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: var(--font-small);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.domain-item:hover {
+  background: var(--bg-hover);
+}
+
+.domain-item.on {
+  color: var(--text);
+  font-weight: 500;
+  background: var(--accent-soft);
+}
+
+.item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-item .rev {
+  margin-left: auto;
+  color: var(--text-disabled);
+  font-size: 10px;
+}
+
+.list-empty {
+  padding: var(--space-5);
+}
+
+/* ── 右侧详情 ───────────────────────────────────────────── */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-1);
+}
+
+.detail-empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+}
+
+.detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-title {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+.detail-title h3 {
+  margin: 0;
+  font-size: var(--font-h2);
+  font-weight: 500;
+}
+
+.detail-title .sub {
+  color: var(--text-tertiary);
+  font-size: var(--font-small);
+}
+
+.detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+/* ── 发布检查 ───────────────────────────────────────────── */
+.check-panel {
+  padding: 12px 14px;
+  background: var(--bg-inset);
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+.check-verdict {
+  font-size: var(--font-small);
+  font-weight: 500;
+}
+
+.check-verdict.ok {
+  color: var(--s-pass);
+}
+
+.check-verdict.bad {
+  color: var(--s-violation);
+}
+
+.check-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+  font-size: var(--font-caption);
+  color: var(--text-secondary);
+}
+
+.check-list li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.issue-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: var(--font-caption);
+  color: var(--s-violation);
+}
+
+/* ── 成员 ───────────────────────────────────────────────── */
+.member-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.member-select {
+  max-width: 320px;
+}
+
+.action-error {
+  margin-bottom: var(--space-3);
+}
+
+.member-card {
+  overflow: hidden;
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+.member-card :deep(.ui-data-table-th) {
+  padding: 8px 12px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  text-align: left;
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.member-card :deep(.ui-data-table-td) {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.member-card :deep(tr:last-child .ui-data-table-td) {
+  border-bottom: 0;
+}
+
+.member-name {
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--text-disabled);
+}
+
+.mini-tag {
+  padding: 1px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-pill);
+}
+
+.status-tag {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 9px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-pill);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--dot);
+  border-radius: 50%;
+}
+
+.drawer-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>
+
+<style scoped src="../styles/observatory.css"></style>

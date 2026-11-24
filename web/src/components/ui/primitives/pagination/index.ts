@@ -1,0 +1,10 @@
+// Source: https://www.shadcn-vue.com/r/styles/reka-nova/pagination.json; original registry SHA256: fac92217aaf383274e3db4c0918db5ae13f17edb259529d9a7d8c9da193d6589. Copyright (c) 2023 unovue; MIT. See ../../THIRD_PARTY_LICENSES.md.
+export { default as Pagination } from './Pagination.vue'
+export { default as PaginationContent } from './PaginationContent.vue'
+export { default as PaginationEllipsis } from './PaginationEllipsis.vue'
+export { default as PaginationFirst } from './PaginationFirst.vue'
+export { default as PaginationItem } from './PaginationItem.vue'
+export { default as PaginationLast } from './PaginationLast.vue'
+export { default as PaginationLink } from './PaginationLink.vue'
+export { default as PaginationNext } from './PaginationNext.vue'
+export { default as PaginationPrevious } from './PaginationPrevious.vue'

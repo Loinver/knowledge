@@ -1,0 +1,17 @@
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "vueIndentScriptAndStyle": false,
+  "overrides": [
+    {
+      "files": ["*.md", "*.yml", "*.yaml"],
+      "options": { "printWidth": 120 }
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: ESLint
+        run: pnpm run lint:web
+      - name: Prettier
+        run: pnpm run format:check
+      - name: Type check
+        run: pnpm -C web typecheck
+      - name: Unit tests
+        run: pnpm run test:web
+      - name: Build
+        run: pnpm run build
+      - name: i18n keys
+        run: node scripts/check-i18n-keys.mjs
+      - name: License check
+        run: pnpm run check:licenses:web
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install API schema dependencies
+        run: |
+          python -m venv server/.venv
+          server/.venv/bin/pip install -e ./server
+      - name: OpenAPI types
+        run: pnpm run check:api
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install
+        run: |
+          cd server
+          python -m venv .venv
+          .venv/bin/pip install -e ".[dev]"
+      - name: Ruff check
+        run: cd server && .venv/bin/ruff check --output-format=github .
+      - name: Ruff format
+        run: cd server && .venv/bin/ruff format --check .
+      - name: Mypy
+        run: cd server && .venv/bin/mypy app
+      - name: Architecture boundaries
+        run: cd server && .venv/bin/pytest tests/test_architecture.py
+      - name: Pytest
+        run: cd server && .venv/bin/pytest
+      - name: License check
+        run: sh scripts/check-python-licenses.sh
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: main
+            command: make test-e2e
+          - suite: ai
+            command: make test-e2e-ai
+          - suite: governance
+            command: make test-e2e-governance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pnpm install --frozen-lockfile
+      - name: Install server and browser
+        run: |
+          python -m venv server/.venv
+          server/.venv/bin/pip install -e './server[dev]'
+          pnpm exec playwright install --with-deps chromium
+      - name: Isolated browser workflows
+        run: ${{ matrix.command }}
+      - name: Retain failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures-${{ matrix.suite }}
+          path: test-results/
+          retention-days: 7

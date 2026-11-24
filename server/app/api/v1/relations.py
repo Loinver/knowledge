@@ -1,0 +1,209 @@
+"""关系类型库路由（H-12）。"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from app.api.v1.asset_audit_context import audit_asset, audit_created
+from app.api.v1.governance_common import governance_session as get_session
+from app.domain.iri_service import rename_resource
+from app.domain.relation_service import (
+    create_relation_type,
+    get_assoc_attributes,
+    get_relation_meta,
+    get_relation_type,
+    list_relation_types,
+    publish_relation_type,
+    update_relation_type,
+)
+from app.domain.resource_lifecycle import delete_resource, unpublish_resource
+from app.domain.usages_service import resource_usages
+from app.models.asset_audit import AssetAuditAction, AssetType
+from app.models.resource import ModelResource
+from app.schemas.common import RenameRequest
+from app.schemas.relation import (
+    AttributeDefOut,
+    CardinalitySpec,
+    EndpointSpec,
+    OwlFeatures,
+    RelationTypeBrief,
+    RelationTypeCreate,
+    RelationTypeOut,
+    RelationTypeUpdate,
+    RelationTypeUsagesOut,
+)
+from app.schemas.response import ApiResponse
+from app.schemas.type import RevisionOut as TypeRevisionOut
+from app.schemas.type import Synonym
+
+router = APIRouter(prefix="/relations", tags=["relations"])
+
+
+def _to_out(session: Session, resource: ModelResource) -> RelationTypeOut:
+    """组装 RelationTypeOut。
+
+    端点基数、角色标签与 OWL 特征一律从存储读回（M-07 补齐正式列），
+    不再区分「创建时用 payload、其余按默认值猜」两条路径。
+    """
+    meta = get_relation_meta(session, resource)
+    domain_id = meta["domain_ids"][0] if meta["domain_ids"] else 0
+    range_id = meta["range_ids"][0] if meta["range_ids"] else 0
+    domain_spec = EndpointSpec(
+        type_id=domain_id,
+        cardinality=CardinalitySpec(
+            min=meta["domain_min"],
+            max=meta["domain_max"],
+            role_label_i18n=meta["domain_cardinality_role_i18n"],
+        ),
+        role_i18n=meta["domain_role_i18n"],
+    )
+    range_spec = EndpointSpec(
+        type_id=range_id,
+        cardinality=CardinalitySpec(
+            min=meta["range_min"],
+            max=meta["range_max"],
+            role_label_i18n=meta["range_cardinality_role_i18n"],
+        ),
+        role_i18n=meta["range_role_i18n"],
+    )
+
+    attribute_defs: list[AttributeDefOut] = []
+    if meta["assoc_resource_id"] is not None:
+        attribute_defs = get_assoc_attributes(session, meta["assoc_resource_id"])
+
+    return RelationTypeOut(
+        id=resource.id,
+        kind=resource.kind,
+        name=resource.name,
+        iri=resource.iri,
+        namespace_id=resource.namespace_id,
+        label_i18n=resource.label_i18n,
+        definition_i18n=resource.definition_i18n,
+        synonyms=[Synonym.model_validate(item) for item in resource.synonyms],
+        status=resource.status,
+        current_revision=resource.current_revision,
+        edit_revision=resource.edit_revision,
+        domain_spec=domain_spec,
+        range_spec=range_spec,
+        inverse_of=meta["inverse_of"],
+        owl=OwlFeatures(**meta["owl"]),
+        union_of=meta["union_of"],
+        intersection_of=meta["intersection_of"],
+        enable_attributes=meta["assoc_resource_id"] is not None,
+        assoc_resource_id=meta["assoc_resource_id"],
+        attribute_defs=attribute_defs,
+    )
+
+
+@router.get("", response_model=ApiResponse[list[RelationTypeBrief]])
+def list_relations(
+    q: str = Query(""),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[RelationTypeBrief]:
+    items, _total = list_relation_types(session, q, page, page_size)
+    out: list[RelationTypeBrief] = []
+    for res in items:
+        meta = get_relation_meta(session, res)
+        out.append(
+            RelationTypeBrief(
+                id=res.id,
+                name=res.name,
+                iri=res.iri,
+                label_i18n=res.label_i18n,
+                status=res.status,
+                current_revision=res.current_revision,
+                enable_attributes=meta["assoc_resource_id"] is not None,
+                inverse_of=meta["inverse_of"],
+            )
+        )
+    return out
+
+
+@router.post("", response_model=ApiResponse[RelationTypeOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.RELATION_TYPE)
+def create_relation(
+    payload: RelationTypeCreate, session: Session = Depends(get_session)
+) -> RelationTypeOut:
+    resource = create_relation_type(session, payload)
+    audit_created(session, resource.id)
+    session.commit()
+    return _to_out(session, resource)
+
+
+@router.get("/{relation_id}/usages", response_model=ApiResponse[RelationTypeUsagesOut])
+def relation_usages(
+    relation_id: int, session: Session = Depends(get_session)
+) -> RelationTypeUsagesOut:
+    """详情页「规则 / 引用与版本」两个页签的数据。"""
+    resource = get_relation_type(session, relation_id)
+    return RelationTypeUsagesOut.model_validate(resource_usages(session, resource))
+
+
+@router.get("/{relation_id}", response_model=ApiResponse[RelationTypeOut])
+def get_relation(
+    relation_id: int, session: Session = Depends(get_session)
+) -> RelationTypeOut:
+    resource = get_relation_type(session, relation_id)
+    return _to_out(session, resource)
+
+
+@router.put("/{relation_id}", response_model=ApiResponse[RelationTypeOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.RELATION_TYPE, "relation_id")
+def update_relation(
+    relation_id: int,
+    payload: RelationTypeUpdate,
+    session: Session = Depends(get_session),
+) -> RelationTypeOut:
+    resource = get_relation_type(session, relation_id)
+    update_relation_type(session, resource, payload)
+    session.commit()
+    return _to_out(session, resource)
+
+
+@router.patch("/{relation_id}/rename", response_model=ApiResponse[RelationTypeOut])
+@audit_asset(AssetAuditAction.RENAME, AssetType.RELATION_TYPE, "relation_id")
+def rename_relation(
+    relation_id: int,
+    payload: RenameRequest,
+    session: Session = Depends(get_session),
+) -> RelationTypeOut:
+    """草稿态关系类型改名：重建 IRI，同步规则引用面。"""
+    resource = get_relation_type(session, relation_id)
+    rename_resource(session, resource.id, payload.name)
+    session.commit()
+    return _to_out(session, resource)
+
+
+@router.post("/{relation_id}/publish", response_model=ApiResponse[TypeRevisionOut])
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.RELATION_TYPE, "relation_id")
+def publish_relation(
+    relation_id: int, session: Session = Depends(get_session)
+) -> TypeRevisionOut:
+    resource = get_relation_type(session, relation_id)
+    revision = publish_relation_type(session, resource)
+    session.commit()
+    return TypeRevisionOut(revision=revision, checksum="")
+
+
+@router.post("/{relation_id}/unpublish", response_model=ApiResponse[RelationTypeOut])
+@audit_asset(AssetAuditAction.UNPUBLISH, AssetType.RELATION_TYPE, "relation_id")
+def unpublish_relation(
+    relation_id: int, session: Session = Depends(get_session)
+) -> RelationTypeOut:
+    """撤回发布：PUBLISHED → DRAFT，版本历史保持不可变。"""
+    resource = get_relation_type(session, relation_id)
+    resource = unpublish_resource(session, resource)
+    session.commit()
+    return _to_out(session, resource)
+
+
+@router.delete("/{relation_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.RELATION_TYPE, "relation_id")
+def remove_relation(relation_id: int, session: Session = Depends(get_session)) -> None:
+    """删除从未发布过的草稿关系；有外部引用或版本历史一律拒绝。"""
+    resource = get_relation_type(session, relation_id)
+    delete_resource(session, resource)
+    session.commit()

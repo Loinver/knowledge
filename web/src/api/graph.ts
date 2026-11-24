@@ -1,0 +1,144 @@
+import { http } from '@/api/client'
+import { listPages } from '@/api/pagination'
+import type { components, operations } from '@/api/schema'
+
+type Schemas = components['schemas']
+export type GraphEntity = Schemas['EntityIdentityOut']
+export type GraphFact = Schemas['GraphTripleOut']
+export type EvidenceItem = Schemas['EvidenceTraceItem']
+export type EvidenceTrace = Schemas['FactTraceOut'] | Schemas['EntityTraceOut']
+export type GraphView = Schemas['GraphViewOut']
+export type GraphDiff = Schemas['GraphDiffOut']
+export type GraphPath = Schemas['PathOut']
+export type GraphRecommendations = Schemas['GraphRecommendationOut']
+export type ReverseTrace = Schemas['ReverseTraceOut']
+export type EntityFusion = Schemas['EntityFusionOut']
+export type FusionAttributeDecision = Schemas['FusionAttributeDecision']
+export type ViewTemplate = Schemas['ViewTemplateOut']
+export type ViewTemplatePage = Schemas['ViewTemplatePage']
+export type SemanticViewConfig = Schemas['SemanticViewConfig']
+export type SemanticViewFields = Schemas['SemanticViewFieldsOut']
+export type GraphRevision = Schemas['GraphRevisionOut']
+
+type EntityQuery =
+  operations['search_entities_api_v1_extraction_entities_get']['parameters']['query']
+type ViewQuery = operations['browse_graph_api_v1_extraction_graph_view_get']['parameters']['query']
+
+export const graphApi = {
+  switchCurrent: (id: number) =>
+    http.post<GraphRevision>(`/extraction/graph/${id}/switch`).then((r) => r.data),
+  view: (params: ViewQuery, signal: AbortSignal) =>
+    http
+      .get<GraphView>('/extraction/graph-view', {
+        params,
+        signal,
+        paramsSerializer: { indexes: null },
+      })
+      .then((r) => r.data),
+  entities: (params: EntityQuery, signal: AbortSignal) =>
+    http.get<Schemas['EntityPage']>('/extraction/entities', { params, signal }).then((r) => r.data),
+  detail: (iri: string, graph_revision_id: number | undefined, signal: AbortSignal) =>
+    http
+      .get<Schemas['EntityDetailOut']>('/extraction/entity-detail', {
+        params: { iri, graph_revision_id },
+        signal,
+      })
+      .then((r) => r.data),
+  entityEvidence: (iri: string, graph_revision_id: number | undefined, signal: AbortSignal) =>
+    http
+      .get<Schemas['EntityTraceOut']>('/extraction/evidence/trace/entity', {
+        params: { iri, graph_revision_id },
+        signal,
+      })
+      .then((r) => r.data),
+  entityFusion: (iri: string, graph_revision_id: number | undefined, signal: AbortSignal) =>
+    http
+      .get<EntityFusion>('/extraction/evidence/fusion', {
+        params: { iri, graph_revision_id },
+        signal,
+      })
+      .then((r) => r.data),
+  factEvidence: (
+    fact: Schemas['FactOut'],
+    graph_revision_id: number | undefined,
+    signal: AbortSignal,
+  ) =>
+    http
+      .get<Schemas['FactTraceOut']>('/extraction/evidence/trace', {
+        params: { ...fact, graph_revision_id },
+        signal,
+      })
+      .then((r) => r.data),
+  diff: (baseId: number, targetId: number, signal: AbortSignal) =>
+    http
+      .get<GraphDiff>(`/extraction/graph/${baseId}/diff/${targetId}`, { signal })
+      .then((r) => r.data),
+  path: (
+    graphRevisionId: number,
+    params: { from: string; to: string; max_hops: number; include_derived: boolean },
+    signal: AbortSignal,
+  ) =>
+    http
+      .get<GraphPath>(`/extraction/graph/${graphRevisionId}/path`, { params, signal })
+      .then((r) => r.data),
+  recommendations: (graphRevisionId: number, signal: AbortSignal) =>
+    http
+      .get<GraphRecommendations>(`/extraction/graph/${graphRevisionId}/layout-recommendations`, {
+        signal,
+      })
+      .then((r) => r.data),
+  reverseTrace: (
+    params: { source_id: number; table: string; row_key: string },
+    graphRevisionId: number | undefined,
+    signal: AbortSignal,
+  ) =>
+    http
+      .get<ReverseTrace>('/extraction/evidence/trace/reverse', {
+        params: { ...params, graph_revision_id: graphRevisionId },
+        signal,
+      })
+      .then((r) => r.data),
+  revisions: (signal: AbortSignal) =>
+    listPages(
+      (page, page_size) =>
+        http
+          .get<Schemas['GraphRevisionOut'][]>('/extraction/graph/revisions', {
+            params: { page, page_size },
+            signal,
+          })
+          .then((r) => r.data),
+      signal,
+    ),
+  runQuarantine: (runId: number, signal: AbortSignal) =>
+    http
+      .get<Schemas['QuarantineOut'][]>(`/extraction/runs/${runId}/quarantine`, { signal })
+      .then((r) => r.data),
+}
+
+export const viewTemplateApi = {
+  fields: (ontologyId: number, revision: number, signal: AbortSignal) =>
+    http
+      .get<SemanticViewFields>('/view-templates/semantic-fields', {
+        params: { ontology_id: ontologyId, ontology_revision: revision },
+        signal,
+      })
+      .then((r) => r.data),
+  applicable: (id: number, ontologyId: number, revision: number, signal: AbortSignal) =>
+    http
+      .get<ViewTemplate>(`/view-templates/${id}/applicable`, {
+        params: { ontology_id: ontologyId, ontology_revision: revision },
+        signal,
+      })
+      .then((r) => r.data),
+  list: (ontologyId: number | undefined, signal: AbortSignal) =>
+    http
+      .get<ViewTemplatePage>('/view-templates', {
+        params: { ontology_id: ontologyId },
+        signal,
+      })
+      .then((r) => r.data),
+  create: (payload: Schemas['ViewTemplateCreate'], signal?: AbortSignal) =>
+    http.post<ViewTemplate>('/view-templates', payload, { signal }).then((r) => r.data),
+  remove: (id: number, signal?: AbortSignal) =>
+    http.delete(`/view-templates/${id}`, { signal }).then((r) => r.data),
+}

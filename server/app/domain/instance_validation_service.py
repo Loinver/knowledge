@@ -1,0 +1,572 @@
+"""实例层校验报告（H-51）。
+
+对图谱版本做实例层校验，复用 M1 四态常量。
+检查抽取产出是否符合本体定义。
+"""
+
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from datetime import date
+from decimal import Decimal, InvalidOperation
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.error_codes import ErrorCode
+from app.core.errors import KGError
+from app.domain.ontology_snapshot import (
+    ResourceSnapshot,
+    SnapshotProperty,
+    effective_datatype_props,
+    load_ontology_snapshot,
+    relation_endpoints,
+)
+from app.iri import is_valid_any_uri
+from app.models.data_access import Mapping, MappingRevision
+from app.models.enums import ResourceKind, ValidationState
+from app.models.extraction import (
+    DerivedEdge,
+    EntityIdentity,
+    ExtractionRun,
+    FactEvidence,
+    GraphRevision,
+    GraphTriple,
+    Quarantine,
+)
+from app.models.validation import ValidationReport, ValidationResult
+
+
+def run_instance_validation(
+    session: Session, graph_revision_id: int
+) -> ValidationReport:
+    """对图谱版本执行 6 项实例层校验，四态输出。"""
+    gr = session.get(GraphRevision, graph_revision_id)
+    if gr is None:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND,
+            {"graph_revision_id": graph_revision_id},
+        )
+    run = session.get(ExtractionRun, gr.run_id)
+    if run is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"run_id": gr.run_id})
+    rev = session.get(MappingRevision, run.mapping_revision_id)
+    if rev is None:
+        raise KGError(
+            ErrorCode.REVISION_NOT_FOUND,
+            {"mapping_revision_id": run.mapping_revision_id},
+        )
+    mapping = session.get(Mapping, rev.mapping_id)
+    if mapping is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"mapping_id": rev.mapping_id})
+    resources = list(
+        load_ontology_snapshot(session, mapping.ontology_id, rev.onto_version).values()
+    )
+
+    checks = [
+        _check_i01_entity_type_defined(session, gr, resources),
+        _check_i02_relation_endpoint_types(session, gr, resources),
+        _check_i03_attribute_value_types(session, gr, resources),
+        _check_i04_fact_evidence(session, gr),
+        _check_i05_quarantine(session, gr),
+        _check_i06_derived_edge_refs(session, gr),
+    ]
+
+    summary = {
+        "pass": sum(1 for c in checks if c.state == ValidationState.PASS),
+        "violation": sum(1 for c in checks if c.state == ValidationState.VIOLATION),
+        "na": sum(1 for c in checks if c.state == ValidationState.NA),
+        "not_run": sum(1 for c in checks if c.state == ValidationState.NOT_RUN),
+    }
+    report = ValidationReport(
+        scope="instance",
+        target_id=graph_revision_id,
+        target_revision=graph_revision_id,
+        summary=summary,
+    )
+    session.add(report)
+    session.flush()
+    for check in checks:
+        check.report_id = report.id
+        session.add(check)
+    session.flush()
+    return report
+
+
+def _check_i01_entity_type_defined(
+    session: Session, gr: GraphRevision, resources: list[ResourceSnapshot]
+) -> ValidationResult:
+    """I01：每个 EntityIdentity 的 type_iri 必须在本体已定义。"""
+    entity_iris = {
+        r.iri for r in resources if r.kind in {ResourceKind.ENTITY, ResourceKind.ASSOC}
+    }
+    entities = list(
+        session.scalars(
+            select(EntityIdentity).where(EntityIdentity.graph_revision_id == gr.id)
+        )
+    )
+    undefined = [e for e in entities if e.type_iri not in entity_iris]
+    if undefined:
+        return ValidationResult(
+            check_code="I01",
+            state=ValidationState.VIOLATION,
+            focus_node=undefined[0].iri,
+            detail={
+                "undefined_types": sorted({e.type_iri for e in undefined}),
+                "count": len(undefined),
+            },
+            message="entity type not defined in ontology",
+        )
+    return ValidationResult(check_code="I01", state=ValidationState.PASS)
+
+
+def _check_i02_relation_endpoint_types(
+    session: Session, gr: GraphRevision, resources: list[ResourceSnapshot]
+) -> ValidationResult:
+    """I02：冻结继承下的关系端点类型及所有目标实例的出入基数。"""
+    rel_by_name = {r.name: r for r in resources if r.kind == ResourceKind.OBJECT_PROP}
+    resource_iris = {r.id: r.iri for r in resources}
+    ancestors = _frozen_type_ancestors(resources)
+    entity_type_map = _entity_type_map(session, gr)
+    endpoints = {
+        rel.name: relation_endpoints(rel, resource_iris) for rel in rel_by_name.values()
+    }
+    outgoing: dict[tuple[str, str], set[str]] = defaultdict(set)
+    incoming: dict[tuple[str, str], set[str]] = defaultdict(set)
+    triples = list(
+        session.scalars(
+            select(GraphTriple).where(
+                GraphTriple.graph_revision_id == gr.id,
+                GraphTriple.predicate != "_entity_attrs",
+            )
+        )
+    )
+    for triple in triples:
+        rel = rel_by_name.get(triple.predicate)
+        if rel is None:
+            return ValidationResult(
+                check_code="I02",
+                state=ValidationState.VIOLATION,
+                focus_node=triple.predicate,
+                detail={"predicate": triple.predicate},
+                message="relation type not defined in ontology",
+            )
+        domain_iri, range_iri = endpoints[rel.name]
+        if not domain_iri or not range_iri:
+            return ValidationResult(
+                check_code="I02",
+                state=ValidationState.NOT_RUN,
+                focus_node=triple.predicate,
+                message="relation endpoint definitions missing from snapshot",
+            )
+        subj_type = entity_type_map.get(triple.subject)
+        obj_type = entity_type_map.get(triple.object_)
+        if domain_iri not in ancestors.get(subj_type or "", frozenset()):
+            return ValidationResult(
+                check_code="I02",
+                state=ValidationState.VIOLATION,
+                focus_node=triple.predicate,
+                detail={
+                    "expected_domain": domain_iri,
+                    "actual_subject_type": subj_type,
+                    "subject": triple.subject,
+                },
+                message="subject type does not match relation domain",
+            )
+        if range_iri not in ancestors.get(obj_type or "", frozenset()):
+            return ValidationResult(
+                check_code="I02",
+                state=ValidationState.VIOLATION,
+                focus_node=triple.predicate,
+                detail={
+                    "expected_range": range_iri,
+                    "actual_object_type": obj_type,
+                    "object": triple.object_,
+                },
+                message="object type does not match relation range",
+            )
+        # Cardinality counts distinct neighbours, as SHACL value-node counts do.
+        # Repeated source facts remain intact in the graph and evidence tables.
+        outgoing[(rel.name, triple.subject)].add(triple.object_)
+        incoming[(rel.name, triple.object_)].add(triple.subject)
+    for rel in rel_by_name.values():
+        domain_iri, range_iri = endpoints[rel.name]
+        if not domain_iri or not range_iri:
+            return ValidationResult(
+                check_code="I02",
+                state=ValidationState.NOT_RUN,
+                focus_node=rel.name,
+                message="relation endpoint definitions missing from snapshot",
+            )
+        if domain_iri not in ancestors or range_iri not in ancestors:
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {"resource_id": rel.id, "reason": "incomplete_snapshot_closure"},
+            )
+        for direction, target, counts in (
+            ("domain", domain_iri, outgoing),
+            ("range", range_iri, incoming),
+        ):
+            bounds, reason = _relation_cardinality(rel, direction)
+            if bounds is None:
+                return ValidationResult(
+                    check_code="I02",
+                    state=ValidationState.NOT_RUN,
+                    focus_node=rel.name,
+                    detail={"direction": direction, "reason": reason},
+                    message=reason,
+                )
+            minimum, maximum = bounds
+            for entity_iri, type_iri in entity_type_map.items():
+                if target not in ancestors.get(type_iri, frozenset()):
+                    continue
+                count = len(counts.get((rel.name, entity_iri), set()))
+                if count < minimum or (maximum != -1 and count > maximum):
+                    return ValidationResult(
+                        check_code="I02",
+                        state=ValidationState.VIOLATION,
+                        focus_node=entity_iri,
+                        detail={
+                            "predicate": rel.name,
+                            "direction": direction,
+                            "min": minimum,
+                            "max": maximum,
+                            "count": count,
+                            "reason": "relation_cardinality_violation",
+                        },
+                        message="relation cardinality violation",
+                    )
+    return ValidationResult(check_code="I02", state=ValidationState.PASS)
+
+
+def _frozen_type_ancestors(
+    resources: list[ResourceSnapshot],
+) -> dict[str, frozenset[str]]:
+    """Include each type itself; missing/cyclic/invalid frozen parents fail closed."""
+    snapshots = {resource.id: resource for resource in resources}
+    resolved: dict[str, frozenset[str]] = {}
+    visiting: set[int] = set()
+
+    def visit(resource_id: int) -> frozenset[str]:
+        if resource_id in visiting:
+            reason = "inheritance_cycle"
+        elif resource_id not in snapshots:
+            reason = "missing_parent_snapshot"
+        elif snapshots[resource_id].kind not in {
+            ResourceKind.ENTITY,
+            ResourceKind.ASSOC,
+        }:
+            reason = "invalid_parent_kind"
+        else:
+            resource = snapshots[resource_id]
+            if resource.iri not in resolved:
+                visiting.add(resource_id)
+                iris = {resource.iri}
+                for parent_id in resource.parent_ids:
+                    iris.update(visit(parent_id))
+                visiting.remove(resource_id)
+                resolved[resource.iri] = frozenset(iris)
+            return resolved[resource.iri]
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {"resource_id": resource_id, "reason": reason},
+        )
+
+    for resource in resources:
+        if resource.kind in {ResourceKind.ENTITY, ResourceKind.ASSOC}:
+            visit(resource.id)
+    return resolved
+
+
+def _relation_cardinality(
+    resource: ResourceSnapshot, direction: str
+) -> tuple[tuple[int, int] | None, str]:
+    cardinality = (resource.object_prop or {}).get(f"{direction}_cardinality")
+    if not isinstance(cardinality, dict) or not {"min", "max"} <= cardinality.keys():
+        return None, "missing_relation_cardinality_snapshot"
+    minimum, maximum = cardinality["min"], cardinality["max"]
+    if (
+        type(minimum) is not int
+        or type(maximum) is not int
+        or minimum < 0
+        or maximum < -1
+        or (maximum != -1 and maximum < minimum)
+    ):
+        return None, "invalid_relation_cardinality_snapshot"
+    return (minimum, maximum), ""
+
+
+def _check_i03_attribute_value_types(
+    session: Session, gr: GraphRevision, resources: list[ResourceSnapshot]
+) -> ValidationResult:
+    """I03：实体属性值类型符合数据属性定义的 datatype。"""
+    prop_by_name = {
+        r.name: r for r in resources if r.kind == ResourceKind.DATATYPE_PROP
+    }
+    type_by_iri = {
+        r.iri: r
+        for r in resources
+        if r.kind in {ResourceKind.ENTITY, ResourceKind.ASSOC}
+    }
+    snapshots = {resource.id: resource for resource in resources}
+    props_by_iri = {
+        iri: {prop.name: prop for prop in effective_datatype_props(snapshots, owner.id)}
+        for iri, owner in type_by_iri.items()
+    }
+    valid_types = {"string", "integer", "decimal", "boolean", "date", "anyURI", "enum"}
+    entities = list(
+        session.scalars(
+            select(EntityIdentity).where(EntityIdentity.graph_revision_id == gr.id)
+        )
+    )
+    for entity in entities:
+        attrs = entity.attrs or {}
+        owner = type_by_iri.get(entity.type_iri)
+        owner_props = props_by_iri.get(entity.type_iri, {})
+        legacy_props = (
+            owner is not None
+            and not owner_props
+            and "datatype_props" not in owner.model_fields_set
+        )
+        for name, definition in owner_props.items():
+            constraint_state, reason = _property_constraints(
+                definition, attrs.get(name)
+            )
+            if constraint_state is not None:
+                return ValidationResult(
+                    check_code="I03",
+                    state=constraint_state,
+                    focus_node=entity.iri,
+                    detail={"attr": name, "reason": reason},
+                    message=reason,
+                )
+            if not definition.nullable and name not in attrs:
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.VIOLATION,
+                    focus_node=entity.iri,
+                    detail={"attr": name, "reason": "required_attribute_missing"},
+                    message="required attribute missing",
+                )
+        for attr_name, value in attrs.items():
+            detail = owner_props.get(attr_name)
+            prop = prop_by_name.get(attr_name)
+            if detail is not None:
+                datatype = detail.datatype
+            elif prop is not None and legacy_props:
+                datatype = (prop.definition_i18n or {}).get("datatype", "string")
+            else:
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.VIOLATION,
+                    focus_node=entity.iri,
+                    detail={"attr": attr_name},
+                    message="attribute not defined in ontology",
+                )
+            if datatype not in valid_types:
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.NOT_RUN,
+                    focus_node=entity.iri,
+                    detail={"attr": attr_name, "datatype": datatype},
+                    message="unsupported datatype in resource snapshot",
+                )
+            if datatype == "enum" and (
+                detail is None or detail.enum_dictionary is None
+            ):
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.NOT_RUN,
+                    focus_node=entity.iri,
+                    detail={"attr": attr_name},
+                    message="enum dictionary missing from resource snapshot",
+                )
+            values = value if isinstance(value, list) else [value]
+            enum_values = (
+                {entry.value for entry in detail.enum_dictionary.entries}
+                if detail is not None and detail.enum_dictionary is not None
+                else None
+            )
+            nullable = detail.nullable if detail is not None else False
+            matches = (bool(values) or nullable) and all(
+                (item is None and nullable)
+                or (
+                    _value_matches_type(item, datatype)
+                    and (enum_values is None or item in enum_values)
+                )
+                for item in values
+            )
+            if not matches:
+                return ValidationResult(
+                    check_code="I03",
+                    state=ValidationState.VIOLATION,
+                    focus_node=entity.iri,
+                    detail={
+                        "attr": attr_name,
+                        "datatype": datatype,
+                        "value_type": type(value).__name__,
+                    },
+                    message="attribute value does not match datatype",
+                )
+    return ValidationResult(check_code="I03", state=ValidationState.PASS)
+
+
+def _property_constraints(
+    prop: SnapshotProperty, value: object
+) -> tuple[ValidationState | None, str]:
+    fields = {"min_cardinality", "max_cardinality", "min_value", "max_value"}
+    if not fields <= prop.model_fields_set:
+        return ValidationState.NOT_RUN, "missing_property_constraints_snapshot"
+    values = value if isinstance(value, list) else [value]
+    present = [item for item in values if item is not None]
+    minimum = max(prop.min_cardinality or 0, 0 if prop.nullable else 1)
+    maximum = prop.max_cardinality
+    if maximum is not None and maximum < minimum:
+        return ValidationState.NOT_RUN, "invalid_property_cardinality_snapshot"
+    if len(present) < minimum or (maximum is not None and len(present) > maximum):
+        return ValidationState.VIOLATION, "property_cardinality_violation"
+    if prop.min_value is None and prop.max_value is None:
+        return None, ""
+    if prop.datatype not in {"integer", "decimal"}:
+        return ValidationState.NOT_RUN, "unsupported_property_range_datatype"
+    try:
+        lower = Decimal(prop.min_value) if prop.min_value is not None else None
+        upper = Decimal(prop.max_value) if prop.max_value is not None else None
+        if any(v is not None and not v.is_finite() for v in (lower, upper)):
+            raise InvalidOperation
+        if lower is not None and upper is not None and lower > upper:
+            raise InvalidOperation
+    except InvalidOperation:
+        return ValidationState.NOT_RUN, "invalid_property_range_snapshot"
+    for item in present:
+        if not _value_matches_type(item, prop.datatype):
+            continue  # The datatype check below reports this value.
+        number = Decimal(str(item))
+        if (lower is not None and number < lower) or (
+            upper is not None and number > upper
+        ):
+            return ValidationState.VIOLATION, "property_range_violation"
+    return None, ""
+
+
+def _check_i04_fact_evidence(session: Session, gr: GraphRevision) -> ValidationResult:
+    """I04：每条关系事实至少有一条 FactEvidence。无来源即不可信。"""
+    triples = list(
+        session.scalars(
+            select(GraphTriple).where(
+                GraphTriple.graph_revision_id == gr.id,
+                GraphTriple.predicate != "_entity_attrs",
+            )
+        )
+    )
+    if not triples:
+        return ValidationResult(
+            check_code="I04", state=ValidationState.NA, message="no relation facts"
+        )
+    missing: list[str] = []
+    for triple in triples:
+        found = session.scalar(
+            select(FactEvidence)
+            .where(
+                FactEvidence.graph_revision_id == gr.id,
+                FactEvidence.subject == triple.subject,
+                FactEvidence.predicate == triple.predicate,
+                FactEvidence.object_ == triple.object_,
+            )
+            .limit(1)
+        )
+        if found is None:
+            missing.append(f"{triple.subject} {triple.predicate} {triple.object_}")
+    if missing:
+        return ValidationResult(
+            check_code="I04",
+            state=ValidationState.VIOLATION,
+            focus_node=missing[0],
+            detail={"count": len(missing)},
+            message="fact without evidence",
+        )
+    return ValidationResult(check_code="I04", state=ValidationState.PASS)
+
+
+def _check_i05_quarantine(session: Session, gr: GraphRevision) -> ValidationResult:
+    """I05：隔离记录标记。有隔离记录表示抽取时存在问题行。"""
+    run = session.get(ExtractionRun, gr.run_id)
+    assert run is not None
+    found = session.scalar(
+        select(Quarantine).where(Quarantine.run_id == run.id).limit(1)
+    )
+    if found is not None:
+        return ValidationResult(
+            check_code="I05",
+            state=ValidationState.VIOLATION,
+            detail={"run_id": run.id},
+            message="quarantine records exist",
+        )
+    return ValidationResult(check_code="I05", state=ValidationState.PASS)
+
+
+def _check_i06_derived_edge_refs(
+    session: Session, gr: GraphRevision
+) -> ValidationResult:
+    """I06：派生边的 subject/object 必须是图谱中存在的实体。"""
+    derived = list(
+        session.scalars(
+            select(DerivedEdge).where(DerivedEdge.graph_revision_id == gr.id)
+        )
+    )
+    if not derived:
+        return ValidationResult(
+            check_code="I06", state=ValidationState.NA, message="no derived edges"
+        )
+    entity_iris = set(
+        session.scalars(
+            select(EntityIdentity.iri).where(EntityIdentity.graph_revision_id == gr.id)
+        )
+    )
+    for edge in derived:
+        if edge.subject not in entity_iris or edge.object_ not in entity_iris:
+            return ValidationResult(
+                check_code="I06",
+                state=ValidationState.VIOLATION,
+                focus_node=f"{edge.subject} {edge.predicate} {edge.object_}",
+                detail={"edge_id": edge.id},
+                message="derived edge references non-existent entity",
+            )
+    return ValidationResult(check_code="I06", state=ValidationState.PASS)
+
+
+def _entity_type_map(session: Session, gr: GraphRevision) -> dict[str, str]:
+    entities = list(
+        session.scalars(
+            select(EntityIdentity).where(EntityIdentity.graph_revision_id == gr.id)
+        )
+    )
+    return {e.iri: e.type_iri for e in entities}
+
+
+def _value_matches_type(value: object, datatype: str) -> bool:
+    if datatype == "string":
+        return isinstance(value, str)
+    if datatype == "integer":
+        return (isinstance(value, int) and not isinstance(value, bool)) or (
+            isinstance(value, float) and value.is_integer()
+        )
+    if datatype == "decimal":
+        return (isinstance(value, int) and not isinstance(value, bool)) or (
+            isinstance(value, float) and math.isfinite(value)
+        )
+    if datatype == "boolean":
+        return isinstance(value, bool)
+    if datatype == "date":
+        if not isinstance(value, str):
+            return False
+        try:
+            return date.fromisoformat(value).isoformat() == value
+        except ValueError:
+            return False
+    if datatype == "anyURI":
+        return isinstance(value, str) and is_valid_any_uri(value)
+    if datatype == "enum":
+        return isinstance(value, str)
+    return True

@@ -1,0 +1,97 @@
+/* Account-only settings and identity panels. */
+.account-page {
+  min-width: 0;
+  max-width: 1180px;
+}
+.account-workspace {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.6fr);
+  gap: 16px;
+  align-items: start;
+}
+.identity-panel,
+.settings-panel {
+  min-width: 0;
+  background: var(--bg-panel, var(--bg-surface));
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+}
+.group-heading {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.group-heading span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.group-heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.group-heading p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+  line-height: 1.7;
+}
+.identity-list {
+  margin: 0;
+  padding: 0 20px;
+  background: var(--bg-inset);
+}
+.identity-list > div {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.identity-list > div:last-child {
+  border-bottom: 0;
+}
+.identity-list dt {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.identity-list dd {
+  margin: 6px 0 0;
+  color: var(--text-primary, var(--text));
+  overflow-wrap: anywhere;
+}
+.settings-form {
+  padding: 24px 20px 0;
+}
+.form-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.session-help {
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+.session-help summary {
+  cursor: pointer;
+  line-height: 1.7;
+}
+.session-help p {
+  margin-bottom: 0;
+  line-height: 1.7;
+}
+.alert {
+  margin-bottom: 16px;
+}
+@media (max-width: 720px) {
+  .account-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .form-actions {
+    flex-wrap: wrap;
+  }
+  .form-actions :deep(.ui-button) {
+    min-height: 44px;
+  }
+}

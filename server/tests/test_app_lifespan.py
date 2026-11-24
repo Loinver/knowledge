@@ -1,0 +1,113 @@
+"""应用生命周期使用替身引擎，绝不连接用户元数据库。"""
+
+from __future__ import annotations
+
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+from app import main
+from app.api.errors import install_error_handler
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+
+
+@pytest.mark.parametrize("create_tables", [False, True])
+def test_lifespan_creates_tables_only_when_enabled_and_disposes(
+    monkeypatch: pytest.MonkeyPatch, create_tables: bool
+) -> None:
+    engine = Mock()
+    create_all = Mock()
+    monkeypatch.setattr(main, "get_engine", lambda: engine)
+    monkeypatch.setattr(main.Base.metadata, "create_all", create_all)
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            create_tables_on_startup=create_tables, knowledge_workers_enabled=False
+        ),
+    )
+
+    async def run() -> None:
+        async with main.lifespan(FastAPI()):
+            assert create_all.call_count == int(create_tables)
+            engine.dispose.assert_not_called()
+
+    asyncio.run(run())
+    engine.dispose.assert_called_once_with()
+    if create_tables:
+        create_all.assert_called_once_with(engine)
+
+
+@pytest.mark.parametrize("fail_during_startup", [False, True])
+def test_lifespan_disposes_on_startup_or_application_failure(
+    monkeypatch: pytest.MonkeyPatch, fail_during_startup: bool
+) -> None:
+    engine = Mock()
+    create_all = Mock(
+        side_effect=RuntimeError("startup") if fail_during_startup else None
+    )
+    monkeypatch.setattr(main, "get_engine", lambda: engine)
+    monkeypatch.setattr(main.Base.metadata, "create_all", create_all)
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            create_tables_on_startup=True, knowledge_workers_enabled=False
+        ),
+    )
+
+    async def run() -> None:
+        async with main.lifespan(FastAPI()):
+            raise RuntimeError("application")
+
+    with pytest.raises(
+        RuntimeError, match="startup" if fail_during_startup else "application"
+    ):
+        asyncio.run(run())
+    engine.dispose.assert_called_once_with()
+
+
+def test_http_error_adapter_preserves_headers_and_envelope() -> None:
+    application = FastAPI()
+    install_error_handler(application)
+
+    @application.get("/protected")
+    def protected() -> None:
+        raise HTTPException(
+            401, "Not authenticated", headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    with TestClient(application) as client:
+        response = client.get("/protected")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json()["code"] == "AUTH.TOKEN_EXPIRED"
+    assert response.json()["data"] is None
+
+
+def test_lifespan_owns_workers_and_disposes_even_when_stop_fails(monkeypatch) -> None:
+    engine = Mock()
+    runtime = SimpleNamespace(
+        start=AsyncMock(), stop=AsyncMock(side_effect=RuntimeError("stop"))
+    )
+    monkeypatch.setattr(main, "get_engine", lambda: engine)
+    monkeypatch.setattr(main, "KnowledgeRuntime", lambda factory: runtime)
+    monkeypatch.setattr(
+        main,
+        "get_settings",
+        lambda: SimpleNamespace(
+            create_tables_on_startup=False,
+            knowledge_workers_enabled=True,
+        ),
+    )
+
+    async def run() -> None:
+        async with main.lifespan(FastAPI()):
+            runtime.start.assert_awaited_once()
+            runtime.stop.assert_not_awaited()
+
+    with pytest.raises(RuntimeError, match="stop"):
+        asyncio.run(run())
+    engine.dispose.assert_called_once()

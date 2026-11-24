@@ -1,0 +1,11 @@
+// Source: https://www.shadcn-vue.com/r/styles/reka-nova/dialog.json; original registry SHA256: b1d0a48ef9dc6f71ad128761ceb1a957901306d2e097cd7ee20c703388c5db03. Copyright (c) 2023 unovue; MIT. See ../../THIRD_PARTY_LICENSES.md.
+export { default as Dialog } from './Dialog.vue'
+export { default as DialogClose } from './DialogClose.vue'
+export { default as DialogContent } from './DialogContent.vue'
+export { default as DialogDescription } from './DialogDescription.vue'
+export { default as DialogFooter } from './DialogFooter.vue'
+export { default as DialogHeader } from './DialogHeader.vue'
+export { default as DialogOverlay } from './DialogOverlay.vue'
+export { default as DialogScrollContent } from './DialogScrollContent.vue'
+export { default as DialogTitle } from './DialogTitle.vue'
+export { default as DialogTrigger } from './DialogTrigger.vue'

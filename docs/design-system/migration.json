@@ -1,0 +1,1637 @@
+{
+  "specification": "2026-11-23",
+  "baselineHead": "13b5a3a",
+  "initial": [
+    {
+      "path": "web/src/App.vue",
+      "symbols": [
+        "enUS",
+        "NConfigProvider",
+        "NDialogProvider",
+        "NLoadingBarProvider",
+        "NMessageProvider",
+        "NNotificationProvider",
+        "zhCN"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/AdminLayout.vue",
+      "symbols": ["NLayout", "NLayoutContent"],
+      "css": [".n-layout-scroll-container", ".n-layout-header"],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/AuthLayout.vue",
+      "symbols": ["NButton"],
+      "css": [".n-button"],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/components/AppHeader.vue",
+      "symbols": ["NBreadcrumb", "NBreadcrumbItem", "NButton", "NLayoutHeader"],
+      "css": [".n-breadcrumb", ".n-breadcrumb-item"],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/components/AppSider.vue",
+      "symbols": ["NLayoutSider", "NMenu"],
+      "css": [".n-layout-sider--collapsed", ".n-layout-sider-scroll-container"],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/components/QuickSearch.vue",
+      "symbols": ["NButton", "NEmpty", "NInput", "NModal"],
+      "css": [".n-modal-container", ".n-modal", ".n-drawer-container", ".n-drawer"],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/components/UserDropdown.vue",
+      "symbols": ["NDropdown", "useDialog", "useMessage"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/layout/navigation/useNavigation.ts",
+      "symbols": ["MenuOption"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/styles/tokens.css",
+      "symbols": [],
+      "css": [
+        ".n-drawer",
+        ".n-data-table",
+        ".n-data-table-th",
+        ".n-data-table-td",
+        ".n-card",
+        ".n-modal",
+        ".n-form-item-label",
+        ".n-button"
+      ],
+      "test": false
+    },
+    {
+      "path": "web/src/theme/naive.ts",
+      "symbols": ["darkTheme", "type GlobalThemeOverrides"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/account/AccountSettings.css",
+      "symbols": [],
+      "css": [".n-button"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/account/ProfilePage.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NTag",
+        "useMessage"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/account/SecurityPage.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "useMessage"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/account/__tests__/account-admin.browser.mjs",
+      "symbols": [],
+      "css": [
+        ".n-modal",
+        ".n-form-item",
+        ".n-base-select-option",
+        ".n-dropdown-option-body__label",
+        ".n-base-selection"
+      ],
+      "test": true
+    },
+    {
+      "path": "web/src/views/auth/AuthForm.css",
+      "symbols": [],
+      "css": [".n-form-item-label", ".n-button--primary-type", ".n-input"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/auth/ForgotPasswordPage.vue",
+      "symbols": ["FormInst", "FormRules", "NAlert", "NButton", "NForm", "NFormItem", "NInput"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/auth/LoginPage.vue",
+      "symbols": ["FormInst", "FormRules", "NAlert", "NButton", "NForm", "NFormItem", "NInput"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/auth/RegisterPage.vue",
+      "symbols": ["FormInst", "FormRules", "NAlert", "NButton", "NForm", "NFormItem", "NInput"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/auth/ResetPasswordPage.vue",
+      "symbols": ["FormInst", "FormRules", "NAlert", "NButton", "NForm", "NFormItem", "NInput"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/dashboard/DashboardPage.vue",
+      "symbols": ["NAlert", "NButton", "NSpin"],
+      "css": [".n-button"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/dashboard/__tests__/operations.browser.mjs",
+      "symbols": [],
+      "css": [".n-drawer"],
+      "test": true
+    },
+    {
+      "path": "web/src/views/data-integration/catalog/preview/SamplePreviewPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDataTable",
+        "NEmpty",
+        "NSelect",
+        "NSpin",
+        "NTag"
+      ],
+      "css": [".n-select", ".n-button"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/MappingWorkbenchPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NPopconfirm",
+        "NSelect",
+        "NSpin",
+        "NTag"
+      ],
+      "css": [".n-select", ".n-input", ".n-input-number", ".n-card__content", ".n-card"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/ai-assist/AiAssistPage.vue",
+      "symbols": [
+        "InputInst",
+        "NAlert",
+        "NButton",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NSelect",
+        "NSpin"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/components/ExtractionSuggestions.vue",
+      "symbols": ["NAlert", "NButton", "NEmpty", "NSpin", "NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/components/FrozenMapping.vue",
+      "symbols": ["NAlert", "NEmpty"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/components/FusionPolicyEditor.vue",
+      "symbols": ["NAlert", "NFormItem", "NInputNumber", "NSelect"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/runs/ExtractionRunsPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NSpace",
+        "NSpin",
+        "NTable",
+        "NTag"
+      ],
+      "css": [".n-tag"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/runs/__tests__/run-manifest.browser.mjs",
+      "symbols": [],
+      "css": [".n-drawer-content"],
+      "test": true
+    },
+    {
+      "path": "web/src/views/data-integration/runs/components/RunQuarantine.vue",
+      "symbols": ["NAlert", "NButton", "NEmpty", "NSpin", "NTable"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/sources/DataSourcesPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NModal",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NTag",
+        "useMessage"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/data-integration/tasks/ExtractionTasksPage.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NCheckbox",
+        "NDatePicker",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NTable",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/errors/ErrorWorkspace.css",
+      "symbols": [],
+      "css": [".n-button"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/errors/ForbiddenPage.vue",
+      "symbols": ["NButton"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/errors/NotFoundPage.vue",
+      "symbols": ["NButton"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/governance/clauses/StandardClausesPage.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPagination",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NTag"
+      ],
+      "css": [".n-card"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/governance/exchange/OntologyExchangePage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInputNumber",
+        "NSelect",
+        "NSpace",
+        "NTabPane",
+        "NTabs"
+      ],
+      "css": [".n-tab-pane"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/governance/exchange/components/OntologyHistory.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDescriptions",
+        "NDescriptionsItem",
+        "NEmpty",
+        "NSpace"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/governance/exchange/components/OntologyRestore.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NSelect",
+        "NSpace"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/governance/rules/GovernanceRulesPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPagination",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NTabPane",
+        "NTabs",
+        "NTag"
+      ],
+      "css": [".n-card"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/governance/styles/observatory.css",
+      "symbols": [],
+      "css": [
+        ".n-data-table-th",
+        ".n-data-table-td",
+        ".n-pagination",
+        ".n-form-item",
+        ".n-empty",
+        ".n-button",
+        ".n-button__content",
+        ".n-descriptions-table"
+      ],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/browse/GraphBrowsePage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCheckbox",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NInput",
+        "NInputNumber",
+        "NPopconfirm",
+        "NPopselect",
+        "NSelect",
+        "NSlider",
+        "NSpace",
+        "NTabPane",
+        "NTabs",
+        "NTag"
+      ],
+      "css": [".n-empty", ".n-select", ".n-input-number", ".n-input", ".n-slider"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/browse/components/EvidenceInspector.vue",
+      "symbols": ["NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/browse/components/GraphCanvas.vue",
+      "symbols": ["NAlert"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/browse/components/KnowledgeGraphReferences.vue",
+      "symbols": ["NAlert", "NButton", "NDrawer", "NDrawerContent"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/browse/components/SemanticViewConfig.vue",
+      "symbols": ["NAlert", "NButton", "NCollapse", "NCollapseItem", "NSelect"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/components/EvidenceTable.vue",
+      "symbols": ["DataTableColumns", "NButton", "NDataTable", "NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/components/GraphFactTable.vue",
+      "symbols": ["DataTableColumns", "NDataTable"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/entities/GraphEntitiesPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NPagination",
+        "NSelect",
+        "NSpace"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/entities/GraphEntityDetailPage.vue",
+      "symbols": ["NAlert", "NButton", "NDataTable", "NEmpty", "NSpace", "NTabPane", "NTabs"],
+      "css": [".n-data-table"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/evidence/GraphEvidencePage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NRadioButton",
+        "NRadioGroup"
+      ],
+      "css": [".n-data-table"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/graph/evidence/components/FusionEvidence.vue",
+      "symbols": ["NAlert", "NCard"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/KnowledgeBaseDetailPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NEmpty",
+        "NInput",
+        "NPagination",
+        "NPopconfirm",
+        "NSelect",
+        "NSpin",
+        "NTable",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/KnowledgeBaseListPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NEmpty",
+        "NInput",
+        "NPagination",
+        "NSelect",
+        "NSpin",
+        "NTable",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/KnowledgeSearchPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCollapse",
+        "NCollapseItem",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NPagination",
+        "NSelect",
+        "NSpin"
+      ],
+      "css": [".n-button__content"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/components/BaseEditor.vue",
+      "symbols": ["NAlert", "NButton", "NDrawer", "NDrawerContent", "NForm", "NFormItem", "NInput"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/components/DocumentDrawer.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NPagination",
+        "NPopconfirm",
+        "NSpin",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/components/DocumentStatus.vue",
+      "symbols": ["NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/components/EvidenceDrawer.vue",
+      "symbols": ["NAlert", "NButton", "NDrawer", "NDrawerContent", "NSpin", "NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/components/GraphLinkForm.vue",
+      "symbols": ["NAlert", "NButton", "NForm", "NFormItem", "NInput", "NSelect"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/components/SearchHit.vue",
+      "symbols": ["NButton", "NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/knowledge/knowledge.css",
+      "symbols": [],
+      "css": [".n-input", ".n-select", ".n-spin"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/ontology/designer/DesignerPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NModal",
+        "NSelect",
+        "NSpin",
+        "useMessage"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/ontology/designer/components/AiSuggestions.vue",
+      "symbols": ["NAlert", "NButton", "NEmpty", "NList", "NListItem", "NSpace", "NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/ontology/designer/components/modeling/AiModeling.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NCheckbox",
+        "NDivider",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NSelect",
+        "NSpace",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/ontology/ontologies/OntologiesPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/ontology/validation/ValidationReportsPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NEmpty",
+        "NInputNumber",
+        "NRadioButton",
+        "NRadioGroup",
+        "NSelect",
+        "NSpin",
+        "NTable",
+        "NTag"
+      ],
+      "css": [".n-select", ".n-input-number"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/ontology/validation/__tests__/validation-reports.browser.mjs",
+      "symbols": [],
+      "css": [".n-radio-button", ".n-select", ".n-base-select-option"],
+      "test": true
+    },
+    {
+      "path": "web/src/views/semantic-assets/business-domains/BusinessDomainsPage.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "TreeOption",
+        "NAlert",
+        "NButton",
+        "NCheckbox",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NTree"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/components/NamespaceCreateModal.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NModal"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NModal",
+        "NPagination",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NTable",
+        "NTag"
+      ],
+      "css": [".n-card"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/configuration/assembly-templates/components/TemplateCoreCheck.vue",
+      "symbols": ["NAlert", "NButton", "NFormItem", "NInput", "NSelect", "NSpace", "NTable"],
+      "css": [".n-form-item"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDescriptions",
+        "NDescriptionsItem",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPagination",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NTabPane",
+        "NTabs"
+      ],
+      "css": [".n-card"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/entity-types/EntityTypeDetailPage.vue",
+      "symbols": [
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDescriptions",
+        "NDescriptionsItem",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NModal",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NSwitch",
+        "NTabPane",
+        "NTabs",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/entity-types/EntityTypesPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/namespaces/NamespacesPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NEmpty",
+        "NPopconfirm",
+        "NSpin",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/relation-types/RelationTypeDetailPage.vue",
+      "symbols": [
+        "NAlert",
+        "NButton",
+        "NDataTable",
+        "NDescriptions",
+        "NDescriptionsItem",
+        "NEmpty",
+        "NPopconfirm",
+        "NSpace",
+        "NSpin",
+        "NTabPane",
+        "NTabs",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/relation-types/RelationTypesPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NCheckbox",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/relation-types/components/RelationSemanticFields.vue",
+      "symbols": ["NCheckbox", "NFormItem", "NInput", "NInputNumber", "NSelect", "NSpace"],
+      "css": [".n-form-item", ".n-input-number"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/semantic-assets/styles/observatory.css",
+      "symbols": [],
+      "css": [
+        ".n-form-item",
+        ".n-data-table",
+        ".n-data-table-th",
+        ".n-data-table-td",
+        ".n-data-table-base-table",
+        ".n-pagination",
+        ".n-table"
+      ],
+      "test": false
+    },
+    {
+      "path": "web/src/views/system/SystemWorkspace.css",
+      "symbols": [],
+      "css": [
+        ".n-form-item",
+        ".n-data-table",
+        ".n-data-table-th",
+        ".n-data-table-td",
+        ".n-pagination"
+      ],
+      "test": false
+    },
+    {
+      "path": "web/src/views/system/ai-models/AiModelsPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NCheckbox",
+        "NDataTable",
+        "NDrawer",
+        "NDrawerContent",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NInputNumber",
+        "NPagination",
+        "NPopconfirm",
+        "NSelect",
+        "NSpace",
+        "NSpin",
+        "NSwitch",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/system/audit-logs/AuditLogsPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDataTable",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NPagination",
+        "NSelect",
+        "NTabPane",
+        "NTabs",
+        "NTag"
+      ],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/system/audit-logs/components/AssetAuditLogs.vue",
+      "symbols": [
+        "DataTableColumns",
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDataTable",
+        "NDatePicker",
+        "NEmpty",
+        "NFormItem",
+        "NInput",
+        "NPagination",
+        "NSelect",
+        "NTag"
+      ],
+      "css": [".n-date-picker"],
+      "test": false
+    },
+    {
+      "path": "web/src/views/system/roles/RolesPage.vue",
+      "symbols": ["DataTableColumns", "NAlert", "NButton", "NCard", "NDataTable", "NEmpty", "NTag"],
+      "css": [],
+      "test": false
+    },
+    {
+      "path": "web/src/views/system/users/UsersPage.vue",
+      "symbols": [
+        "DataTableColumns",
+        "FormInst",
+        "FormRules",
+        "NAlert",
+        "NButton",
+        "NCard",
+        "NDataTable",
+        "NEmpty",
+        "NForm",
+        "NFormItem",
+        "NInput",
+        "NModal",
+        "NPagination",
+        "NSelect",
+        "NSpace",
+        "NTag",
+        "useMessage"
+      ],
+      "css": [],
+      "test": false
+    }
+  ],
+  "files": [
+    {
+      "path": "web/src/App.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/AdminLayout.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/AuthLayout.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/components/AppHeader.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/components/AppSider.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/components/QuickSearch.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/components/UserDropdown.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/layout/navigation/useNavigation.ts",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/styles/tokens.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/theme/naive.ts",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/account/AccountSettings.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/account/ProfilePage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/account/SecurityPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/account/__tests__/account-admin.browser.mjs",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/auth/AuthForm.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/auth/ForgotPasswordPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/auth/LoginPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/auth/RegisterPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/auth/ResetPasswordPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/dashboard/DashboardPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/dashboard/__tests__/operations.browser.mjs",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/catalog/preview/SamplePreviewPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/MappingWorkbenchPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/ai-assist/AiAssistPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/components/ExtractionSuggestions.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/components/FrozenMapping.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/mapping/components/FusionPolicyEditor.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/runs/ExtractionRunsPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/runs/__tests__/run-manifest.browser.mjs",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/runs/components/RunQuarantine.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/sources/DataSourcesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/data-integration/tasks/ExtractionTasksPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/errors/ErrorWorkspace.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/errors/ForbiddenPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/errors/NotFoundPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/governance/clauses/StandardClausesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/governance/exchange/OntologyExchangePage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/governance/exchange/components/OntologyHistory.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/governance/exchange/components/OntologyRestore.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/governance/rules/GovernanceRulesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/governance/styles/observatory.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/browse/GraphBrowsePage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/browse/components/EvidenceInspector.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/browse/components/GraphCanvas.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/browse/components/KnowledgeGraphReferences.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/browse/components/SemanticViewConfig.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/components/EvidenceTable.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/components/GraphFactTable.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/entities/GraphEntitiesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/entities/GraphEntityDetailPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/evidence/GraphEvidencePage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/graph/evidence/components/FusionEvidence.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/KnowledgeBaseDetailPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/KnowledgeBaseListPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/KnowledgeSearchPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/components/BaseEditor.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/components/DocumentDrawer.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/components/DocumentStatus.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/components/EvidenceDrawer.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/components/GraphLinkForm.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/components/SearchHit.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/knowledge/knowledge.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/ontology/designer/DesignerPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/ontology/designer/components/AiSuggestions.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/ontology/designer/components/modeling/AiModeling.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/ontology/ontologies/OntologiesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/ontology/validation/ValidationReportsPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/ontology/validation/__tests__/validation-reports.browser.mjs",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/business-domains/BusinessDomainsPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/components/NamespaceCreateModal.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/configuration/assembly-templates/components/TemplateCoreCheck.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/entity-types/EntityTypeDetailPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/entity-types/EntityTypesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/namespaces/NamespacesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/relation-types/RelationTypeDetailPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/relation-types/RelationTypesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/relation-types/components/RelationSemanticFields.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/semantic-assets/styles/observatory.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/system/SystemWorkspace.css",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/system/ai-models/AiModelsPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/system/audit-logs/AuditLogsPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/system/audit-logs/components/AssetAuditLogs.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/system/roles/RolesPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    },
+    {
+      "path": "web/src/views/system/users/UsersPage.vue",
+      "sourceMigrated": true,
+      "remainingSymbols": [],
+      "remainingCss": []
+    }
+  ],
+  "routePages": [
+    "web/src/views/auth/LoginPage.vue",
+    "web/src/views/auth/RegisterPage.vue",
+    "web/src/views/auth/ForgotPasswordPage.vue",
+    "web/src/views/auth/ResetPasswordPage.vue",
+    "web/src/views/dashboard/DashboardPage.vue",
+    "web/src/views/knowledge/KnowledgeBaseListPage.vue",
+    "web/src/views/knowledge/KnowledgeBaseDetailPage.vue",
+    "web/src/views/knowledge/KnowledgeSearchPage.vue",
+    "web/src/views/ontology/ontologies/OntologiesPage.vue",
+    "web/src/views/semantic-assets/namespaces/NamespacesPage.vue",
+    "web/src/views/semantic-assets/entity-types/EntityTypesPage.vue",
+    "web/src/views/semantic-assets/entity-types/EntityTypeDetailPage.vue",
+    "web/src/views/semantic-assets/relation-types/RelationTypesPage.vue",
+    "web/src/views/semantic-assets/relation-types/RelationTypeDetailPage.vue",
+    "web/src/views/semantic-assets/business-domains/BusinessDomainsPage.vue",
+    "web/src/views/ontology/designer/DesignerPage.vue",
+    "web/src/views/data-integration/sources/DataSourcesPage.vue",
+    "web/src/views/data-integration/catalog/DataCatalogPage.vue",
+    "web/src/views/data-integration/catalog/preview/SamplePreviewPage.vue",
+    "web/src/views/data-integration/mapping/MappingWorkbenchPage.vue",
+    "web/src/views/data-integration/runs/ExtractionRunsPage.vue",
+    "web/src/views/data-integration/tasks/ExtractionTasksPage.vue",
+    "web/src/views/data-integration/mapping/ai-assist/AiAssistPage.vue",
+    "web/src/views/graph/browse/GraphBrowsePage.vue",
+    "web/src/views/graph/entities/GraphEntitiesPage.vue",
+    "web/src/views/graph/entities/GraphEntityDetailPage.vue",
+    "web/src/views/graph/evidence/GraphEvidencePage.vue",
+    "web/src/views/ontology/validation/ValidationReportsPage.vue",
+    "web/src/views/governance/rules/GovernanceRulesPage.vue",
+    "web/src/views/governance/clauses/StandardClausesPage.vue",
+    "web/src/views/semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage.vue",
+    "web/src/views/semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage.vue",
+    "web/src/views/governance/exchange/OntologyExchangePage.vue",
+    "web/src/views/account/ProfilePage.vue",
+    "web/src/views/account/SecurityPage.vue",
+    "web/src/views/system/users/UsersPage.vue",
+    "web/src/views/system/roles/RolesPage.vue",
+    "web/src/views/system/audit-logs/AuditLogsPage.vue",
+    "web/src/views/system/ai-models/AiModelsPage.vue",
+    "web/src/views/errors/ForbiddenPage.vue",
+    "web/src/views/errors/NotFoundPage.vue"
+  ],
+  "remaining": [],
+  "note": "Source inventory is not acceptance evidence. See verification.md for actual checks."
+}

@@ -1,0 +1,526 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+
+import { NODE_RADIUS } from '../../../../components/graph/viewport.ts'
+import { graphPaths } from '../components/graphLayout.ts'
+import { LAYOUT_IDS, resolveLayout } from '../components/layouts/index.ts'
+
+const node = (iri, type, distance = 0, attrs = {}) => ({
+  id: iri.charCodeAt(0),
+  graph_revision_id: 1,
+  iri,
+  type_iri: type,
+  row_key: iri,
+  attrs,
+  distance,
+})
+const edge = (id, subject, object_, kind = 'DIRECT', props = null, predicate = 'rel') => ({
+  id,
+  graph_revision_id: 1,
+  subject,
+  object_,
+  predicate,
+  kind,
+  props,
+})
+const layoutOf = (id, nodes, edges = []) => resolveLayout(id, false).compute({ nodes, edges })
+
+function assertNaryGeometry(graph) {
+  const before = structuredClone(graph)
+  const layout = layoutOf('nary', graph.nodes, graph.edges)
+  assert.deepEqual(graph, before, 'layout does not mutate source facts or node attributes')
+  assert.equal(layout.nodes.length, graph.nodes.length)
+  assert.equal(new Set(layout.nodes.map((item) => item.iri)).size, graph.nodes.length)
+  const original = new Map(graph.nodes.map((item) => [item.iri, item]))
+  for (const { x, y, ...item } of layout.nodes) {
+    assert.deepEqual(
+      item,
+      original.get(item.iri),
+      'node identity and long labels survive placement',
+    )
+    assert.ok(Number.isFinite(x) && Number.isFinite(y))
+    assert.ok(x - NODE_RADIUS >= 0 && x + NODE_RADIUS <= layout.width)
+    assert.ok(y - NODE_RADIUS >= 0 && y + NODE_RADIUS <= layout.height)
+  }
+  for (let left = 0; left < layout.nodes.length; left++) {
+    for (let right = left + 1; right < layout.nodes.length; right++) {
+      const a = layout.nodes[left],
+        b = layout.nodes[right]
+      const distance = Math.hypot(a.x - b.x, a.y - b.y)
+      assert.ok(distance >= NODE_RADIUS * 2 + 12, `${a.iri}/${b.iri}: center distance ${distance}`)
+    }
+  }
+  const paths = graphPaths(layout.nodes, graph.edges, layout.edgePaths)
+  assert.deepEqual(
+    paths.map((path) => path.key).sort(),
+    graph.edges.map((item) => `${item.kind}-${item.id}`).sort(),
+    'parallel, reciprocal, self-loop and derived edge identities survive placement',
+  )
+  assert.ok(paths.every((path) => !/NaN|Infinity/.test(path.path)))
+  assert.deepEqual(layout, layoutOf('nary', graph.nodes, graph.edges), 'layout is reproducible')
+  return layout
+}
+
+for (const amount of [0, 1, 2, 12, 48, 200]) {
+  test(`nary ${amount}-node star keeps node disks apart and inside adaptive bounds`, () => {
+    const nodes = Array.from({ length: amount }, (_, index) => ({
+      ...node(`star-${index}`, 'Thing', index ? 1 : 0, { name: '很长的实体名称🙂'.repeat(12) }),
+      id: index + 1,
+    }))
+    const edges = nodes.slice(1).map((item, index) => edge(index + 1, nodes[0].iri, item.iri))
+    const layout = assertNaryGeometry({ nodes, edges })
+    if (amount === 200) {
+      assert.ok(layout.height > 680, 'high degree expands the layout rather than clamping nodes')
+      const radii = new Set(
+        layout.nodes.map((item) =>
+          Math.round(Math.hypot(item.x - layout.width / 2, item.y - layout.height / 2)),
+        ),
+      )
+      assert.ok(radii.size > 2, 'high degree spreads across several rings')
+    }
+  })
+}
+
+test('nary multi-center, shared neighbors and isolated nodes avoid disk overlap without merging facts', () => {
+  const nodes = Array.from({ length: 200 }, (_, index) => ({
+    ...node(index === 0 ? '_free' : `multi-${index}`, index < 4 ? 'Hub' : 'Thing'),
+    id: index + 1,
+  }))
+  const edges = nodes
+    .slice(4, 196)
+    .map((item, index) => edge(index + 1, nodes[index % 4].iri, item.iri))
+  edges.push(
+    edge(300, nodes[1].iri, nodes[4].iri),
+    edge(301, nodes[4].iri, nodes[0].iri),
+    edge(302, nodes[0].iri, nodes[4].iri),
+    edge(302, nodes[0].iri, nodes[4].iri, 'DERIVED'),
+    edge(303, nodes[0].iri, nodes[0].iri),
+  )
+  assertNaryGeometry({ nodes, edges })
+})
+
+test('overview groups by type, retains isolated nodes, and stays inside its viewbox', () => {
+  const nodes = [
+    node('a', 'Person'),
+    node('b', 'Project'),
+    node('c', 'Person'),
+    node('alone', 'Other'),
+  ]
+  const layout = layoutOf('type_grid', nodes)
+  assert.equal(layout.nodes.length, nodes.length)
+  assert.deepEqual(
+    layout.groups.map((group) => group.type),
+    ['Person', 'Project', 'Other'],
+  )
+  assert.ok(
+    layout.nodes.every(
+      (item) =>
+        item.x >= 80 && item.x + 80 <= layout.width && item.y >= 26 && item.y + 26 <= layout.height,
+    ),
+  )
+})
+
+test('registry exposes every P0 form id and default fallback by center', () => {
+  assert.deepEqual(LAYOUT_IDS, [
+    'type_grid',
+    'ring',
+    'force',
+    'org_tree',
+    'indent_tree',
+    'equity_tree',
+    'control_chain',
+    'supply_chain',
+    'timeline',
+    'schema',
+    'clan_tree',
+    'cycle_view',
+    'bipartite',
+    'community',
+    'nary',
+    'sankey',
+    'chord',
+    'geo',
+    'impact',
+    'sunburst',
+    'treemap',
+    'pack',
+    'gantt',
+    'small_multiples',
+  ])
+  assert.equal(resolveLayout(undefined, true).id, 'ring')
+  assert.equal(resolveLayout(undefined, false).id, 'type_grid')
+  assert.equal(resolveLayout('nonexistent', true).id, 'ring')
+})
+
+test('neighborhood puts root in the center and second degree outside first degree', () => {
+  const layout = layoutOf('ring', [
+    node('a', 'Person'),
+    node('b', 'Person', 1),
+    node('c', 'Project', 2),
+  ])
+  const [root, first, second] = layout.nodes
+  assert.equal(root.x, layout.width / 2)
+  assert.equal(root.y, layout.height / 2)
+  const radius = (item) => Math.hypot(item.x - root.x, item.y - root.y)
+  assert.ok(radius(second) > radius(first))
+})
+
+test('org tree layers child below parent with elbow overrides', () => {
+  const nodes = [node('root', 'Dept'), node('child', 'Dept'), node('grand', 'Dept')]
+  const edges = [
+    edge(1, 'child', 'root', 'DIRECT', null, 'belongs_to'),
+    edge(2, 'grand', 'child', 'DIRECT', null, 'belongs_to'),
+  ]
+  const layout = layoutOf('org_tree', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  assert.ok(byIri.get('grand').y > byIri.get('child').y)
+  assert.ok(byIri.get('child').y > byIri.get('root').y)
+  // 树形折线覆写父边；其余边退回默认渲染
+  assert.ok(layout.edgePaths[1].path.startsWith('M'))
+  const paths = graphPaths(layout.nodes, edges, layout.edgePaths)
+  assert.ok(paths.every((item) => !/NaN|Infinity/.test(item.path)))
+})
+
+test('org tree falls back to grid when every node sits on a cycle', () => {
+  const nodes = [node('a', 'Dept'), node('b', 'Dept')]
+  const edges = [edge(1, 'a', 'b'), edge(2, 'b', 'a')]
+  const layout = layoutOf('org_tree', nodes, edges)
+  assert.deepEqual(
+    layout.groups.map((group) => group.type),
+    ['Dept'],
+  )
+})
+
+test('equity penetration layers shareholders above investees', () => {
+  const nodes = [node('holder', 'Person'), node('target', 'Enterprise'), node('mid', 'Enterprise')]
+  const edges = [
+    edge(1, 'holder', 'mid', 'DIRECT', { pct: 50 }, 'holds_equity_in'),
+    edge(2, 'mid', 'target', 'DIRECT', { pct: 40 }, 'holds_equity_in'),
+  ]
+  const layout = layoutOf('equity_tree', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  assert.ok(byIri.get('holder').y < byIri.get('mid').y)
+  assert.ok(byIri.get('mid').y < byIri.get('target').y)
+})
+
+test('timeline arranges lanes per type and orders by first date attribute', () => {
+  const nodes = [
+    node('early', 'Contract', 0, { signedDate: '2024-01-01' }),
+    node('late', 'Contract', 0, { signedDate: '2024-06-01' }),
+    node('person', 'Person', 0, { name: '无日期' }),
+  ]
+  const layout = layoutOf('timeline', nodes, [])
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  assert.ok(byIri.get('late').x > byIri.get('early').x)
+  assert.ok(byIri.get('person').x > byIri.get('late').x)
+  assert.notEqual(byIri.get('early').y, byIri.get('person').y, '不同类型必须在不同泳道')
+})
+
+test('supply chain puts participants on opposite columns', () => {
+  const nodes = [
+    node('supplier', 'Enterprise'),
+    node('buyer', 'Enterprise'),
+    node('dual', 'Enterprise'),
+  ]
+  const edges = [edge(1, 'supplier', 'buyer'), edge(2, 'dual', 'buyer')]
+  const layout = layoutOf('supply_chain', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  assert.ok(byIri.get('supplier').x < byIri.get('buyer').x)
+  assert.ok(byIri.get('dual').x < byIri.get('buyer').x)
+})
+
+test('schema aggregates instances into typed nodes with counts', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const edges = [
+    edge(1, 'a', 'c', 'DIRECT', null, 'works_on'),
+    edge(2, 'b', 'c', 'DIRECT', null, 'works_on'),
+  ]
+  const layout = layoutOf('schema', nodes, edges)
+  assert.equal(layout.nodes.length, 2, '类型节点数 = 实体类型数')
+  const person = layout.nodes.find((item) => item.iri === 'Person')
+  assert.equal(person.attrs.__typeCount__, 2)
+})
+
+for (const id of ['schema', 'sankey', 'chord']) {
+  test(`${id} renders aggregated edges and preserves direct/derived semantics`, () => {
+    const layout = layoutOf(
+      id,
+      [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')],
+      [
+        edge(1, 'a', 'c'),
+        edge(2, 'b', 'c'),
+        edge(1, 'a', 'c', 'DERIVED'),
+        edge(3, 'a', 'b'),
+        edge(4, 'missing', 'c'),
+      ],
+    )
+    const paths = graphPaths(layout.nodes, layout.edges, layout.edgePaths)
+    assert.equal(paths.length, 3)
+    assert.equal(new Set(paths.map((path) => path.key)).size, 3)
+    assert.equal(
+      layout.edges.find((e) => e.kind === 'DIRECT' && e.object_ === 'Project').props.count,
+      2,
+    )
+    assert.equal(layout.edges.find((e) => e.kind === 'DERIVED').props.count, 1)
+    assert.ok(paths.every((path) => !/NaN|Infinity/.test(path.path)))
+    // Aggregated edges keep the first fact only as draw metadata. The host must
+    // identify them as aggregate, never as that instance fact for evidence.
+    assert.ok(paths.every((path) => path.subject !== 'a' && path.object_ !== 'c'))
+    assert.ok(paths.every((path) => typeof path.props?.count === 'number'))
+  })
+}
+
+test('cycle view contains all members of overlapping cycles and self loops', () => {
+  const nodes = ['a', 'b', 'c', 'd', 'self', 'tail', 'isolated'].map((iri) => node(iri, 'Ent'))
+  const layout = layoutOf('cycle_view', nodes, [
+    edge(1, 'a', 'b'),
+    edge(2, 'b', 'c'),
+    edge(3, 'c', 'a'),
+    edge(4, 'b', 'd'),
+    edge(5, 'd', 'c'),
+    edge(6, 'self', 'self'),
+    edge(7, 'c', 'tail'),
+  ])
+  assert.deepEqual(
+    layout.nodes
+      .filter((n) => n.x < 800)
+      .map((n) => n.iri)
+      .sort(),
+    ['a', 'b', 'c', 'd', 'self'],
+  )
+})
+
+test('supply chain puts dual-role participants in the middle column', () => {
+  const layout = layoutOf(
+    'supply_chain',
+    ['supplier', 'dual', 'buyer'].map((iri) => node(iri, 'Ent')),
+    [edge(1, 'supplier', 'dual'), edge(2, 'dual', 'buyer')],
+  )
+  const byIri = new Map(layout.nodes.map((n) => [n.iri, n]))
+  assert.ok(byIri.get('supplier').x < byIri.get('dual').x)
+  assert.ok(byIri.get('dual').x < byIri.get('buyer').x)
+})
+
+test('edge props are available to renderer and keep stable keys', () => {
+  const layout = layoutOf('type_grid', [node('a', 'Person'), node('b', 'Project')])
+  const paths = graphPaths(layout.nodes, [
+    edge(1, 'a', 'b', 'DIRECT', { pct: '60' }, 'holds'),
+    edge(2, 'a', 'b', 'DERIVED', { pct: '27.5' }, 'indirectly_holds'),
+  ])
+  assert.equal(paths[0].props.pct, '60')
+  assert.equal(paths[1].kind, 'DERIVED')
+  assert.equal(new Set(paths.map((item) => item.key)).size, 2)
+})
+
+test('parallel, reciprocal, and derived facts have separate curves and stable keys', () => {
+  const layout = layoutOf('type_grid', [node('a', 'Person'), node('b', 'Project')])
+  const edges = [
+    edge(1, 'a', 'b'),
+    edge(2, 'a', 'b'),
+    edge(3, 'b', 'a'),
+    edge(1, 'a', 'b', 'DERIVED'),
+  ]
+  const paths = graphPaths(layout.nodes, edges)
+  assert.equal(paths.length, 4)
+  assert.equal(new Set(paths.map((path) => path.key)).size, 4)
+  assert.equal(new Set(paths.map((path) => path.path)).size, 4)
+  assert.ok(paths.every((path) => !/NaN|Infinity/.test(path.path)))
+})
+
+test('self loops remain separate and empty graphs are valid', () => {
+  const layout = layoutOf('type_grid', [node('a', 'Person')])
+  const paths = graphPaths(layout.nodes, [edge(1, 'a', 'a'), edge(2, 'a', 'a')])
+  assert.notEqual(paths[0].path, paths[1].path)
+  assert.ok(paths.every((path) => path.path.includes(' C ')))
+  assert.deepEqual(graphPaths([], []), [])
+  assert.deepEqual(layoutOf('ring', []).nodes, [])
+})
+
+test('cycle view isolates cycle members on the inner ring', () => {
+  const nodes = [node('a', 'Ent'), node('b', 'Ent'), node('c', 'Ent'), node('solo', 'Ent')]
+  const edges = [edge(1, 'a', 'b'), edge(2, 'b', 'a'), edge(3, 'solo', 'c')]
+  const layout = layoutOf('cycle_view', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  // 环上两实体靠近中心 (480, 330)；网格块整体右移
+  const ringDist = Math.hypot(byIri.get('a').x - 480, byIri.get('a').y - 330)
+  assert.ok(ringDist < 220)
+  assert.ok(byIri.get('solo').x > 800, '环外节点应落入右侧网格块')
+})
+
+test('community groups connected components into separated blocks', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('far', 'Person')]
+  const edges = [edge(1, 'a', 'b')]
+  const layout = layoutOf('community', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  const pairGap = Math.hypot(
+    byIri.get('a').x - byIri.get('b').x,
+    byIri.get('a').y - byIri.get('b').y,
+  )
+  const crossGap = Math.abs(byIri.get('far').x - byIri.get('a').x)
+  assert.ok(crossGap > pairGap, '不同社区必须比社区内节点更远')
+})
+
+test('impact tree reverses dependency direction', () => {
+  const nodes = [node('root', 'App'), node('lib', 'Module')]
+  const edges = [edge(1, 'lib', 'root')]
+  const layout = layoutOf('impact', nodes, edges)
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  // 依赖者 lib 排在 root 之下（root 是被依赖的根）
+  assert.ok(byIri.get('lib').y > byIri.get('root').y)
+})
+
+test('geo groups nodes by region attribute and falls back to grid', () => {
+  const nodes = [
+    node('sh', 'Ent', 0, { region: '上海' }),
+    node('sh2', 'Ent', 0, { region: '上海' }),
+    node('bj', 'Ent', 0, { region: '北京' }),
+    node('none', 'Ent'),
+  ]
+  const layout = layoutOf('geo', nodes, [])
+  const byIri = new Map(layout.nodes.map((item) => [item.iri, item]))
+  assert.ok(Math.abs(byIri.get('sh').y - byIri.get('sh2').y) < 1, '同城节点同一行')
+  assert.ok(
+    Math.abs(byIri.get('sh').y - byIri.get('bj').y) > 1 || byIri.get('bj').x !== byIri.get('sh').x,
+  )
+  // 无区域属性节点仍在布局中（退化块）
+  assert.ok(byIri.get('none'))
+})
+
+test('sankey and chord aggregate to type level with counts', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const edges = [edge(1, 'a', 'c'), edge(2, 'b', 'c')]
+  const sankeyLayout = layoutOf('sankey', nodes, edges)
+  assert.equal(sankeyLayout.nodes.length, 2)
+  const chordLayout = layoutOf('chord', nodes, edges)
+  assert.equal(chordLayout.nodes.length, 2)
+  const person = chordLayout.nodes.find((item) => item.iri === 'Person')
+  assert.equal(person.attrs.__typeCount__, 2)
+})
+
+test('sunburst encodes types inner and instances outer with valid angles', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const layout = layoutOf('sunburst', nodes, [])
+  const marks = layout.marks
+  assert.equal(marks.filter((m) => m.id.startsWith('type:')).length, 2)
+  const instances = marks.filter((m) => m.id.startsWith('inst:'))
+  assert.equal(instances.length, 3)
+  assert.ok(
+    instances.every((m) => m.iri),
+    '实例扇区必须可下钻',
+  )
+  assert.ok(
+    marks.every((m) => !/NaN/.test(m.path)),
+    '扇区路径不能有 NaN',
+  )
+  // 同类型同色
+  const pa = marks.find((m) => m.id === 'inst:a')
+  const pb = marks.find((m) => m.id === 'inst:b')
+  assert.equal(pa.fill, pb.fill)
+})
+
+test('treemap places instance rects inside canvas without NaN', () => {
+  const nodes = [
+    node('a', 'Person'),
+    node('b', 'Person'),
+    node('c', 'Project'),
+    node('d', 'Project'),
+    node('e', 'Project'),
+  ]
+  const layout = layoutOf('treemap', nodes, [])
+  const rects = layout.marks.filter((m) => m.kind === 'rect' && m.id.startsWith('inst:'))
+  assert.equal(rects.length, 5)
+  assert.equal(layout.marks.filter((m) => m.id.startsWith('type:')).length, 2)
+  assert.ok(
+    rects.every((m) => m.w > 0 && m.h > 0 && m.x - m.w / 2 >= 0 && m.x + m.w / 2 <= layout.width),
+  )
+})
+
+test('pack nests instance circles inside type circles', () => {
+  const nodes = [node('a', 'Person'), node('b', 'Person'), node('c', 'Project')]
+  const layout = layoutOf('pack', nodes, [])
+  const circles = layout.marks.filter((m) => m.kind === 'circle')
+  assert.equal(circles.length, 5)
+  const typeCircles = circles.filter((m) => m.id.startsWith('type:'))
+  assert.ok(typeCircles.every((m) => m.r > 0))
+  const instances = circles.filter((m) => m.id.startsWith('inst:'))
+  assert.ok(instances.every((m) => m.r > 0))
+})
+
+test('gantt draws one bar per dated node and flags overlapping ranges', () => {
+  const nodes = [
+    node('p1', 'Person', 0, {
+      name: 'A',
+      start_date: '2024-01-01',
+      end_date: '2024-06-30',
+    }),
+    node('p2', 'Person', 0, {
+      name: 'B',
+      start_date: '2024-03-01',
+      end_date: '2024-12-31',
+    }),
+    node('p3', 'Project', 0, { name: 'C', start_date: '2025-01-01' }),
+    node('p4', 'Person', 0, { name: 'D' }),
+  ]
+  const layout = layoutOf('gantt', nodes, [])
+  const bars = layout.marks
+  assert.equal(bars.length, 3, '只有带日期的节点画甘特条')
+  assert.equal(layout.nodes.length, 3, '无日期节点不参与甘特布局')
+  assert.ok(bars.every((bar) => bar.kind === 'rect' && bar.h === 20 && bar.w >= 12))
+
+  // p1 与 p2 时间重叠 → 告警色；p3 只有一个日期 → 零长度区间取最小宽度
+  assert.equal(bars.find((bar) => bar.iri === 'p1').fill, 'var(--s-violation)')
+  assert.equal(bars.find((bar) => bar.iri === 'p2').fill, 'var(--s-violation)')
+  assert.equal(bars.find((bar) => bar.iri === 'p3').w, 12)
+  assert.notEqual(bars.find((bar) => bar.iri === 'p3').fill, 'var(--s-violation)')
+
+  // 时间轴刻度：2~7 个，且都在画布内
+  assert.ok(layout.titles.length >= 2 && layout.titles.length <= 7)
+  assert.ok(layout.titles.every((title) => title.x >= 0 && title.x <= layout.width))
+  assert.ok(layout.titles.every((title) => /^\d{4}-\d{2}$/.test(title.text)))
+
+  // 泳道按类型分组，且标签落在左留白内
+  const lanes = layout.groups.map((group) => group.type).sort()
+  assert.deepEqual(lanes, ['Person', 'Project'])
+  assert.ok(layout.groups.every((group) => group.y > 0))
+})
+
+test('gantt degrades to an empty canvas when no node carries a date', () => {
+  const layout = layoutOf('gantt', [node('a', 'Person'), node('b', 'Person')], [])
+  assert.deepEqual(layout.marks, [])
+  assert.deepEqual(layout.nodes, [])
+  assert.ok(layout.width > 0 && layout.height > 0)
+})
+
+test('small multiples tile 1-hop neighbourhoods on one shared scale', () => {
+  const nodes = [
+    node('a', 'Person', 0, { name: 'A' }),
+    node('b', 'Person', 0, { name: 'B' }),
+    node('c', 'Person', 0, { name: 'C' }),
+    node('d', 'Person', 0, { name: 'D' }),
+  ]
+  const edges = [edge(1, 'a', 'b'), edge(2, 'c', 'd')]
+  const layout = layoutOf('small_multiples', nodes, edges)
+
+  assert.equal(layout.nodes.length, 4, '每个实体只出现在一个小图里')
+  assert.equal(layout.titles.length, 2, '两个中心各一张小图')
+  assert.ok(layout.titles.every((title) => title.text.includes('·')))
+
+  // 统一比例尺：每张小图的邻居到中心的距离完全一致
+  // 图块中心 = 标题下方 170（TILE_H/2 - 30），邻居落在同一半径上
+  const radii = layout.titles.map((title) => {
+    const cx = title.x
+    const cy = title.y + 170
+    const centre = layout.nodes.find((item) => item.x === cx && item.y === cy)
+    assert.ok(centre, '每个图块标题下必须有中心实体')
+    const neighbour = layout.nodes.find(
+      (item) => item.iri !== centre.iri && Math.hypot(item.x - cx, item.y - cy) < 200,
+    )
+    assert.ok(neighbour, '每个图块必须有邻居实体')
+    return Math.round(Math.hypot(neighbour.x - cx, neighbour.y - cy))
+  })
+  assert.equal(radii.length, 2)
+  assert.equal(radii[0], radii[1], '小图之间必须同比例尺')
+
+  // 跨图块的边不参与绘制
+  assert.equal(layout.edges.length, 2)
+})

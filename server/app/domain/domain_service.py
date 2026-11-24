@@ -1,0 +1,419 @@
+"""业务域管理领域服务（H-10）。"""
+
+from __future__ import annotations
+
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.orm import Session
+
+from app.core.error_codes import ErrorCode
+from app.core.errors import KGError
+from app.models.domain import BusinessDomain, DomainMember, DomainRevision
+from app.models.enums import ResourceStatus
+from app.models.resource import ModelResource, ResourceRevision
+from app.schemas.domain import (
+    DomainCreate,
+    DomainMemberAdd,
+    DomainUpdate,
+    PublishCheckResult,
+)
+
+
+def create_domain(session: Session, payload: DomainCreate) -> BusinessDomain:
+    """创建业务域。name 唯一。"""
+    existing = session.execute(
+        select(BusinessDomain).where(BusinessDomain.name == payload.name)
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise KGError(
+            ErrorCode.ALREADY_EXISTS,
+            {"name": payload.name, "reason": "domain_name_taken"},
+        )
+    domain = BusinessDomain(
+        name=payload.name,
+        iri=payload.iri,
+        label_i18n=payload.label_i18n,
+        definition_i18n=payload.definition_i18n,
+        status=ResourceStatus.DRAFT,
+        parent_id=_resolve_parent(session, payload.parent_id),
+    )
+    session.add(domain)
+    session.flush()
+    for rid in payload.member_ids:
+        add_member(session, domain.id, DomainMemberAdd(resource_id=rid))
+    session.flush()
+    return domain
+
+
+def _resolve_parent(session: Session, parent_id: int | None) -> int | None:
+    """校验父域存在。不检查环路 —— 新建的域还没有子域，不可能成环。"""
+    if parent_id is None:
+        return None
+    if session.get(BusinessDomain, parent_id) is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"domain_id": parent_id})
+    return parent_id
+
+
+def _assert_no_cycle(
+    session: Session, domain: BusinessDomain, parent_id: int | None
+) -> None:
+    """把 domain 挂到 parent_id 下不能形成环。
+
+    沿父链往上走，遇到自己就说明目标是自己的后代 —— 直接拒绝，
+    否则域树会自引用，前端渲染成无限层级。
+    """
+    if parent_id is None:
+        return
+    if parent_id == domain.id:
+        raise KGError(
+            ErrorCode.INVALID_REQUEST,
+            {"reason": "domain_parent_cycle", "domain_id": domain.id},
+        )
+    seen: set[int] = {domain.id}
+    cursor = session.get(BusinessDomain, parent_id)
+    while cursor is not None:
+        if cursor.id in seen:
+            raise KGError(
+                ErrorCode.INVALID_REQUEST,
+                {"reason": "domain_parent_cycle", "domain_id": domain.id},
+            )
+        seen.add(cursor.id)
+        if cursor.parent_id is None:
+            return
+        cursor = session.get(BusinessDomain, cursor.parent_id)
+
+
+def _check_owner_domain_unique(
+    session: Session, resource_id: int, owner_domain_id: int
+) -> None:
+    """维护责任域唯一：同一资源至多由一个业务域声明维护责任。
+
+    已有维护域时，只有再次声明同一个维护域才允许（重复声明同一责任域不算冲突）。
+    """
+    owner = session.get(BusinessDomain, owner_domain_id)
+    if owner is None:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND, {"owner_domain_id": owner_domain_id}
+        )
+    conflicting = (
+        session.execute(
+            select(DomainMember).where(
+                DomainMember.resource_id == resource_id,
+                DomainMember.owner_domain_id.is_not(None),
+                DomainMember.owner_domain_id != owner_domain_id,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if conflicting is not None:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {
+                "reason": "owner_domain_conflict",
+                "resource_id": resource_id,
+                "owner_domain_id": conflicting.owner_domain_id,
+            },
+        )
+
+
+def add_member(
+    session: Session, domain_id: int, payload: DomainMemberAdd
+) -> DomainMember:
+    """添加业务域成员。as_ref=True 表示跨域引用，按 IRI 去重。"""
+    lock_domain_edit(session, get_domain(session, domain_id), payload.if_edit_match)
+    resource = session.get(ModelResource, payload.resource_id)
+    if resource is None:
+        raise KGError(
+            ErrorCode.RESOURCE_NOT_FOUND, {"resource_id": payload.resource_id}
+        )
+    existing = session.execute(
+        select(DomainMember).where(
+            DomainMember.domain_id == domain_id,
+            DomainMember.resource_id == payload.resource_id,
+            DomainMember.as_ref == payload.as_ref,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise KGError(
+            ErrorCode.ALREADY_EXISTS,
+            {"resource_id": payload.resource_id, "reason": "member_exists"},
+        )
+    if payload.owner_domain_id is not None:
+        _check_owner_domain_unique(
+            session, payload.resource_id, payload.owner_domain_id
+        )
+    member = DomainMember(
+        domain_id=domain_id,
+        resource_id=payload.resource_id,
+        as_ref=payload.as_ref,
+        owner_domain_id=payload.owner_domain_id,
+    )
+    session.add(member)
+    session.flush()
+    return member
+
+
+def remove_member(
+    session: Session,
+    domain_id: int,
+    member_id: int,
+    if_edit_match: int | None = None,
+) -> None:
+    lock_domain_edit(session, get_domain(session, domain_id), if_edit_match)
+    member = session.get(DomainMember, member_id)
+    if member is None or member.domain_id != domain_id:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"member_id": member_id})
+    session.delete(member)
+    session.flush()
+
+
+def list_members(session: Session, domain_id: int) -> list[DomainMember]:
+    return list(
+        session.execute(
+            select(DomainMember).where(DomainMember.domain_id == domain_id)
+        ).scalars()
+    )
+
+
+def delete_domain(session: Session, domain_id: int) -> None:
+    """删除业务域：有子域一律拒绝；成员归属随域删除，成员资源本身不动。"""
+    domain = get_domain(session, domain_id)
+    child_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(BusinessDomain)
+            .where(BusinessDomain.parent_id == domain_id)
+        )
+        or 0
+    )
+    if child_count:
+        raise KGError(
+            ErrorCode.RESOURCE_IN_USE,
+            {
+                "domain_id": domain_id,
+                "count": child_count,
+                "reason": "domain_has_children",
+            },
+        )
+    session.execute(delete(DomainMember).where(DomainMember.domain_id == domain_id))
+    session.execute(delete(DomainRevision).where(DomainRevision.domain_id == domain_id))
+    session.delete(domain)
+    session.flush()
+
+
+def get_domain(session: Session, domain_id: int) -> BusinessDomain:
+    domain = session.get(BusinessDomain, domain_id)
+    if domain is None:
+        raise KGError(ErrorCode.RESOURCE_NOT_FOUND, {"domain_id": domain_id})
+    return domain
+
+
+def list_domains(
+    session: Session, q: str = "", page: int = 1, page_size: int = 50
+) -> tuple[list[BusinessDomain], int]:
+    stmt = select(BusinessDomain)
+    if q:
+        stmt = stmt.where(BusinessDomain.name.ilike(f"%{q}%"))
+    count_stmt = select(func.count()).select_from(BusinessDomain)
+    if q:
+        count_stmt = count_stmt.where(BusinessDomain.name.ilike(f"%{q}%"))
+    total = session.scalar(count_stmt) or 0
+    stmt = (
+        stmt.order_by(BusinessDomain.name, BusinessDomain.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items = list(session.execute(stmt).scalars())
+    return items, total
+
+
+def lock_domain_edit(
+    session: Session,
+    domain: BusinessDomain,
+    if_edit_match: int | None = None,
+    *,
+    if_match: int | None = None,
+) -> BusinessDomain:
+    """Lock the parent before editing metadata, membership or publishing."""
+    stmt = update(BusinessDomain).where(BusinessDomain.id == domain.id)
+    if if_match is not None:
+        stmt = stmt.where(BusinessDomain.current_revision == if_match)
+    if if_edit_match is not None:
+        stmt = stmt.where(BusinessDomain.edit_revision == if_edit_match)
+    locked = session.scalar(
+        stmt.values(edit_revision=BusinessDomain.edit_revision + 1)
+        .returning(BusinessDomain)
+        .execution_options(populate_existing=True)
+    )
+    if locked is not None:
+        return locked
+    session.refresh(domain)
+    if if_match is not None and domain.current_revision != if_match:
+        raise KGError(
+            ErrorCode.REVISION_CONFLICT,
+            {
+                "resource": domain.name,
+                "expected": if_match,
+                "actual": domain.current_revision,
+            },
+        )
+    raise KGError(
+        ErrorCode.REVISION_CONFLICT,
+        {
+            "resource": domain.name,
+            "expected": if_edit_match,
+            "actual": domain.edit_revision,
+        },
+    )
+
+
+def update_domain(
+    session: Session, domain: BusinessDomain, payload: DomainUpdate
+) -> BusinessDomain:
+    """更新业务域；发布修订号和可选编辑令牌分别校验。"""
+    domain = lock_domain_edit(
+        session, domain, payload.if_edit_match, if_match=payload.if_match
+    )
+    if payload.label_i18n is not None:
+        domain.label_i18n = payload.label_i18n
+    if payload.definition_i18n is not None:
+        domain.definition_i18n = payload.definition_i18n
+    # parent_id 用 model_fields_set 判断「显式传了」还是「没传」：
+    # 显式传 null 表示解除父域，没传则保持原值。
+    if "parent_id" in payload.model_fields_set:
+        if payload.parent_id is None:
+            domain.parent_id = None
+        else:
+            _assert_no_cycle(session, domain, payload.parent_id)
+            domain.parent_id = _resolve_parent(session, payload.parent_id)
+    session.flush()
+    return domain
+
+
+def check_publish(session: Session, domain: BusinessDomain) -> PublishCheckResult:
+    """发布前四项检查：成员存在/版本可用/依赖完整/循环引用。"""
+    members = list_members(session, domain.id)
+    issues: list[str] = []
+
+    member_exists = True
+    versions_available = True
+    for m in members:
+        res = session.get(ModelResource, m.resource_id)
+        if res is None:
+            member_exists = False
+            issues.append(f"member {m.resource_id} not found")
+        elif res.status != ResourceStatus.PUBLISHED:
+            versions_available = False
+            issues.append(f"member {m.resource_id} not published")
+
+    dependencies_complete = member_exists and versions_available
+
+    no_circular_ref = not _has_circular_ref(session, domain.id, domain.id, set())
+    if not no_circular_ref:
+        issues.append("circular cross-domain reference detected")
+
+    can_publish = (
+        member_exists
+        and versions_available
+        and dependencies_complete
+        and no_circular_ref
+    )
+    return PublishCheckResult(
+        member_exists=member_exists,
+        versions_available=versions_available,
+        dependencies_complete=dependencies_complete,
+        no_circular_ref=no_circular_ref,
+        can_publish=can_publish,
+        issues=issues,
+    )
+
+
+def _has_circular_ref(
+    session: Session, start: int, current: int, visited: set[int]
+) -> bool:
+    """检测跨域引用是否成环。"""
+    if current in visited:
+        return True
+    visited.add(current)
+    members = (
+        session.execute(select(DomainMember).where(DomainMember.domain_id == current))
+        .scalars()
+        .all()
+    )
+    for m in members:
+        if (
+            m.owner_domain_id is not None
+            and m.owner_domain_id != start
+            and _has_circular_ref(session, start, m.owner_domain_id, visited)
+        ):
+            return True
+    visited.discard(current)
+    return False
+
+
+def publish_domain(
+    session: Session, domain: BusinessDomain, if_edit_match: int | None = None
+) -> int:
+    """发布业务域：冻结不可变版本。发布前必须通过四项检查。"""
+    domain = lock_domain_edit(session, domain, if_edit_match)
+    members = list_members(session, domain.id)
+    # 与资源发布/撤回串行化，避免检查后冻结到另一个版本。
+    resources = {
+        resource.id: resource
+        for resource in session.scalars(
+            select(ModelResource)
+            .where(ModelResource.id.in_({member.resource_id for member in members}))
+            .order_by(ModelResource.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    }
+    check = check_publish(session, domain)
+    if not check.can_publish:
+        raise KGError(
+            ErrorCode.VALIDATION_VIOLATION,
+            {"domain": domain.name, "issues": check.issues},
+        )
+
+    for resource in resources.values():
+        revision_id = session.scalar(
+            select(ResourceRevision.id).where(
+                ResourceRevision.resource_id == resource.id,
+                ResourceRevision.revision == resource.current_revision,
+            )
+        )
+        if resource.current_revision < 1 or revision_id is None:
+            raise KGError(
+                ErrorCode.VALIDATION_VIOLATION,
+                {
+                    "reason": "domain_member_revision_missing",
+                    "domain_id": domain.id,
+                    "resource_id": resource.id,
+                    "revision": resource.current_revision,
+                },
+            )
+
+    new_rev = domain.current_revision + 1
+    payload = {
+        "name": domain.name,
+        "iri": domain.iri,
+        "label_i18n": domain.label_i18n,
+        "members": [
+            {
+                "resource_id": m.resource_id,
+                "as_ref": m.as_ref,
+                "pinned_revision": resources[m.resource_id].current_revision,
+            }
+            for m in members
+        ],
+    }
+    rev = DomainRevision(
+        domain_id=domain.id,
+        revision=new_rev,
+        payload=payload,
+    )
+    session.add(rev)
+    domain.current_revision = new_rev
+    domain.status = ResourceStatus.PUBLISHED
+    session.flush()
+    return new_rev

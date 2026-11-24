@@ -1,0 +1,855 @@
+pnpm run test:web
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ pnpm -C web test
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ node --test
+TAP version 13
+# Subtest: ontology list and exports preserve pagination, file bytes, MIME types and cancellation signals
+ok 1 - ontology list and exports preserve pagination, file bytes, MIME types and cancellation signals
+  ---
+  duration_ms: 79.590469
+  type: 'test'
+  ...
+# Subtest: ontology export rejects JSON error envelopes in successful and failed Blob responses
+ok 2 - ontology export rejects JSON error envelopes in successful and failed Blob responses
+  ---
+  duration_ms: 9.343516
+  type: 'test'
+  ...
+# Subtest: ontology export preserves original non-JSON, malformed, network and cancellation errors
+ok 3 - ontology export preserves original non-JSON, malformed, network and cancellation errors
+  ---
+  duration_ms: 8.422472
+  type: 'test'
+  ...
+# Subtest: ontology mutations send the captured edit revision without changing legacy calls or canvas writes
+ok 4 - ontology mutations send the captured edit revision without changing legacy calls or canvas writes
+  ---
+  duration_ms: 7.970311
+  type: 'test'
+  ...
+# Subtest: entityTypesApi includes tail records and does not present a failed tail as complete
+ok 5 - entityTypesApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 44.353502
+  type: 'test'
+  ...
+# Subtest: relationsApi includes tail records and does not present a failed tail as complete
+ok 6 - relationsApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 11.249528
+  type: 'test'
+  ...
+# Subtest: domainsApi includes tail records and does not present a failed tail as complete
+ok 7 - domainsApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 12.013009
+  type: 'test'
+  ...
+# Subtest: ontologyApi includes tail records and does not present a failed tail as complete
+ok 8 - ontologyApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 11.806309
+  type: 'test'
+  ...
+# Subtest: datasourcesApi includes tail records and does not present a failed tail as complete
+ok 9 - datasourcesApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 13.438923
+  type: 'test'
+  ...
+# Subtest: mappingsApi includes tail records and does not present a failed tail as complete
+ok 10 - mappingsApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 14.818546
+  type: 'test'
+  ...
+# Subtest: graphApi includes tail records and does not present a failed tail as complete
+ok 11 - graphApi includes tail records and does not present a failed tail as complete
+  ---
+  duration_ms: 17.125038
+  type: 'test'
+  ...
+# Subtest: loaded identity + business 401 + shared refresh 401 clears identity before one login redirect
+ok 12 - loaded identity + business 401 + shared refresh 401 clears identity before one login redirect
+  ---
+  duration_ms: 706.874255
+  type: 'test'
+  ...
+# Subtest: another tab logout invalidates a pending refresh and clears reactive identity
+ok 13 - another tab logout invalidates a pending refresh and clears reactive identity
+  ---
+  duration_ms: 62.606778
+  type: 'test'
+  ...
+# Subtest: late profile save cannot overwrite the user or role of a new session
+ok 14 - late profile save cannot overwrite the user or role of a new session
+  ---
+  duration_ms: 38.569129
+  type: 'test'
+  ...
+# Subtest: concurrent me and business requests share refresh and normal rotation still completes loadMe
+ok 15 - concurrent me and business requests share refresh and normal rotation still completes loadMe
+  ---
+  duration_ms: 40.776661
+  type: 'test'
+  ...
+# Subtest: refresh 503 preserves loaded user, role and tokens
+ok 16 - refresh 503 preserves loaded user, role and tokens
+  ---
+  duration_ms: 40.248664
+  type: 'test'
+  ...
+# Subtest: refresh network failure preserves loaded user, role and tokens
+ok 17 - refresh network failure preserves loaded user, role and tokens
+  ---
+  duration_ms: 29.618714
+  type: 'test'
+  ...
+# Subtest: logout clears identity immediately and late refresh cannot restore it
+ok 18 - logout clears identity immediately and late refresh cannot restore it
+  ---
+  duration_ms: 34.669082
+  type: 'test'
+  ...
+# Subtest: logout clears identity immediately and late me cannot restore it
+ok 19 - logout clears identity immediately and late me cannot restore it
+  ---
+  duration_ms: 40.287663
+  type: 'test'
+  ...
+# Subtest: new login survives old refresh and me responses with status 200
+ok 20 - new login survives old refresh and me responses with status 200
+  ---
+  duration_ms: 47.166835
+  type: 'test'
+  ...
+# Subtest: new login survives old refresh and me responses with status 401
+ok 21 - new login survives old refresh and me responses with status 401
+  ---
+  duration_ms: 32.927829
+  type: 'test'
+  ...
+# Subtest: an old logout response does not clear a subsequent login
+ok 22 - an old logout response does not clear a subsequent login
+  ---
+  duration_ms: 35.046608
+  type: 'test'
+  ...
+# Subtest: authentication rejected during login user loading clears its loading state
+ok 23 - authentication rejected during login user loading clears its loading state
+  ---
+  duration_ms: 33.883792
+  type: 'test'
+  ...
+# Subtest: a new session refresh is independent and an old refresh completion cannot release its shared flight
+ok 24 - a new session refresh is independent and an old refresh completion cannot release its shared flight
+  ---
+  duration_ms: 37.784653
+  type: 'test'
+  ...
+# Subtest: a token write interleaved with another tab login cannot overwrite the new identity
+ok 25 - a token write interleaved with another tab login cannot overwrite the new identity
+  ---
+  duration_ms: 34.429422
+  type: 'test'
+  ...
+# Subtest: an old credential invalidation never removes a newly logged-in session
+ok 26 - an old credential invalidation never removes a newly logged-in session
+  ---
+  duration_ms: 37.65234
+  type: 'test'
+  ...
+# Subtest: two tabs coordinate refresh through one shared browser lock
+ok 27 - two tabs coordinate refresh through one shared browser lock
+  ---
+  duration_ms: 63.460923
+  type: 'test'
+  ...
+# Subtest: an old 401 cannot remove the rejection of a newer token in the same session
+ok 28 - an old 401 cannot remove the rejection of a newer token in the same session
+  ---
+  duration_ms: 44.211752
+  type: 'test'
+  ...
+# Subtest: clause table uses its summary contract and editing reads the full detail
+ok 29 - clause table uses its summary contract and editing reads the full detail
+  ---
+  duration_ms: 188.341103
+  type: 'test'
+  ...
+# Subtest: task creation uses the latest selected mapping revision
+ok 30 - task creation uses the latest selected mapping revision
+  ---
+  duration_ms: 67.431826
+  type: 'test'
+  ...
+# Subtest: task polling never starts after unmount during initial reads
+ok 31 - task polling never starts after unmount during initial reads
+  ---
+  duration_ms: 59.564917
+  type: 'test'
+  ...
+# Subtest: ontology editing waits for detail and preserves its definition
+ok 32 - ontology editing waits for detail and preserves its definition
+  ---
+  duration_ms: 45.205142
+  type: 'test'
+  ...
+# Subtest: graph overview and clear revision remove old URL keys
+ok 33 - graph overview and clear revision remove old URL keys
+  ---
+  duration_ms: 164.445607
+  type: 'test'
+  ...
+# Subtest: selecting datasource preserves saved draft bindings
+ok 34 - selecting datasource preserves saved draft bindings
+  ---
+  duration_ms: 128.665355
+  type: 'test'
+  ...
+# Subtest: entity fusion reloads for the current entity
+ok 35 - entity fusion reloads for the current entity
+  ---
+  duration_ms: 47.01484
+  type: 'test'
+  ...
+# Subtest: failed validation cannot retain another graph report
+ok 36 - failed validation cannot retain another graph report
+  ---
+  duration_ms: 37.106411
+  type: 'test'
+  ...
+# Subtest: late compile cannot authorize publication of an edited draft
+ok 37 - late compile cannot authorize publication of an edited draft
+  ---
+  duration_ms: 118.097871
+  type: 'test'
+  ...
+# Subtest: designer created resources appear in the canvas catalog
+ok 38 - designer created resources appear in the canvas catalog
+  ---
+  duration_ms: 203.11626
+  type: 'test'
+  ...
+# Subtest: designer rejects old validation after selecting another ontology
+ok 39 - designer rejects old validation after selecting another ontology
+  ---
+  duration_ms: 68.514978
+  type: 'test'
+  ...
+# Subtest: late designer creation cannot attach to a different ontology
+ok 40 - late designer creation cannot attach to a different ontology
+  ---
+  duration_ms: 65.700767
+  type: 'test'
+  ...
+# Subtest: entity route reuse closes old basic editors and rejects validation that finishes after navigation
+ok 41 - entity route reuse closes old basic editors and rejects validation that finishes after navigation
+  ---
+  duration_ms: 53.126099
+  type: 'test'
+  ...
+# Subtest: core resource checks discard results after the requirements change
+ok 42 - core resource checks discard results after the requirements change
+  ---
+  duration_ms: 20.248774
+  type: 'test'
+  ...
+# Subtest: one cancellable aggregate request renders totals beyond the list page limits
+ok 43 - one cancellable aggregate request renders totals beyond the list page limits
+  ---
+  duration_ms: 374.70485
+  type: 'test'
+  ...
+# Subtest: zh-CN: errors do not display zero totals or healthy status; retry restores real empty state
+ok 44 - zh-CN: errors do not display zero totals or healthy status; retry restores real empty state
+  ---
+  duration_ms: 139.692546
+  type: 'test'
+  ...
+# Subtest: en-US: errors do not display zero totals or healthy status; retry restores real empty state
+ok 45 - en-US: errors do not display zero totals or healthy status; retry restores real empty state
+  ---
+  duration_ms: 98.973076
+  type: 'test'
+  ...
+# Subtest: leaving the dashboard cancels the request and ignores a late response
+ok 46 - leaving the dashboard cancels the request and ignores a late response
+  ---
+  duration_ms: 60.365394
+  type: 'test'
+  ...
+# Subtest: paging aborts obsolete reads and cannot display stale rows
+ok 47 - paging aborts obsolete reads and cannot display stale rows
+  ---
+  duration_ms: 1898.988076
+  type: 'test'
+  ...
+# Subtest: list errors are visible and refresh can recover
+ok 48 - list errors are visible and refresh can recover
+  ---
+  duration_ms: 48.446596
+  type: 'test'
+  ...
+# Subtest: SQLite UTC times render in local timezone while explicit offsets are preserved
+ok 49 - SQLite UTC times render in local timezone while explicit offsets are preserved
+  ---
+  duration_ms: 32.99037
+  type: 'test'
+  ...
+# Subtest: download uses captured run id, suppresses duplicate clicks and releases object URL
+ok 50 - download uses captured run id, suppresses duplicate clicks and releases object URL
+  ---
+  duration_ms: 39.838266
+  type: 'test'
+  ...
+# Subtest: download errors recover and navigation cancels a pending download
+ok 51 - download errors recover and navigation cancels a pending download
+  ---
+  duration_ms: 30.681133
+  type: 'test'
+  ...
+# Subtest: real template renders bilingual report explanation and page controls
+ok 52 - real template renders bilingual report explanation and page controls
+  ---
+  duration_ms: 177.867008
+  type: 'test'
+  ...
+# Subtest: export API produces a JSON file without turning error envelopes into blobs
+ok 53 - export API produces a JSON file without turning error envelopes into blobs
+  ---
+  duration_ms: 9.707689
+  type: 'test'
+  ...
+# Subtest: saving and publishing use the saved mapping and advance only its edit token
+ok 54 - saving and publishing use the saved mapping and advance only its edit token
+  ---
+  duration_ms: 2283.25376
+  type: 'test'
+  ...
+# Subtest: published copy waits for its frozen details and preserves the incremental configuration
+ok 55 - published copy waits for its frozen details and preserves the incremental configuration
+  ---
+  duration_ms: 100.0679
+  type: 'test'
+  ...
+# Subtest: compile followed by publish uses the edit token returned by the first save
+ok 56 - compile followed by publish uses the edit token returned by the first save
+  ---
+  duration_ms: 82.439988
+  type: 'test'
+  ...
+# Subtest: deleting a draft mapping sends its edit token and resets the wizard
+ok 57 - deleting a draft mapping sends its edit token and resets the wizard
+  ---
+  duration_ms: 85.55247
+  type: 'test'
+  ...
+# Subtest: publishMapping stops after delayed save when selection changes
+ok 58 - publishMapping stops after delayed save when selection changes
+  ---
+  duration_ms: 84.988154
+  type: 'test'
+  ...
+# Subtest: publishMapping stops after delayed save when selection changes and returns to the same ID
+ok 59 - publishMapping stops after delayed save when selection changes and returns to the same ID
+  ---
+  duration_ms: 72.997294
+  type: 'test'
+  ...
+# Subtest: runCompile stops after delayed save when selection changes
+ok 60 - runCompile stops after delayed save when selection changes
+  ---
+  duration_ms: 60.351972
+  type: 'test'
+  ...
+# Subtest: runCompile stops after delayed save when selection changes and returns to the same ID
+ok 61 - runCompile stops after delayed save when selection changes and returns to the same ID
+  ---
+  duration_ms: 57.313947
+  type: 'test'
+  ...
+# Subtest: obsolete save success cannot finish the new selection's save
+ok 62 - obsolete save success cannot finish the new selection's save
+  ---
+  duration_ms: 57.417921
+  type: 'test'
+  ...
+# Subtest: obsolete save failure KG.REVISION_CONFLICT cannot finish the new selection's save
+ok 63 - obsolete save failure KG.REVISION_CONFLICT cannot finish the new selection's save
+  ---
+  duration_ms: 56.313225
+  type: 'test'
+  ...
+# Subtest: obsolete save failure network cannot finish the new selection's save
+ok 64 - obsolete save failure network cannot finish the new selection's save
+  ---
+  duration_ms: 61.002261
+  type: 'test'
+  ...
+# Subtest: delayed publish success cannot change a later selection
+ok 65 - delayed publish success cannot change a later selection
+  ---
+  duration_ms: 55.140132
+  type: 'test'
+  ...
+# Subtest: delayed publish conflict cannot change a later selection
+ok 66 - delayed publish conflict cannot change a later selection
+  ---
+  duration_ms: 51.920573
+  type: 'test'
+  ...
+# Subtest: a current save conflict keeps local edits and prevents publishing
+ok 67 - a current save conflict keeps local edits and prevents publishing
+  ---
+  duration_ms: 46.525211
+  type: 'test'
+  ...
+# Subtest: unmount during saveDraft ignores success and performs no later write
+ok 68 - unmount during saveDraft ignores success and performs no later write
+  ---
+  duration_ms: 41.465739
+  type: 'test'
+  ...
+# Subtest: unmount during saveDraft ignores conflicts and performs no later write
+ok 69 - unmount during saveDraft ignores conflicts and performs no later write
+  ---
+  duration_ms: 49.786921
+  type: 'test'
+  ...
+# Subtest: unmount during publish ignores success and performs no later write
+ok 70 - unmount during publish ignores success and performs no later write
+  ---
+  duration_ms: 48.814444
+  type: 'test'
+  ...
+# Subtest: unmount during publish ignores conflicts and performs no later write
+ok 71 - unmount during publish ignores conflicts and performs no later write
+  ---
+  duration_ms: 45.125957
+  type: 'test'
+  ...
+# Subtest: a delayed creation cannot select its mapping after navigating elsewhere
+ok 72 - a delayed creation cannot select its mapping after navigating elsewhere
+  ---
+  duration_ms: 43.728692
+  type: 'test'
+  ...
+# Subtest: obsolete dictionary list successes and errors cannot overwrite the current search or loading state
+ok 73 - obsolete dictionary list successes and errors cannot overwrite the current search or loading state
+  ---
+  duration_ms: 1937.008568
+  type: 'test'
+  ...
+# Subtest: dictionary editor keeps only the newest opened item, preserves history, and validates duplicate values
+ok 74 - dictionary editor keeps only the newest opened item, preserves history, and validates duplicate values
+  ---
+  duration_ms: 58.721374
+  type: 'test'
+  ...
+# Subtest: dictionary create/update/delete use current saved revision and expose in-use conflicts
+ok 75 - dictionary create/update/delete use current saved revision and expose in-use conflicts
+  ---
+  duration_ms: 49.290863
+  type: 'test'
+  ...
+# Subtest: property resave pins the original version and sends edit CAS; upgrading validates the default
+ok 76 - property resave pins the original version and sends edit CAS; upgrading validates the default
+  ---
+  duration_ms: 107.322881
+  type: 'test'
+  ...
+# Subtest: new enum properties require explicit version choice and obsolete revision responses are ignored
+ok 77 - new enum properties require explicit version choice and obsolete revision responses are ignored
+  ---
+  duration_ms: 59.342094
+  type: 'test'
+  ...
+# Subtest: route changes ignore stale entity loads and published properties are read-only
+ok 78 - route changes ignore stale entity loads and published properties are read-only
+  ---
+  duration_ms: 46.996281
+  type: 'test'
+  ...
+# Subtest: property add/remove retain sibling pins and rejected writes leave local data unchanged
+ok 79 - property add/remove retain sibling pins and rejected writes leave local data unchanged
+  ---
+  duration_ms: 35.41927
+  type: 'test'
+  ...
+# Subtest: dictionary API sends If-Match on writes and passes read cancellation to HTTP
+ok 80 - dictionary API sends If-Match on writes and passes read cancellation to HTTP
+  ---
+  duration_ms: 11.799842
+  type: 'test'
+  ...
+# Subtest: enum management renders real templates in both locales without untranslated keys
+ok 81 - enum management renders real templates in both locales without untranslated keys
+  ---
+  duration_ms: 366.117979
+  type: 'test'
+  ...
+# Subtest: Chinese and English locale keys stay aligned
+ok 82 - Chinese and English locale keys stay aligned
+  ---
+  duration_ms: 31.810513
+  type: 'test'
+  ...
+# Subtest: GovernanceRules renders both locales with real templates and no untranslated keys
+ok 83 - GovernanceRules renders both locales with real templates and no untranslated keys
+  ---
+  duration_ms: 2317.100767
+  type: 'test'
+  ...
+# Subtest: OntologyExport renders both locales with real templates and no untranslated keys
+ok 84 - OntologyExport renders both locales with real templates and no untranslated keys
+  ---
+  duration_ms: 152.039277
+  type: 'test'
+  ...
+# Subtest: AssemblyTemplates renders both locales with real templates and no untranslated keys
+ok 85 - AssemblyTemplates renders both locales with real templates and no untranslated keys
+  ---
+  duration_ms: 237.498719
+  type: 'test'
+  ...
+# Subtest: overview groups by type, retains isolated nodes, and stays inside its viewbox
+ok 86 - overview groups by type, retains isolated nodes, and stays inside its viewbox
+  ---
+  duration_ms: 28.093736
+  type: 'test'
+  ...
+# Subtest: registry exposes every P0 form id and default fallback by center
+ok 87 - registry exposes every P0 form id and default fallback by center
+  ---
+  duration_ms: 0.313855
+  type: 'test'
+  ...
+# Subtest: neighborhood puts root in the center and second degree outside first degree
+ok 88 - neighborhood puts root in the center and second degree outside first degree
+  ---
+  duration_ms: 0.615875
+  type: 'test'
+  ...
+# Subtest: org tree layers child below parent with elbow overrides
+ok 89 - org tree layers child below parent with elbow overrides
+  ---
+  duration_ms: 2.722316
+  type: 'test'
+  ...
+# Subtest: org tree falls back to grid when every node sits on a cycle
+ok 90 - org tree falls back to grid when every node sits on a cycle
+  ---
+  duration_ms: 0.51882
+  type: 'test'
+  ...
+# Subtest: equity penetration layers shareholders above investees
+ok 91 - equity penetration layers shareholders above investees
+  ---
+  duration_ms: 0.770749
+  type: 'test'
+  ...
+# Subtest: timeline arranges lanes per type and orders by first date attribute
+ok 92 - timeline arranges lanes per type and orders by first date attribute
+  ---
+  duration_ms: 0.845524
+  type: 'test'
+  ...
+# Subtest: supply chain puts participants on opposite columns
+ok 93 - supply chain puts participants on opposite columns
+  ---
+  duration_ms: 0.546865
+  type: 'test'
+  ...
+# Subtest: schema aggregates instances into typed nodes with counts
+ok 94 - schema aggregates instances into typed nodes with counts
+  ---
+  duration_ms: 41.019548
+  type: 'test'
+  ...
+# Subtest: schema renders aggregated edges and preserves direct/derived semantics
+ok 95 - schema renders aggregated edges and preserves direct/derived semantics
+  ---
+  duration_ms: 19.269597
+  type: 'test'
+  ...
+# Subtest: sankey renders aggregated edges and preserves direct/derived semantics
+ok 96 - sankey renders aggregated edges and preserves direct/derived semantics
+  ---
+  duration_ms: 0.694615
+  type: 'test'
+  ...
+# Subtest: chord renders aggregated edges and preserves direct/derived semantics
+ok 97 - chord renders aggregated edges and preserves direct/derived semantics
+  ---
+  duration_ms: 0.715343
+  type: 'test'
+  ...
+# Subtest: cycle view contains all members of overlapping cycles and self loops
+ok 98 - cycle view contains all members of overlapping cycles and self loops
+  ---
+  duration_ms: 1.166583
+  type: 'test'
+  ...
+# Subtest: supply chain puts dual-role participants in the middle column
+ok 99 - supply chain puts dual-role participants in the middle column
+  ---
+  duration_ms: 0.362906
+  type: 'test'
+  ...
+# Subtest: edge props are available to renderer and keep stable keys
+ok 100 - edge props are available to renderer and keep stable keys
+  ---
+  duration_ms: 0.39285
+  type: 'test'
+  ...
+# Subtest: parallel, reciprocal, and derived facts have separate curves and stable keys
+ok 101 - parallel, reciprocal, and derived facts have separate curves and stable keys
+  ---
+  duration_ms: 0.394104
+  type: 'test'
+  ...
+# Subtest: self loops remain separate and empty graphs are valid
+ok 102 - self loops remain separate and empty graphs are valid
+  ---
+  duration_ms: 0.341424
+  type: 'test'
+  ...
+# Subtest: cycle view isolates cycle members on the inner ring
+ok 103 - cycle view isolates cycle members on the inner ring
+  ---
+  duration_ms: 0.42973
+  type: 'test'
+  ...
+# Subtest: community groups connected components into separated blocks
+ok 104 - community groups connected components into separated blocks
+  ---
+  duration_ms: 0.760114
+  type: 'test'
+  ...
+# Subtest: impact tree reverses dependency direction
+ok 105 - impact tree reverses dependency direction
+  ---
+  duration_ms: 7.800588
+  type: 'test'
+  ...
+# Subtest: geo groups nodes by region attribute and falls back to grid
+ok 106 - geo groups nodes by region attribute and falls back to grid
+  ---
+  duration_ms: 0.82227
+  type: 'test'
+  ...
+# Subtest: sankey and chord aggregate to type level with counts
+ok 107 - sankey and chord aggregate to type level with counts
+  ---
+  duration_ms: 0.569749
+  type: 'test'
+  ...
+# Subtest: sunburst encodes types inner and instances outer with valid angles
+ok 108 - sunburst encodes types inner and instances outer with valid angles
+  ---
+  duration_ms: 1.884293
+  type: 'test'
+  ...
+# Subtest: treemap places instance rects inside canvas without NaN
+ok 109 - treemap places instance rects inside canvas without NaN
+  ---
+  duration_ms: 1.72472
+  type: 'test'
+  ...
+# Subtest: pack nests instance circles inside type circles
+ok 110 - pack nests instance circles inside type circles
+  ---
+  duration_ms: 1.668798
+  type: 'test'
+  ...
+# Subtest: gantt draws one bar per dated node and flags overlapping ranges
+ok 111 - gantt draws one bar per dated node and flags overlapping ranges
+  ---
+  duration_ms: 5.734282
+  type: 'test'
+  ...
+# Subtest: gantt degrades to an empty canvas when no node carries a date
+ok 112 - gantt degrades to an empty canvas when no node carries a date
+  ---
+  duration_ms: 0.381114
+  type: 'test'
+  ...
+# Subtest: small multiples tile 1-hop neighbourhoods on one shared scale
+ok 113 - small multiples tile 1-hop neighbourhoods on one shared scale
+  ---
+  duration_ms: 29.242711
+  type: 'test'
+  ...
+# Subtest: namespace list explains blocked deletes and keeps in-use conflicts readable
+ok 114 - namespace list explains blocked deletes and keeps in-use conflicts readable
+  ---
+  duration_ms: 1913.624247
+  type: 'test'
+  ...
+# Subtest: namespace list keeps only the newest result and ignores reads finishing after unmount
+ok 115 - namespace list keeps only the newest result and ignores reads finishing after unmount
+  ---
+  duration_ms: 52.209705
+  type: 'test'
+  ...
+# Subtest: namespace modal trims input, omits empty labels and names the duplicated field
+ok 116 - namespace modal trims input, omits empty labels and names the duplicated field
+  ---
+  duration_ms: 38.823848
+  type: 'test'
+  ...
+# Subtest: entity type drawer selects a namespace registered in place on an empty system
+ok 117 - entity type drawer selects a namespace registered in place on an empty system
+  ---
+  duration_ms: 77.895554
+  type: 'test'
+  ...
+# Subtest: namespace page renders both locales with a registration entry
+ok 118 - namespace page renders both locales with a registration entry
+  ---
+  duration_ms: 222.972527
+  type: 'test'
+  ...
+# Subtest: designer ignores obsolete successes, errors and loading completion even when reads ignore abort
+ok 119 - designer ignores obsolete successes, errors and loading completion even when reads ignore abort
+  ---
+  duration_ms: 2091.65297
+  type: 'test'
+  ...
+# Subtest: designer saves captured identity and positions, blocks writes while loading and isolates old save callbacks
+ok 120 - designer saves captured identity and positions, blocks writes while loading and isolates old save callbacks
+  ---
+  duration_ms: 101.443422
+  type: 'test'
+  ...
+# Subtest: designer waits for pending writes before returning to the same ontology and recovers from read errors
+ok 121 - designer waits for pending writes before returning to the same ontology and recovers from read errors
+  ---
+  duration_ms: 89.691431
+  type: 'test'
+  ...
+# Subtest: designer refreshes the complete snapshot before accepting the next edit token and retains data on conflict
+ok 122 - designer refreshes the complete snapshot before accepting the next edit token and retains data on conflict
+  ---
+  duration_ms: 82.165437
+  type: 'test'
+  ...
+# Subtest: designer suppresses stale edit conflicts and pending read callbacks after unmount
+ok 123 - designer suppresses stale edit conflicts and pending read callbacks after unmount
+  ---
+  duration_ms: 61.050865
+  type: 'test'
+  ...
+# Subtest: designer catalog errors remain visible and an explicit retry reloads all required resources
+ok 124 - designer catalog errors remain visible and an explicit retry reloads all required resources
+  ---
+  duration_ms: 55.812389
+  type: 'test'
+  ...
+# Subtest: domain member reads and publication checks keep only the latest selection
+ok 125 - domain member reads and publication checks keep only the latest selection
+  ---
+  duration_ms: 41.471443
+  type: 'test'
+  ...
+# Subtest: domain writes capture identity and revision and never refresh a different selection
+ok 126 - domain writes capture identity and revision and never refresh a different selection
+  ---
+  duration_ms: 27.732322
+  type: 'test'
+  ...
+# Subtest: domain edits reload token then members before enabling writes and conflicts require a full refresh
+ok 127 - domain edits reload token then members before enabling writes and conflicts require a full refresh
+  ---
+  duration_ms: 33.520395
+  type: 'test'
+  ...
+# Subtest: returning to a domain waits for its pending write and obtains a fresh token before members
+ok 128 - returning to a domain waits for its pending write and obtains a fresh token before members
+  ---
+  duration_ms: 29.680567
+  type: 'test'
+  ...
+# Subtest: domain list failures are visible and obsolete requests cannot finish a newer retry
+ok 129 - domain list failures are visible and obsolete requests cannot finish a newer retry
+  ---
+  duration_ms: 28.65636
+  type: 'test'
+  ...
+# Subtest: domain failures recover and obsolete member failures cannot finish a newer load or update an unmounted view
+ok 130 - domain failures recover and obsolete member failures cannot finish a newer load or update an unmounted view
+  ---
+  duration_ms: 27.707719
+  type: 'test'
+  ...
+# Subtest: both pages suppress pending mutation callbacks and follow-up reads after unmount
+    # Subtest: Designer
+    ok 1 - Designer
+      ---
+      duration_ms: 53.074771
+      type: 'test'
+      ...
+    # Subtest: Domains
+    ok 2 - Domains
+      ---
+      duration_ms: 27.133154
+      type: 'test'
+      ...
+    1..2
+ok 131 - both pages suppress pending mutation callbacks and follow-up reads after unmount
+  ---
+  duration_ms: 80.872711
+  type: 'test'
+  ...
+# Subtest: selection pages render visible errors and translated refresh controls using their real templates
+ok 132 - selection pages render visible errors and translated refresh controls using their real templates
+  ---
+  duration_ms: 384.808222
+  type: 'test'
+  ...
+1..132
+# tests 134
+# suites 0
+# pass 134
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4242.631349
+pnpm run test:server
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+$ cd server && .venv/bin/pytest
+........................................................................ [  9%]
+........................................................................ [ 18%]
+........................................................................ [ 27%]
+........................................................................ [ 37%]
+........................................................................ [ 46%]
+........................................................................ [ 55%]
+........................................................................ [ 64%]
+........................................................................ [ 74%]
+........................................................................ [ 83%]
+........................................................................ [ 92%]
+........................................................                 [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /Users/linyer/Public/Private/knowledge/server/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+.venv/lib/python3.13/site-packages/starlette/testclient.py:53
+  /Users/linyer/Public/Private/knowledge/server/.venv/lib/python3.13/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+app/schemas/datasource.py:53
+  /Users/linyer/Public/Private/knowledge/server/app/schemas/datasource.py:53: PytestCollectionWarning: cannot collect test class 'TestConnectionRequest' because it has a __init__ constructor (from: tests/test_m2_datasource.py)
+    class TestConnectionRequest(BaseModel):
+
+tests/test_m4_export.py: 6 warnings
+tests/test_m4_import.py: 3 warnings
+tests/test_semantics_roundtrip.py: 2 warnings
+  /Users/linyer/Public/Private/knowledge/server/.venv/lib/python3.13/site-packages/rdflib/plugins/parsers/jsonld.py:159: DeprecationWarning: ConjunctiveGraph is deprecated, use Dataset instead.
+    conj_sink = ConjunctiveGraph(store=sink.store, identifier=sink.identifier)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+776 passed, 14 warnings in 148.69s (0:02:28)

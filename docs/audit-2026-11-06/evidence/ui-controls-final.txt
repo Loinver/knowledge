@@ -1,0 +1,16 @@
+[WARN] The following settings cannot be set in the global config file ("/Users/linyer/Library/Preferences/pnpm/config.yaml") and were ignored: "globalShims". Move them to a project-level pnpm-workspace.yaml. To share these settings across projects, use config dependencies: https://pnpm.io/11.x/config-dependencies
+[isolated API] INFO:     Started server process [10467]
+[isolated API] INFO:     Waiting for application startup.
+[isolated API] INFO:     Application startup complete.
+[isolated API] INFO:     Uvicorn running on http://127.0.0.1:8123 (Press CTRL+C to quit)
+[Vite frontend] (node:10492) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[Vite frontend] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:10510) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+  ✓  1 e2e/audit-correction-flow.spec.ts:186:1 › UI modeling, frozen evidence, correction and history switch (45.0s)
+
+  1 passed (49.1s)

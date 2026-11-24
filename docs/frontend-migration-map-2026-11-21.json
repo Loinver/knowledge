@@ -1,0 +1,352 @@
+{
+  "pages": {
+    "Dashboard": "dashboard/DashboardPage",
+    "Forbidden": "errors/ForbiddenPage",
+    "NotFound": "errors/NotFoundPage",
+    "ontology/Namespaces": "semantic-assets/namespaces/NamespacesPage",
+    "ontology/EntityTypes": "semantic-assets/entity-types/EntityTypesPage",
+    "ontology/EntityDetail": "semantic-assets/entity-types/EntityTypeDetailPage",
+    "ontology/RelationTypes": "semantic-assets/relation-types/RelationTypesPage",
+    "ontology/RelationDetail": "semantic-assets/relation-types/RelationTypeDetailPage",
+    "ontology/Domains": "semantic-assets/business-domains/BusinessDomainsPage",
+    "ontology/Ontologies": "ontology/ontologies/OntologiesPage",
+    "ontology/Designer": "ontology/designer/DesignerPage",
+    "governance/EnumDictionaries": "semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage",
+    "governance/AssemblyTemplates": "semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage",
+    "datasources/DataSources": "data-integration/sources/DataSourcesPage",
+    "datasources/DataCatalog": "data-integration/catalog/DataCatalogPage",
+    "datasources/SamplePreview": "data-integration/catalog/preview/SamplePreviewPage",
+    "extraction/MappingWizard": "data-integration/mapping/MappingWorkbenchPage",
+    "extraction/AiAssist": "data-integration/mapping/ai-assist/AiAssistPage",
+    "extraction/ExtractionTasks": "data-integration/tasks/ExtractionTasksPage",
+    "extraction/ExtractionRuns": "data-integration/runs/ExtractionRunsPage",
+    "graph/GraphBrowse": "graph/browse/GraphBrowsePage",
+    "graph/GraphEntities": "graph/entities/GraphEntitiesPage",
+    "graph/GraphEntityDetail": "graph/entities/GraphEntityDetailPage",
+    "graph/GraphEvidence": "graph/evidence/GraphEvidencePage",
+    "graph/GraphReports": "ontology/validation/ValidationReportsPage",
+    "governance/StandardClauses": "governance/clauses/StandardClausesPage",
+    "governance/GovernanceRules": "governance/rules/GovernanceRulesPage",
+    "governance/OntologyExport": "governance/exchange/OntologyExchangePage",
+    "knowledge/KnowledgeBases": "knowledge/KnowledgeBaseListPage",
+    "knowledge/KnowledgeBaseDetail": "knowledge/KnowledgeBaseDetailPage",
+    "knowledge/KnowledgeSearch": "knowledge/KnowledgeSearchPage",
+    "system/Users": "system/users/UsersPage",
+    "system/Roles": "system/roles/RolesPage",
+    "system/AuditLogs": "system/audit-logs/AuditLogsPage",
+    "system/AiModels": "system/ai-models/AiModelsPage",
+    "account/Profile": "account/ProfilePage",
+    "account/Security": "account/SecurityPage",
+    "auth/Login": "auth/LoginPage",
+    "auth/Register": "auth/RegisterPage",
+    "auth/ForgotPassword": "auth/ForgotPasswordPage",
+    "auth/ResetPassword": "auth/ResetPasswordPage"
+  },
+  "files": {
+    "web/src/views/Dashboard.vue": "web/src/views/dashboard/DashboardPage.vue",
+    "web/src/views/Forbidden.vue": "web/src/views/errors/ForbiddenPage.vue",
+    "web/src/views/NotFound.vue": "web/src/views/errors/NotFoundPage.vue",
+    "web/src/views/ontology/Namespaces.vue": "web/src/views/semantic-assets/namespaces/NamespacesPage.vue",
+    "web/src/views/ontology/EntityTypes.vue": "web/src/views/semantic-assets/entity-types/EntityTypesPage.vue",
+    "web/src/views/ontology/EntityDetail.vue": "web/src/views/semantic-assets/entity-types/EntityTypeDetailPage.vue",
+    "web/src/views/ontology/RelationTypes.vue": "web/src/views/semantic-assets/relation-types/RelationTypesPage.vue",
+    "web/src/views/ontology/RelationDetail.vue": "web/src/views/semantic-assets/relation-types/RelationTypeDetailPage.vue",
+    "web/src/views/ontology/Domains.vue": "web/src/views/semantic-assets/business-domains/BusinessDomainsPage.vue",
+    "web/src/views/ontology/Ontologies.vue": "web/src/views/ontology/ontologies/OntologiesPage.vue",
+    "web/src/views/ontology/Designer.vue": "web/src/views/ontology/designer/DesignerPage.vue",
+    "web/src/views/governance/EnumDictionaries.vue": "web/src/views/semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage.vue",
+    "web/src/views/governance/AssemblyTemplates.vue": "web/src/views/semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage.vue",
+    "web/src/views/datasources/DataSources.vue": "web/src/views/data-integration/sources/DataSourcesPage.vue",
+    "web/src/views/datasources/DataCatalog.vue": "web/src/views/data-integration/catalog/DataCatalogPage.vue",
+    "web/src/views/datasources/SamplePreview.vue": "web/src/views/data-integration/catalog/preview/SamplePreviewPage.vue",
+    "web/src/views/extraction/MappingWizard.vue": "web/src/views/data-integration/mapping/MappingWorkbenchPage.vue",
+    "web/src/views/extraction/AiAssist.vue": "web/src/views/data-integration/mapping/ai-assist/AiAssistPage.vue",
+    "web/src/views/extraction/ExtractionTasks.vue": "web/src/views/data-integration/tasks/ExtractionTasksPage.vue",
+    "web/src/views/extraction/ExtractionRuns.vue": "web/src/views/data-integration/runs/ExtractionRunsPage.vue",
+    "web/src/views/graph/GraphBrowse.vue": "web/src/views/graph/browse/GraphBrowsePage.vue",
+    "web/src/views/graph/GraphEntities.vue": "web/src/views/graph/entities/GraphEntitiesPage.vue",
+    "web/src/views/graph/GraphEntityDetail.vue": "web/src/views/graph/entities/GraphEntityDetailPage.vue",
+    "web/src/views/graph/GraphEvidence.vue": "web/src/views/graph/evidence/GraphEvidencePage.vue",
+    "web/src/views/graph/GraphReports.vue": "web/src/views/ontology/validation/ValidationReportsPage.vue",
+    "web/src/views/governance/StandardClauses.vue": "web/src/views/governance/clauses/StandardClausesPage.vue",
+    "web/src/views/governance/GovernanceRules.vue": "web/src/views/governance/rules/GovernanceRulesPage.vue",
+    "web/src/views/governance/OntologyExport.vue": "web/src/views/governance/exchange/OntologyExchangePage.vue",
+    "web/src/views/knowledge/KnowledgeBases.vue": "web/src/views/knowledge/KnowledgeBaseListPage.vue",
+    "web/src/views/knowledge/KnowledgeBaseDetail.vue": "web/src/views/knowledge/KnowledgeBaseDetailPage.vue",
+    "web/src/views/knowledge/KnowledgeSearch.vue": "web/src/views/knowledge/KnowledgeSearchPage.vue",
+    "web/src/views/system/Users.vue": "web/src/views/system/users/UsersPage.vue",
+    "web/src/views/system/Roles.vue": "web/src/views/system/roles/RolesPage.vue",
+    "web/src/views/system/AuditLogs.vue": "web/src/views/system/audit-logs/AuditLogsPage.vue",
+    "web/src/views/system/AiModels.vue": "web/src/views/system/ai-models/AiModelsPage.vue",
+    "web/src/views/account/Profile.vue": "web/src/views/account/ProfilePage.vue",
+    "web/src/views/account/Security.vue": "web/src/views/account/SecurityPage.vue",
+    "web/src/views/auth/Login.vue": "web/src/views/auth/LoginPage.vue",
+    "web/src/views/auth/Register.vue": "web/src/views/auth/RegisterPage.vue",
+    "web/src/views/auth/ForgotPassword.vue": "web/src/views/auth/ForgotPasswordPage.vue",
+    "web/src/views/auth/ResetPassword.vue": "web/src/views/auth/ResetPasswordPage.vue",
+    "web/src/views/ontology/components/designerGeometry.ts": "web/src/views/ontology/designer/components/designerGeometry.ts",
+    "web/src/views/ontology/components/RelationSemanticFields.vue": "web/src/views/semantic-assets/relation-types/components/RelationSemanticFields.vue",
+    "web/src/views/ontology/components/AiSuggestions.vue": "web/src/views/ontology/designer/components/AiSuggestions.vue",
+    "web/src/views/ontology/components/useAiSuggestions.ts": "web/src/views/ontology/designer/components/useAiSuggestions.ts",
+    "web/src/views/ontology/components/NamespaceCreateModal.vue": "web/src/views/semantic-assets/components/NamespaceCreateModal.vue",
+    "web/src/views/ontology/components/modeling/AiModeling.vue": "web/src/views/ontology/designer/components/modeling/AiModeling.vue",
+    "web/src/views/ontology/components/modeling/useAiModeling.ts": "web/src/views/ontology/designer/components/modeling/useAiModeling.ts",
+    "web/src/views/ontology/components/__tests__/ontology-fields.test.mjs": "web/src/__tests__/semantic-fields.test.mjs",
+    "web/src/views/ontology/components/__tests__/ai-suggestions.test.mjs": "web/src/views/ontology/designer/components/__tests__/ai-suggestions.test.mjs",
+    "web/src/views/ontology/components/modeling/__tests__/ai-modeling.test.mjs": "web/src/views/ontology/designer/components/modeling/__tests__/ai-modeling.test.mjs",
+    "web/src/views/ontology/components/modeling/__tests__/designer-history.test.mjs": "web/src/views/ontology/designer/components/modeling/__tests__/designer-history.test.mjs",
+    "web/src/views/ontology/composables/useDesignerHistory.ts": "web/src/views/ontology/designer/composables/useDesignerHistory.ts",
+    "web/src/views/ontology/__tests__/designer-interactions.test.mjs": "web/src/views/ontology/designer/__tests__/designer-interactions.test.mjs",
+    "web/src/views/ontology/__tests__/namespaces.test.mjs": "web/src/views/semantic-assets/namespaces/__tests__/namespaces.test.mjs",
+    "web/src/views/ontology/__tests__/relation-edit-lifecycle.test.mjs": "web/src/views/semantic-assets/relation-types/__tests__/relation-edit-lifecycle.test.mjs",
+    "web/src/views/ontology/__tests__/selection-lifecycle.test.mjs": "web/src/__tests__/selection-lifecycle.test.mjs",
+    "web/src/views/extraction/components/ExtractionSuggestions.vue": "web/src/views/data-integration/mapping/components/ExtractionSuggestions.vue",
+    "web/src/views/extraction/components/FusionPolicyEditor.vue": "web/src/views/data-integration/mapping/components/FusionPolicyEditor.vue",
+    "web/src/views/extraction/components/FrozenMapping.vue": "web/src/views/data-integration/mapping/components/FrozenMapping.vue",
+    "web/src/views/extraction/__tests__/mapping-wizard.test.mjs": "web/src/views/data-integration/mapping/__tests__/mapping-wizard.test.mjs",
+    "web/src/views/extraction/__tests__/extraction-runs.test.mjs": "web/src/views/data-integration/runs/__tests__/extraction-runs.test.mjs",
+    "web/src/views/extraction/__tests__/task-ai-safety.test.mjs": "web/src/views/data-integration/__tests__/task-ai-safety.test.mjs",
+    "web/src/views/extraction/__tests__/ai-evidence-ux.test.mjs": "web/src/views/data-integration/__tests__/ai-evidence-ux.test.mjs",
+    "web/src/views/datasources/__tests__/connection-feedback.test.mjs": "web/src/views/data-integration/sources/__tests__/connection-feedback.test.mjs",
+    "web/src/views/governance/components/OntologyHistory.vue": "web/src/views/governance/exchange/components/OntologyHistory.vue",
+    "web/src/views/governance/components/OntologyRestore.vue": "web/src/views/governance/exchange/components/OntologyRestore.vue",
+    "web/src/views/governance/components/TemplateCoreCheck.vue": "web/src/views/semantic-assets/configuration/assembly-templates/components/TemplateCoreCheck.vue",
+    "web/src/views/governance/composables/useGovernanceAccess.ts": "web/src/composables/useAssetAccess.ts",
+    "web/src/views/governance/__tests__/governance-safety.test.mjs": "web/src/__tests__/governance-safety.test.mjs",
+    "web/src/views/governance/__tests__/governance-drafts.test.mjs": "web/src/__tests__/governance-drafts.test.mjs",
+    "web/src/views/governance/__tests__/governance-render.test.mjs": "web/src/__tests__/governance-render.test.mjs",
+    "web/src/views/governance/__tests__/draft-guard.test.mjs": "web/src/composables/__tests__/draft-guard.test.mjs",
+    "web/src/views/governance/__tests__/ontology-transfer.test.mjs": "web/src/views/governance/exchange/__tests__/ontology-transfer.test.mjs",
+    "web/src/views/governance/__tests__/enum-dictionaries.test.mjs": "web/src/views/semantic-assets/configuration/__tests__/enum-dictionaries.test.mjs",
+    "web/src/views/graph/components/graphViewport.ts": "web/src/components/graph/viewport.ts",
+    "web/src/views/graph/components/EvidenceInspector.vue": "web/src/views/graph/browse/components/EvidenceInspector.vue",
+    "web/src/views/graph/components/GraphCanvas.vue": "web/src/views/graph/browse/components/GraphCanvas.vue",
+    "web/src/views/graph/components/KnowledgeGraphReferences.vue": "web/src/views/graph/browse/components/KnowledgeGraphReferences.vue",
+    "web/src/views/graph/components/SemanticViewConfig.vue": "web/src/views/graph/browse/components/SemanticViewConfig.vue",
+    "web/src/views/graph/components/graphExport.ts": "web/src/views/graph/browse/components/graphExport.ts",
+    "web/src/views/graph/components/graphLayout.ts": "web/src/views/graph/browse/components/graphLayout.ts",
+    "web/src/views/graph/components/useGraphViewport.ts": "web/src/views/graph/browse/components/useGraphViewport.ts",
+    "web/src/views/graph/components/layouts/index.ts": "web/src/views/graph/browse/components/layouts/index.ts",
+    "web/src/views/graph/components/layouts/semanticView.ts": "web/src/views/graph/browse/components/layouts/semanticView.ts",
+    "web/src/views/graph/components/FusionEvidence.vue": "web/src/views/graph/evidence/components/FusionEvidence.vue",
+    "web/src/views/graph/__tests__/graph-workspace.test.mjs": "web/src/views/graph/browse/__tests__/graph-workspace.test.mjs",
+    "web/src/views/graph/__tests__/graphLayout.test.mjs": "web/src/views/graph/browse/__tests__/graphLayout.test.mjs",
+    "web/src/views/graph/__tests__/semanticView-page.test.mjs": "web/src/views/graph/browse/__tests__/semanticView-page.test.mjs",
+    "web/src/views/graph/__tests__/semanticView.test.mjs": "web/src/views/graph/browse/__tests__/semanticView.test.mjs",
+    "web/src/views/graph/components/__tests__/graphViewport.test.mjs": "web/src/components/graph/__tests__/viewport.test.mjs",
+    "web/src/views/system/components/AssetAuditLogs.vue": "web/src/views/system/audit-logs/components/AssetAuditLogs.vue",
+    "web/src/views/system/__tests__/asset-audit.test.mjs": "web/src/views/system/audit-logs/__tests__/asset-audit.test.mjs",
+    "web/src/views/system/__tests__/users-draft.test.mjs": "web/src/views/system/users/__tests__/users-draft.test.mjs",
+    "web/src/views/__tests__/dashboard.test.mjs": "web/src/views/dashboard/__tests__/dashboard.test.mjs",
+    "web/src/views/__tests__/audit-regressions.test.mjs": "web/src/__tests__/audit-regressions.test.mjs",
+    "web/src/views/__tests__/view-harness.mjs": "web/src/testing/view-harness.mjs",
+    "web/src/views/auth/AuthHeading.vue": "web/src/views/auth/components/AuthHeading.vue"
+  },
+  "routes": [
+    {
+      "name": "dashboard",
+      "from": "web/src/views/Dashboard.vue",
+      "to": "web/src/views/dashboard/DashboardPage.vue"
+    },
+    {
+      "name": "knowledge-bases",
+      "from": "web/src/views/knowledge/KnowledgeBases.vue",
+      "to": "web/src/views/knowledge/KnowledgeBaseListPage.vue"
+    },
+    {
+      "name": "knowledge-base-detail",
+      "from": "web/src/views/knowledge/KnowledgeBaseDetail.vue",
+      "to": "web/src/views/knowledge/KnowledgeBaseDetailPage.vue"
+    },
+    {
+      "name": "knowledge-base-search",
+      "from": "web/src/views/knowledge/KnowledgeSearch.vue",
+      "to": "web/src/views/knowledge/KnowledgeSearchPage.vue"
+    },
+    {
+      "name": "ontologies",
+      "from": "web/src/views/ontology/Ontologies.vue",
+      "to": "web/src/views/ontology/ontologies/OntologiesPage.vue"
+    },
+    {
+      "name": "namespaces",
+      "from": "web/src/views/ontology/Namespaces.vue",
+      "to": "web/src/views/semantic-assets/namespaces/NamespacesPage.vue"
+    },
+    {
+      "name": "entity-types",
+      "from": "web/src/views/ontology/EntityTypes.vue",
+      "to": "web/src/views/semantic-assets/entity-types/EntityTypesPage.vue"
+    },
+    {
+      "name": "entity-detail",
+      "from": "web/src/views/ontology/EntityDetail.vue",
+      "to": "web/src/views/semantic-assets/entity-types/EntityTypeDetailPage.vue"
+    },
+    {
+      "name": "relation-types",
+      "from": "web/src/views/ontology/RelationTypes.vue",
+      "to": "web/src/views/semantic-assets/relation-types/RelationTypesPage.vue"
+    },
+    {
+      "name": "relation-detail",
+      "from": "web/src/views/ontology/RelationDetail.vue",
+      "to": "web/src/views/semantic-assets/relation-types/RelationTypeDetailPage.vue"
+    },
+    {
+      "name": "domains",
+      "from": "web/src/views/ontology/Domains.vue",
+      "to": "web/src/views/semantic-assets/business-domains/BusinessDomainsPage.vue"
+    },
+    {
+      "name": "designer",
+      "from": "web/src/views/ontology/Designer.vue",
+      "to": "web/src/views/ontology/designer/DesignerPage.vue"
+    },
+    {
+      "name": "datasources",
+      "from": "web/src/views/datasources/DataSources.vue",
+      "to": "web/src/views/data-integration/sources/DataSourcesPage.vue"
+    },
+    {
+      "name": "data-catalog",
+      "from": "web/src/views/datasources/DataCatalog.vue",
+      "to": "web/src/views/data-integration/catalog/DataCatalogPage.vue"
+    },
+    {
+      "name": "sample-preview",
+      "from": "web/src/views/datasources/SamplePreview.vue",
+      "to": "web/src/views/data-integration/catalog/preview/SamplePreviewPage.vue"
+    },
+    {
+      "name": "mapping-wizard",
+      "from": "web/src/views/extraction/MappingWizard.vue",
+      "to": "web/src/views/data-integration/mapping/MappingWorkbenchPage.vue"
+    },
+    {
+      "name": "extraction-runs",
+      "from": "web/src/views/extraction/ExtractionRuns.vue",
+      "to": "web/src/views/data-integration/runs/ExtractionRunsPage.vue"
+    },
+    {
+      "name": "extraction-tasks",
+      "from": "web/src/views/extraction/ExtractionTasks.vue",
+      "to": "web/src/views/data-integration/tasks/ExtractionTasksPage.vue"
+    },
+    {
+      "name": "ai-assist",
+      "from": "web/src/views/extraction/AiAssist.vue",
+      "to": "web/src/views/data-integration/mapping/ai-assist/AiAssistPage.vue"
+    },
+    {
+      "name": "graph-browse",
+      "from": "web/src/views/graph/GraphBrowse.vue",
+      "to": "web/src/views/graph/browse/GraphBrowsePage.vue"
+    },
+    {
+      "name": "graph-entities",
+      "from": "web/src/views/graph/GraphEntities.vue",
+      "to": "web/src/views/graph/entities/GraphEntitiesPage.vue"
+    },
+    {
+      "name": "graph-entity-detail",
+      "from": "web/src/views/graph/GraphEntityDetail.vue",
+      "to": "web/src/views/graph/entities/GraphEntityDetailPage.vue"
+    },
+    {
+      "name": "graph-evidence",
+      "from": "web/src/views/graph/GraphEvidence.vue",
+      "to": "web/src/views/graph/evidence/GraphEvidencePage.vue"
+    },
+    {
+      "name": "graph-reports",
+      "from": "web/src/views/graph/GraphReports.vue",
+      "to": "web/src/views/ontology/validation/ValidationReportsPage.vue"
+    },
+    {
+      "name": "governance-rules",
+      "from": "web/src/views/governance/GovernanceRules.vue",
+      "to": "web/src/views/governance/rules/GovernanceRulesPage.vue"
+    },
+    {
+      "name": "governance-clauses",
+      "from": "web/src/views/governance/StandardClauses.vue",
+      "to": "web/src/views/governance/clauses/StandardClausesPage.vue"
+    },
+    {
+      "name": "enum-dictionaries",
+      "from": "web/src/views/governance/EnumDictionaries.vue",
+      "to": "web/src/views/semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage.vue"
+    },
+    {
+      "name": "assembly-templates",
+      "from": "web/src/views/governance/AssemblyTemplates.vue",
+      "to": "web/src/views/semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage.vue"
+    },
+    {
+      "name": "ontology-export",
+      "from": "web/src/views/governance/OntologyExport.vue",
+      "to": "web/src/views/governance/exchange/OntologyExchangePage.vue"
+    },
+    {
+      "name": "account-profile",
+      "from": "web/src/views/account/Profile.vue",
+      "to": "web/src/views/account/ProfilePage.vue"
+    },
+    {
+      "name": "account-security",
+      "from": "web/src/views/account/Security.vue",
+      "to": "web/src/views/account/SecurityPage.vue"
+    },
+    {
+      "name": "system-users",
+      "from": "web/src/views/system/Users.vue",
+      "to": "web/src/views/system/users/UsersPage.vue"
+    },
+    {
+      "name": "system-roles",
+      "from": "web/src/views/system/Roles.vue",
+      "to": "web/src/views/system/roles/RolesPage.vue"
+    },
+    {
+      "name": "system-audit-logs",
+      "from": "web/src/views/system/AuditLogs.vue",
+      "to": "web/src/views/system/audit-logs/AuditLogsPage.vue"
+    },
+    {
+      "name": "system-ai-models",
+      "from": "web/src/views/system/AiModels.vue",
+      "to": "web/src/views/system/ai-models/AiModelsPage.vue"
+    },
+    {
+      "name": "forbidden",
+      "from": "web/src/views/Forbidden.vue",
+      "to": "web/src/views/errors/ForbiddenPage.vue"
+    },
+    {
+      "name": "not-found",
+      "from": "web/src/views/NotFound.vue",
+      "to": "web/src/views/errors/NotFoundPage.vue"
+    },
+    {
+      "name": "login",
+      "from": "web/src/views/auth/Login.vue",
+      "to": "web/src/views/auth/LoginPage.vue"
+    },
+    {
+      "name": "register",
+      "from": "web/src/views/auth/Register.vue",
+      "to": "web/src/views/auth/RegisterPage.vue"
+    },
+    {
+      "name": "forgot-password",
+      "from": "web/src/views/auth/ForgotPassword.vue",
+      "to": "web/src/views/auth/ForgotPasswordPage.vue"
+    },
+    {
+      "name": "reset-password",
+      "from": "web/src/views/auth/ResetPassword.vue",
+      "to": "web/src/views/auth/ResetPasswordPage.vue"
+    }
+  ]
+}

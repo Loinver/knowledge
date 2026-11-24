@@ -1,0 +1,126 @@
+"""映射方案路由（H-30）。"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Header, Query
+from sqlalchemy.orm import Session
+
+from app.api.v1.asset_audit_context import audit_asset, audit_created
+from app.core.db import get_session
+from app.domain.mapping_service import (
+    create_mapping,
+    delete_mapping,
+    get_draft_revision,
+    get_frozen_revision,
+    get_mapping,
+    get_published_revision,
+    list_mappings,
+    publish_mapping,
+    save_draft,
+)
+from app.models.asset_audit import AssetAuditAction, AssetType
+from app.schemas.mapping import (
+    MappingBrief,
+    MappingCreate,
+    MappingOut,
+    MappingRevisionOut,
+    PublishRequest,
+    SaveDraftRequest,
+)
+from app.schemas.response import ApiResponse
+
+router = APIRouter(prefix="/mappings", tags=["mappings"])
+
+
+@router.get("/revisions/{revision_id}", response_model=ApiResponse[MappingRevisionOut])
+def frozen_revision(
+    revision_id: int, session: Session = Depends(get_session)
+) -> MappingRevisionOut:
+    return MappingRevisionOut.model_validate(get_frozen_revision(session, revision_id))
+
+
+@router.get("", response_model=ApiResponse[list[MappingBrief]])
+def list_m(
+    q: str = Query(""),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    session: Session = Depends(get_session),
+) -> list[MappingBrief]:
+    items, _total = list_mappings(session, q, page, page_size)
+    return [MappingBrief.model_validate(i) for i in items]
+
+
+@router.post("", response_model=ApiResponse[MappingOut], status_code=201)
+@audit_asset(AssetAuditAction.CREATE, AssetType.MAPPING)
+def create_m(
+    payload: MappingCreate, session: Session = Depends(get_session)
+) -> MappingOut:
+    m = create_mapping(session, payload)
+    audit_created(session, m.id)
+    session.commit()
+    return MappingOut.model_validate(m)
+
+
+@router.get("/{mapping_id}", response_model=ApiResponse[MappingOut])
+def get_m(mapping_id: int, session: Session = Depends(get_session)) -> MappingOut:
+    m = get_mapping(session, mapping_id)
+    return MappingOut.model_validate(m)
+
+
+@router.delete("/{mapping_id}", response_model=ApiResponse[None])
+@audit_asset(AssetAuditAction.DELETE, AssetType.MAPPING, "mapping_id")
+def remove_m(
+    mapping_id: int,
+    if_edit_match: int | None = Header(None, ge=0),
+    session: Session = Depends(get_session),
+) -> None:
+    delete_mapping(session, mapping_id, if_edit_match)
+    session.commit()
+
+
+@router.put("/{mapping_id}/draft", response_model=ApiResponse[MappingRevisionOut])
+@audit_asset(AssetAuditAction.EDIT, AssetType.MAPPING, "mapping_id")
+def put_draft(
+    mapping_id: int,
+    payload: SaveDraftRequest,
+    session: Session = Depends(get_session),
+) -> MappingRevisionOut:
+    rev = save_draft(
+        session, mapping_id, payload.draft, payload.if_match, payload.if_edit_match
+    )
+    result = MappingRevisionOut.model_validate(rev)
+    session.commit()
+    return result
+
+
+@router.get(
+    "/{mapping_id}/draft", response_model=ApiResponse[MappingRevisionOut | None]
+)
+def get_draft(
+    mapping_id: int, session: Session = Depends(get_session)
+) -> MappingRevisionOut | None:
+    rev = get_draft_revision(session, mapping_id)
+    if rev is None:
+        return None
+    return MappingRevisionOut.model_validate(rev)
+
+
+@router.post("/{mapping_id}/publish", response_model=ApiResponse[MappingRevisionOut])
+@audit_asset(AssetAuditAction.PUBLISH, AssetType.MAPPING, "mapping_id")
+def publish_m(
+    mapping_id: int,
+    payload: PublishRequest,
+    session: Session = Depends(get_session),
+) -> MappingRevisionOut:
+    rev = publish_mapping(session, mapping_id, payload.if_match, payload.if_edit_match)
+    result = MappingRevisionOut.model_validate(rev)
+    session.commit()
+    return result
+
+
+@router.get("/{mapping_id}/published", response_model=ApiResponse[MappingRevisionOut])
+def get_pub(
+    mapping_id: int, session: Session = Depends(get_session)
+) -> MappingRevisionOut:
+    rev = get_published_revision(session, mapping_id)
+    return MappingRevisionOut.model_validate(rev)

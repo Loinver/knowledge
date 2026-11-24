@@ -1,0 +1,350 @@
+import { expect, test, type Page } from '@playwright/test'
+
+import { ensureAdmin, loginAsAdmin } from './admin'
+
+/**
+ * B-10 第一步：建模链全程走界面（零业务 API）。
+ *
+ * 既有 m3-browser-flow 的建模部分是 API 预置的（seedOntology / seedMapping），
+ * 所以"业务人员能不能只靠界面走到本体"一直没有实测证据。本 spec 专门验证
+ * 「登记命名空间 → 建实体类型（含数据属性） → 建关系类型（含端点） → 建业务域
+ * （含成员、发布）→ 按域装配本体并发布」这一段。
+ *
+ * 边界（如实说明，不做超出范围的成功声明）：
+ * - 管理员账号由 scripts/seed_admin.py 种入，与既有 spec 一致，属环境准备；
+ *   登录本身走界面。除此之外本文件不调用任何业务 API。
+ * - 本体装配通过资源池加入业务域已发布成员，刷新后仍保留节点和关系；
+ *   后续映射、抽取、图谱和追溯由 m3-browser-flow 覆盖。
+ *
+ * 该链路已通过隔离 Playwright 环境验证；管理员准备由共享的 ensureAdmin 幂等处理。
+ */
+
+/**
+ * UiSelect 通过 Portal 渲染 option；按完整可访问名称定位当前可见选项。
+ */
+async function pickOption(page: Page, label: string): Promise<void> {
+  // 下拉浮层渲染有延迟，先等目标选项出现再点。
+  const option = page.getByRole('option', { name: label, exact: true })
+  await option.waitFor({ state: 'visible', timeout: 10000 })
+  await option.click()
+}
+
+/**
+ * 当前打开的 UiModal / UiDrawer 都提供 dialog 语义。
+ *
+ * 必须把表单控件限定在浮层里：同一页常有多个同名按钮（例如空态与页头各有一个
+ * 「登记命名空间」），直接 getByRole 会撞 strict mode；页面上也可能残留上一个抽屉。
+ */
+function overlay(page: Page) {
+  return page.getByRole('dialog').and(page.locator('.ui-dialog, .ui-sheet')).last()
+}
+
+/**
+ * 按 FormField 的 label 找字段容器，兼容必填标记并保留字段数量断言。
+ */
+function formItem(page: Page, label: string) {
+  return overlay(page)
+    .locator('.ui-field')
+    .filter({ has: page.locator('label').filter({ hasText: label }) })
+    .first()
+}
+
+async function fillField(page: Page, label: string, value: string): Promise<void> {
+  await formItem(page, label).locator('input').fill(value)
+}
+
+async function selectField(page: Page, label: string, option: string): Promise<void> {
+  const field = formItem(page, label)
+  await field.getByRole('combobox').click()
+  await pickOption(page, option)
+}
+
+async function saveOverlay(page: Page): Promise<void> {
+  const current = overlay(page)
+  await current.getByRole('button', { name: '保存' }).click()
+  await expect(current).not.toBeVisible()
+}
+
+async function createNamespace(
+  page: Page,
+  prefix: string,
+  iri: string,
+  label: string,
+): Promise<void> {
+  await page.goto('/ontology/namespaces')
+  // 空态与页头各有一个同名按钮，取第一个即可。
+  await page.getByRole('button', { name: '登记命名空间' }).first().click()
+  await overlay(page).getByPlaceholder('kg', { exact: true }).fill(prefix)
+  await overlay(page).getByPlaceholder('https://example.org/kg#', { exact: true }).fill(iri)
+  await fillField(page, '中文标签', label)
+  await saveOverlay(page)
+  await expect(page.getByText(`命名空间 ${prefix} 已登记。`)).toBeVisible()
+  await expect(page.getByText(iri).first()).toBeVisible()
+}
+
+async function createEntityType(
+  page: Page,
+  name: string,
+  label: string,
+  namespacePrefix: string,
+): Promise<void> {
+  await page.goto('/ontology/entity-types')
+  // 触发按钮用的是 common.create（"创建"），抽屉标题才是"新建实体类型"。
+  await page.getByRole('button', { name: '创建', exact: true }).first().click()
+  await overlay(page).getByPlaceholder('Employee', { exact: true }).fill(name)
+  // 命名空间下拉的 label 是前缀（nsOptions: label = ns.prefix），不是中文标签。
+  await selectField(page, '命名空间', namespacePrefix)
+  await fillField(page, '中文标签', label)
+  await saveOverlay(page)
+  await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
+}
+
+async function deleteEntityTypeThroughUI(page: Page, name: string, label: string): Promise<void> {
+  await page.goto('/ontology/entity-types')
+  const row = page.locator('tr').filter({ hasText: name }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`实体类型 ${label} 已删除。`)).toBeVisible()
+  await expect(row).toHaveCount(0)
+}
+
+/** 数据属性在详情页的属性抽屉里加：机读名 + 中文标签，数据类型保持默认 string。 */
+async function addDataProperty(
+  page: Page,
+  typeId: number,
+  propName: string,
+  propLabel: string,
+): Promise<void> {
+  await page.goto(`/ontology/entity-types/${typeId}`)
+  // 「添加属性」在「数据属性」页签里，不切页签找不到。
+  await page.getByRole('tab', { name: '数据属性', exact: true }).click()
+  await page.getByRole('button', { name: '添加属性', exact: true }).click()
+  await fillField(page, '机读名', propName)
+  await fillField(page, '中文标签', propLabel)
+  await saveOverlay(page)
+  await expect(page.getByText(propLabel).first()).toBeVisible()
+}
+
+async function createRelationType(
+  page: Page,
+  name: string,
+  label: string,
+  namespacePrefix: string,
+  domain: string,
+  range: string,
+): Promise<void> {
+  await page.goto('/ontology/relation-types')
+  await page.getByRole('button', { name: '创建', exact: true }).first().click()
+  await overlay(page).getByPlaceholder('WorksIn', { exact: true }).fill(name)
+  // 命名空间按前缀选；定义域/值域的下拉 label 是类型的中文标签。
+  await selectField(page, '命名空间', namespacePrefix)
+  await fillField(page, '中文标签', label)
+  await selectField(page, '定义域', domain)
+  await expect
+    .poll(async () =>
+      overlay(page)
+        .locator('.ui-field')
+        .filter({ has: page.locator('label').filter({ hasText: '定义域' }) })
+        .count(),
+    )
+    .toBe(1)
+  const endpointForms = overlay(page)
+    .locator('.ui-field')
+    .filter({ has: page.locator('label').filter({ hasText: '值域' }) })
+  await expect(endpointForms).toHaveCount(1)
+  await expect(formItem(page, '定义域').getByRole('combobox')).toHaveValue(domain)
+  const rangeField = formItem(page, '值域')
+  const rangeInput = rangeField.getByRole('combobox')
+  await rangeField.getByRole('combobox').click()
+  await rangeInput.fill(range)
+  const rangeSurface = page
+    .getByRole('listbox')
+    .filter({ has: page.getByRole('option', { name: range, exact: true }) })
+  const rangeOption = rangeSurface.getByRole('option', { name: range, exact: true })
+  await expect(rangeOption).toHaveCount(1)
+  await rangeOption.click()
+  await expect(rangeField.getByRole('combobox')).toHaveValue(range)
+  await saveOverlay(page)
+  await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
+}
+
+async function deleteRelationTypeThroughUI(page: Page, name: string, label: string): Promise<void> {
+  await page.goto('/ontology/relation-types')
+  const row = page.locator('tr').filter({ hasText: name }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`关系类型 ${label} 已删除。`)).toBeVisible()
+  await expect(row).toHaveCount(0)
+}
+
+/** 发布实体类型：详情页点发布按钮，等已发布状态出现。 */
+async function publishEntityType(page: Page, name: string): Promise<void> {
+  await page.goto('/ontology/entity-types')
+  // 卡片视图的卡片可访问名含机读名（cell-sub），按子串匹配。
+  await page.getByRole('button', { name: '卡片', exact: true }).click()
+  await page.getByRole('button', { name: name }).first().click()
+  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
+  await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
+  await page.getByRole('button', { name: '发布', exact: true }).first().click()
+  await expect(page.getByText('已发布').first()).toBeVisible({ timeout: 15000 })
+}
+
+/** 发布关系类型：列表页行内发布按钮。 */
+async function publishRelationType(page: Page, label: string): Promise<void> {
+  await page.goto('/ontology/relation-types')
+  // 行内发布按钮的父行包含关系类型名。
+  const row = page.locator('tr').filter({ hasText: label }).first()
+  await row.getByRole('button', { name: '发布', exact: true }).click()
+  await expect(page.getByText('已发布').first()).toBeVisible({ timeout: 15000 })
+}
+
+async function createDomain(page: Page, name: string, iri: string, label: string): Promise<void> {
+  await page.goto('/ontology/domains')
+  await page.getByRole('button', { name: '创建', exact: true }).first().click()
+  await overlay(page).getByPlaceholder('HumanResources', { exact: true }).fill(name)
+  await overlay(page).getByPlaceholder('urn:knowledge:domain:hr', { exact: true }).fill(iri)
+  await fillField(page, '中文标签', label)
+  await saveOverlay(page)
+  // 业务域列表显示的是 label（pickLabel），不是机读名 name。
+  await expect(page.getByRole('treeitem').filter({ hasText: label })).toBeVisible()
+}
+
+async function deleteDomainThroughUI(page: Page, label: string): Promise<void> {
+  await page.goto('/ontology/domains')
+  await page.getByRole('treeitem').filter({ hasText: label }).first().click()
+  await page.locator('.detail-actions').getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`业务域 ${label} 已删除。`)).toBeVisible()
+}
+
+async function createAndDeleteOntologyThroughUI(
+  page: Page,
+  name: string,
+  iri: string,
+  label: string,
+  domainLabel: string,
+): Promise<void> {
+  await page.goto('/ontology/ontologies')
+  await page.getByRole('button', { name: '新建本体' }).first().click()
+  await fillField(page, '机读名', name)
+  await fillField(page, 'IRI', iri)
+  await fillField(page, '中文标签', label)
+  await saveOverlay(page)
+  await expect(page).toHaveURL(/\/ontology\/designer\?ontology=\d+/)
+
+  const domain = page.locator('.pool-item.addable').filter({ hasText: domainLabel })
+  await expect(domain).toBeEnabled()
+  await domain.click()
+  await expect(page.locator('.node')).toHaveCount(2)
+  await expect(page.locator('.edge-label')).toHaveCount(1)
+  await page.getByRole('button', { name: '发布', exact: true }).first().click()
+  await expect(page.locator('.status-tag')).toContainText('已发布')
+  await page.reload()
+  await expect(page.locator('.node')).toHaveCount(2)
+  await expect(page.locator('.edge-label')).toHaveCount(1)
+
+  await page.goto('/ontology/ontologies')
+  const row = page.locator('tr').filter({ hasText: name }).first()
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await page.getByRole('button', { name: '确认', exact: true }).click()
+  await expect(page.getByText(`本体 ${label} 已删除。`)).toBeVisible()
+  await expect(row).toHaveCount(0)
+}
+
+test('建模链全程走界面：命名空间 → 实体类型 → 关系类型 → 业务域 → 本体', async ({ page }) => {
+  await ensureAdmin(page)
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  await loginAsAdmin(page)
+
+  const stamp = Date.now().toString().slice(-6)
+  const prefix = `uie${stamp}`
+  const namespaceLabel = `界面命名空间${stamp}`
+  await createNamespace(page, prefix, `https://example.org/${prefix}#`, namespaceLabel)
+
+  // 两个实体类型：关系类型需要一对定义域/值域（命名空间按前缀选）
+  await createEntityType(page, `UiEmployee${stamp}`, `界面员工${stamp}`, prefix)
+  await createEntityType(page, `UiDepartment${stamp}`, `界面部门${stamp}`, prefix)
+  await createEntityType(page, `UiDeleteEntity${stamp}`, `界面删除实体${stamp}`, prefix)
+  await deleteEntityTypeThroughUI(page, `UiDeleteEntity${stamp}`, `界面删除实体${stamp}`)
+
+  // 卡片先打开预览抽屉，再通过「查看」进入详情，从 URL 取 id，全程走界面。
+  await page.goto('/ontology/entity-types')
+  await page.getByRole('button', { name: '卡片', exact: true }).click()
+  await page
+    .getByRole('button', { name: `UiEmployee${stamp}` })
+    .first()
+    .click()
+  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
+  await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
+  const typeId = Number(/entity-types\/(\d+)/.exec(page.url())![1])
+  // 属性机读名必须是 PascalCase（小写开头会被表单拒："请填写 PascalCase 属性名与中文标签"）。
+  await addDataProperty(page, typeId, 'HireDate', `入职日期${stamp}`)
+
+  // 业务域发布要求成员已有发布版本（版本冻结）：先发布实体类型与关系类型。
+  await publishEntityType(page, `UiEmployee${stamp}`)
+  await publishEntityType(page, `UiDepartment${stamp}`)
+
+  await createRelationType(
+    page,
+    `UiWorksIn${stamp}`,
+    `界面就职于${stamp}`,
+    prefix,
+    `界面员工${stamp}`,
+    `界面部门${stamp}`,
+  )
+  await createRelationType(
+    page,
+    `UiDeleteWorksIn${stamp}`,
+    `界面删除关系${stamp}`,
+    prefix,
+    `界面员工${stamp}`,
+    `界面部门${stamp}`,
+  )
+  await deleteRelationTypeThroughUI(page, `UiDeleteWorksIn${stamp}`, `界面删除关系${stamp}`)
+  await publishRelationType(page, `界面就职于${stamp}`)
+
+  await createDomain(
+    page,
+    `UiDomain${stamp}`,
+    `urn:knowledge:domain:ui${stamp}`,
+    `界面业务域${stamp}`,
+  )
+  // reload 确保成员下拉的类型/关系列表含刚创建并发布的资源
+  await page.reload()
+  // 成员区在右侧详情面板，只有「已选中某个域」时才渲染。
+  await page
+    .getByRole('treeitem')
+    .filter({ hasText: `界面业务域${stamp}` })
+    .first()
+    .click()
+  // UiSelect 的下拉触发器也叫「添加成员」；提交按钮是成员工具栏的直接子元素。
+  const addMemberButton = page
+    .getByRole('button', { name: '添加成员', exact: true })
+    .and(page.locator('.member-add > button'))
+  for (const member of [`界面员工${stamp}`, `界面部门${stamp}`, `界面就职于${stamp}`]) {
+    await expect(addMemberButton).toBeEnabled()
+    // 成员选择使用 UiSelect 的 combobox 输入。
+    await page.locator('.member-select').getByRole('combobox').click()
+    // 搜索后再选择，避免依赖虚拟下拉当前只渲染的首屏选项。
+    await page.locator('.member-select').getByRole('combobox').fill(member)
+    await pickOption(page, member)
+    await addMemberButton.click()
+    await expect(
+      page.locator('.member-card').getByRole('cell', { name: member, exact: true }),
+    ).toBeVisible()
+  }
+  await page.getByRole('button', { name: '发布', exact: true }).first().click()
+  await expect(page.getByText('已发布').first()).toBeVisible()
+  await createAndDeleteOntologyThroughUI(
+    page,
+    `UiDeleteOntology${stamp}`,
+    `https://example.org/${prefix}/delete-ontology#`,
+    `界面删除本体${stamp}`,
+    `界面业务域${stamp}`,
+  )
+  await deleteDomainThroughUI(page, `界面业务域${stamp}`)
+
+  expect(pageErrors, '界面操作不应产生未捕获的前端错误').toEqual([])
+})

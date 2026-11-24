@@ -1,0 +1,127 @@
+"""本体装配与设计器（H-13）的请求/响应模型。"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field, computed_field
+
+from app.models.enums import ResourceStatus
+from app.schemas.template import TemplateLink
+from app.schemas.type import Synonyms, SynonymsUpdate
+
+
+class OntologyExportFormat(StrEnum):
+    TURTLE = "turtle"
+    JSON_LD = "json-ld"
+
+
+class OntologyRefAdd(BaseModel):
+    """添加引用资源（域或单类型）。按 IRI 去重。"""
+
+    resource_id: int
+    pinned_revision: int | None = None
+    if_edit_match: int | None = Field(default=None, ge=0)
+
+
+class OntologyDomainAdd(BaseModel):
+    """装配指定已发布业务域版本的冻结成员，不混用域与资源的 ID。"""
+
+    domain_id: int = Field(gt=0)
+    domain_revision: int = Field(gt=0)
+    if_edit_match: int = Field(ge=0)
+
+
+class OntologyCreate(BaseModel):
+    name: str
+    iri: str
+    label_i18n: dict[str, str]
+    definition_i18n: dict[str, str] | None = None
+    synonyms: Synonyms = Field(default_factory=list)
+    template_id: int | None = None
+    ref_resource_ids: list[int] = Field(default_factory=list)
+    rule_ids: list[int] = Field(default_factory=list)
+
+
+class OntologyUpdate(BaseModel):
+    label_i18n: dict[str, str] | None = None
+    definition_i18n: dict[str, str] | None = None
+    synonyms: SynonymsUpdate = None
+    if_match: int
+    if_edit_match: int | None = Field(default=None, ge=0)
+    rule_ids: list[int] | None = None
+
+
+class OntologyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    iri: str
+    label_i18n: dict[str, str] | None = None
+    definition_i18n: dict[str, str] | None = None
+    synonyms: Synonyms = Field(default_factory=list)
+    status: ResourceStatus
+    current_revision: int
+    edit_revision: int
+    template_id: int | None = None
+    template: TemplateLink | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def working_draft_id(self) -> str:
+        return f"ontology:{self.id}:working"
+
+
+class OntologyPublishOut(BaseModel):
+    revision: int
+    edit_revision: int
+
+
+class OntologyRuleOut(BaseModel):
+    rule_id: int
+    identifier: str
+    revision: int
+    source_kind: str
+    source_reference: str
+
+
+class OntologyBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    iri: str
+    label_i18n: dict[str, str] | None = None
+    status: ResourceStatus
+    current_revision: int
+    edit_revision: int
+
+
+class OntologyRefOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    ontology_id: int
+    resource_id: int
+    pinned_revision: int | None = None
+
+
+class CanvasLayoutUpdate(BaseModel):
+    """画布布局更新。拖节点只改这里，不产生语义版本。"""
+
+    positions: dict
+
+
+class CanvasLayoutOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    scope: str
+    owner_id: int
+    positions: dict
+
+
+class ConflictInfo(BaseModel):
+    """相同资源不兼容版本冲突。"""
+
+    resource_id: int
+    resource_name: str
+    existing_revision: int
+    new_revision: int

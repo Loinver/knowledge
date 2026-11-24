@@ -1,0 +1,77 @@
+{
+  "name": "knowledge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "知识中台：本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯",
+  "license": "MIT",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "commit": "git-cz",
+    "dev": "concurrently -n api,web -c blue,green \"pnpm run dev:api\" \"pnpm run dev:web\"",
+    "dev:api": "cd server && .venv/bin/uvicorn app.main:app --reload --port 4000",
+    "dev:web": "pnpm -C web dev",
+    "start": "pnpm run build && cd server && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 4000",
+    "build": "pnpm -C web build",
+    "test": "pnpm run test:web && pnpm run test:server",
+    "test:web": "pnpm -C web test",
+    "test:server": "cd server && .venv/bin/pytest",
+    "test:e2e": "playwright test",
+    "test:e2e:ai": "playwright test --config=e2e/knowledge-ai.config.ts",
+    "test:e2e:modeling": "playwright test --config=e2e/ontology-modeling.config.ts",
+    "test:e2e:governance": "playwright test --config=e2e/governance-redesign.config.ts",
+    "check:api": "pnpm -C web check:api",
+    "check:architecture": "cd server && .venv/bin/pytest tests/test_architecture.py",
+    "check:licenses:web": "node scripts/check-web-licenses.mjs",
+    "check:licenses:web:all": "node scripts/check-web-licenses.mjs --include-dev",
+    "check:licenses:server": "sh scripts/check-python-licenses.sh",
+    "lint": "pnpm run lint:web && pnpm run lint:server && pnpm run check:architecture",
+    "lint:web": "eslint web",
+    "lint:server": "cd server && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy app",
+    "fix:server": "cd server && .venv/bin/ruff check . --fix && .venv/bin/ruff format .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "config": {
+    "commitizen": {
+      "path": "node_modules/cz-git"
+    }
+  },
+  "lint-staged": {
+    "web/**/*.{ts,tsx,vue,js,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css,html}": [
+      "prettier --write"
+    ],
+    "server/**/*.py": [
+      "server/.venv/bin/ruff check --fix",
+      "server/.venv/bin/ruff format"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@eslint/js": "^9.18.0",
+    "@intlify/eslint-plugin-vue-i18n": "^4.0.1",
+    "@playwright/test": "^1.63.0",
+    "commitizen": "^4.3.1",
+    "concurrently": "^9.1.2",
+    "cz-git": "^1.11.0",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-vue": "^10.0.0",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.1",
+    "prettier": "^3.4.2",
+    "typescript-eslint": "^8.20.0",
+    "vue-eslint-parser": "^10.0.0"
+  }
+}

@@ -1,0 +1,60 @@
+# 依赖
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+docs/*
+.gitkeep
+!.gitkeep
+!docs/knowledge-information-architecture-2026-11-21.zh-CN.md
+!docs/frontend-migration-2026-11-21.zh-CN.md
+!docs/frontend-migration-map-2026-11-21.json
+!docs/ui-redesign-2026-11-21/
+!docs/ui-redesign-2026-11-21/*.png
+!docs/ui-redesign-2026-11-21/SHA256SUMS
+!docs/ui-redesign-2026-11-21/README.md
+!docs/design-system/
+!docs/design-system/**
+*.tsbuildinfo
+
+# 本地 demo 与原始素材：不入库（版权/体积/非源码）
+design/
+demo/
+.workbuddy/
+.workbuddy-ai/
+.DS_Store
+
+# 环境变量与本地配置
+.env
+.env.*
+!.env.example
+
+# 编辑器与系统
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.claude/settings.local.json
+*.swp
+*.swo
+
+# 日志与临时产物
+*.log
+coverage/
+playwright-report/
+test-results/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 开发态元数据库：含口令哈希、会话令牌与审计记录，绝不入库
+# （样例源库在 samples/ 下，用 .sqlite 后缀，不受此规则影响）
+*.db
+*.db-journal
+# 迁移前的回滚副本（alembic upgrade 前手动留档用）
+*.db.bak*
+*.db.pre-*
+.zcode/

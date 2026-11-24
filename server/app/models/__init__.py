@@ -1,0 +1,141 @@
+"""ORM 模型汇总导入。
+
+集中导出是为了让 Alembic 的 target_metadata 与 SQLAlchemy 的
+registry 能发现全部表；新增模型必须在这里登记。
+"""
+
+from __future__ import annotations
+
+from app.models.account import (
+    AuditLog,
+    AuthToken,
+    PasswordResetToken,
+    User,
+)
+from app.models.ai_model import AiModelCapability, AiModelConfig, AiModelDefault
+from app.models.asset_audit import AssetAuditLog
+from app.models.data_access import (
+    Datasource,
+    Mapping,
+    MappingPreview,
+    MappingRevision,
+    MetadataSnapshot,
+)
+from app.models.domain import (
+    AssemblyTemplate,
+    BusinessDomain,
+    CanvasLayout,
+    DomainMember,
+    DomainRevision,
+    Ontology,
+    OntologyResourceRef,
+    OntologyRevision,
+    OntologyRuleRef,
+)
+from app.models.enum_dictionary import EnumDictionary, EnumDictionaryRevision
+from app.models.enums import (
+    AuditAction,
+    AuditResult,
+    AuthTokenKind,
+    RelMapMode,
+    ResourceKind,
+    ResourceStatus,
+    RunResult,
+    UserRole,
+    UserStatus,
+    ValidationState,
+)
+from app.models.extraction import (
+    DerivedEdge,
+    EntityIdentity,
+    ExtractionRun,
+    FactEvidence,
+    GraphRevision,
+    GraphTriple,
+    Quarantine,
+)
+from app.models.governance import Rule
+from app.models.knowledge import (
+    KnowledgeBase,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeIndex,
+    KnowledgeTask,
+)
+from app.models.knowledge_links import KnowledgeGraphLink
+from app.models.ontology_modeling import (
+    ModelingApplication,
+    ModelingCandidateRevision,
+    ModelingProposal,
+    ModelingValidation,
+)
+from app.models.resource import (
+    ModelResource,
+    Namespace,
+    ResourceParent,
+    ResourceRef,
+    ResourceRevision,
+)
+from app.models.validation import ValidationReport, ValidationResult
+
+__all__ = [
+    "AiModelCapability",
+    "AiModelConfig",
+    "AiModelDefault",
+    "AssemblyTemplate",
+    "AssetAuditLog",
+    "AuditAction",
+    "AuditLog",
+    "AuditResult",
+    "AuthToken",
+    "AuthTokenKind",
+    "BusinessDomain",
+    "CanvasLayout",
+    "Datasource",
+    "DerivedEdge",
+    "DomainMember",
+    "DomainRevision",
+    "EntityIdentity",
+    "EnumDictionary",
+    "EnumDictionaryRevision",
+    "ExtractionRun",
+    "FactEvidence",
+    "GraphRevision",
+    "GraphTriple",
+    "KnowledgeBase",
+    "KnowledgeChunk",
+    "KnowledgeDocument",
+    "KnowledgeGraphLink",
+    "KnowledgeIndex",
+    "KnowledgeTask",
+    "Mapping",
+    "MappingPreview",
+    "MappingRevision",
+    "MetadataSnapshot",
+    "ModelResource",
+    "ModelingApplication",
+    "ModelingCandidateRevision",
+    "ModelingProposal",
+    "ModelingValidation",
+    "Namespace",
+    "Ontology",
+    "OntologyResourceRef",
+    "OntologyRevision",
+    "OntologyRuleRef",
+    "PasswordResetToken",
+    "Quarantine",
+    "RelMapMode",
+    "ResourceKind",
+    "ResourceParent",
+    "ResourceRef",
+    "ResourceRevision",
+    "ResourceStatus",
+    "Rule",
+    "RunResult",
+    "User",
+    "UserRole",
+    "UserStatus",
+    "ValidationReport",
+    "ValidationResult",
+    "ValidationState",
+]

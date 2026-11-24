@@ -1,0 +1,111 @@
+.error-workspace {
+  display: grid;
+  place-items: center;
+  min-height: 65dvh;
+  padding: 32px 16px;
+  box-sizing: border-box;
+  background: var(--bg-base);
+}
+.error-panel {
+  width: 100%;
+  max-width: 800px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--bg-panel, var(--bg-surface));
+}
+.error-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-direction: column;
+  padding: 32px 20px;
+  background: var(--bg-inset);
+  border-right: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.error-code strong {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.error-code span {
+  font-size: 12px;
+  text-align: center;
+}
+.error-content {
+  min-width: 0;
+  padding: 32px;
+}
+.error-content .eyebrow {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.error-content h1 {
+  margin: 8px 0 16px;
+  font-size: 24px;
+  font-weight: 600;
+}
+.error-content p {
+  margin: 0 0 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.error-identity {
+  margin: 0 0 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-inset);
+}
+.error-identity > div + div {
+  margin-top: 12px;
+}
+.error-identity dt {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.error-identity dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 600px) {
+  .error-workspace {
+    min-height: 80dvh;
+    padding: 24px 12px;
+  }
+  .error-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .error-code {
+    flex-direction: row;
+    justify-content: flex-start;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 20px;
+  }
+  .error-code strong {
+    font-size: 32px;
+  }
+  .error-content {
+    padding: 24px 20px;
+  }
+  .error-actions :deep(.ui-button) {
+    min-height: 44px;
+  }
+}
