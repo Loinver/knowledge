@@ -20,6 +20,10 @@ docs/*
 !docs/knowledge-information-architecture-2026-11-21.zh-CN.md
 !docs/frontend-migration-2026-11-21.zh-CN.md
 !docs/frontend-migration-map-2026-11-21.json
+!docs/ui-redesign-2026-11-21/
+!docs/ui-redesign-2026-11-21/*.png
+!docs/ui-redesign-2026-11-21/SHA256SUMS
+!docs/ui-redesign-2026-11-21/README.md
 !docs/design-system/
 !docs/design-system/**
 *.tsbuildinfo
