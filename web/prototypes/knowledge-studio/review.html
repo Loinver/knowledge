@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>知识中台 · 设计评审</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #1f332c;
+        background: #f8faf7;
+        font:
+          14px/1.7 -apple-system,
+          BlinkMacSystemFont,
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button,
+      select {
+        font: inherit;
+        cursor: pointer;
+        color: inherit;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      select:focus-visible {
+        outline: 3px solid #246a50;
+        outline-offset: 3px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: sticky;
+        top: 0;
+        padding: 16px 5vw;
+        border-bottom: 1px solid #dfe7dd;
+        background: #f8faf7f0;
+        backdrop-filter: blur(12px);
+        z-index: 10;
+      }
+      header strong {
+        font-size: 15px;
+        letter-spacing: 1px;
+      }
+      header span {
+        font-size: 11px;
+        color: #7d8e7b;
+        margin-left: 15px;
+      }
+      nav {
+        display: flex;
+        gap: 22px;
+        align-items: center;
+        font-size: 12px;
+      }
+      .cta {
+        padding: 9px 15px;
+        border-radius: 5px;
+        background: #1c674c;
+        color: white;
+        display: inline-flex;
+        gap: 20px;
+        align-items: center;
+      }
+      main {
+        max-width: 1540px;
+        margin: auto;
+        padding: 54px 5vw;
+      }
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+      h1 {
+        font-size: 36px;
+        letter-spacing: -1px;
+        line-height: 1.35;
+        margin: 13px 0 18px;
+      }
+      h2 {
+        font-size: 23px;
+        letter-spacing: -0.5px;
+      }
+      h3 {
+        font-size: 17px;
+      }
+      .eyebrow {
+        font-size: 10px;
+        letter-spacing: 2px;
+        color: #6b866d;
+      }
+      .lead {
+        font-size: 15px;
+        color: #63755f;
+        max-width: 800px;
+        line-height: 1.9;
+      }
+      .intro {
+        display: flex;
+        justify-content: space-between;
+        gap: 50px;
+        align-items: flex-end;
+      }
+      .intro .cta {
+        white-space: nowrap;
+        margin-bottom: 8px;
+      }
+      .chip {
+        font-size: 10px;
+        border: 1px solid #c9dac4;
+        border-radius: 20px;
+        padding: 3px 10px;
+        color: #53734b;
+      }
+      .section {
+        margin-top: 70px;
+        scroll-margin-top: 100px;
+      }
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 25px;
+        margin-bottom: 23px;
+      }
+      .section-heading p {
+        font-size: 13px;
+        color: #708269;
+        margin-top: 8px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+      .design-card {
+        border: 1px solid #dce6d6;
+        border-radius: 9px;
+        background: white;
+        overflow: hidden;
+        min-width: 0;
+      }
+      .design-card.recommended {
+        border-color: #8cab7b;
+        box-shadow: 0 4px 20px #2c56210a;
+      }
+      .design-meta {
+        padding: 22px 24px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        justify-content: space-between;
+      }
+      .design-meta p {
+        font-size: 12px;
+        color: #74846c;
+        margin-top: 8px;
+        line-height: 1.85;
+      }
+      .preview {
+        width: 100%;
+        display: block;
+        border-top: 1px solid #e4eadf;
+        cursor: zoom-in;
+      }
+      .design-foot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 24px;
+        border-top: 1px solid #e4eadf;
+        font-size: 12px;
+        color: #547347;
+      }
+      .design-foot a {
+        border-bottom: 1px solid #b5c7a8;
+      }
+      .wide-shot {
+        background: white;
+        border: 1px solid #dce6d6;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .wide-shot img {
+        width: 100%;
+        display: block;
+        cursor: zoom-in;
+      }
+      .caption {
+        padding: 20px 24px;
+        display: flex;
+        gap: 25px;
+        align-items: flex-start;
+        border-top: 1px solid #e5ebdf;
+      }
+      .caption strong {
+        min-width: 120px;
+        font-size: 14px;
+      }
+      .caption p {
+        font-size: 12px;
+        color: #728568;
+        line-height: 1.9;
+      }
+      .design-stack {
+        display: grid;
+        gap: 25px;
+      }
+      .comparison-controls {
+        display: flex;
+        gap: 10px;
+      }
+      select {
+        height: 34px;
+        padding: 0 28px 0 12px;
+        background: #fff;
+        border: 1px solid #d6e1cf;
+        border-radius: 5px;
+        font-size: 12px;
+      }
+      .compare-label {
+        font-size: 11px;
+        color: #738668;
+        padding: 12px 18px;
+        background: #eef3e9;
+        border-bottom: 1px solid #dfe7d6;
+        display: flex;
+        justify-content: space-between;
+      }
+      .comparison-img {
+        width: 100%;
+        display: block;
+        cursor: zoom-in;
+      }
+      .note {
+        font-size: 11px;
+        color: #7b8c71;
+        margin-top: 15px;
+        line-height: 1.9;
+      }
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+      .status-grid figure {
+        margin: 0;
+        border: 1px solid #dce6d5;
+        border-radius: 7px;
+        background: white;
+        overflow: hidden;
+      }
+      .status-grid img {
+        width: 100%;
+        display: block;
+        cursor: zoom-in;
+      }
+      .status-grid figcaption {
+        padding: 14px 18px;
+        font-size: 12px;
+        color: #6c835e;
+      }
+      .coverage {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border: 1px solid #dae4d2;
+        text-align: left;
+      }
+      .coverage th,
+      .coverage td {
+        padding: 14px 20px;
+        border-bottom: 1px solid #e6ecdf;
+        font-size: 12px;
+      }
+      .coverage th {
+        background: #edf3e7;
+        font-weight: 600;
+        color: #5c784c;
+      }
+      .coverage td:first-child {
+        font-weight: 600;
+        width: 150px;
+      }
+      .coverage td:last-child {
+        color: #7b8f6c;
+        width: 220px;
+      }
+      .tokens {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        border-top: 1px solid #dae4d2;
+        padding-top: 24px;
+      }
+      .swatch {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 11px;
+      }
+      .swatch i {
+        width: 32px;
+        height: 32px;
+        border-radius: 5px;
+        border: 1px solid #d5e0cc;
+      }
+      .swatch span {
+        display: block;
+        color: #829573;
+        font:
+          10px ui-monospace,
+          monospace;
+      }
+      .phase-list {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+        border-top: 1px solid #dce6d3;
+      }
+      .phase {
+        padding-top: 22px;
+      }
+      .phase > span {
+        color: #849776;
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+      .phase h3 {
+        margin: 12px 0 8px;
+        font-size: 15px;
+      }
+      .phase p {
+        font-size: 12px;
+        color: #758a65;
+        line-height: 1.9;
+      }
+      footer {
+        border-top: 1px solid #dce6d3;
+        padding-top: 25px;
+        margin-top: 60px;
+        color: #879b75;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+      }
+      dialog {
+        width: min(96vw, 1920px);
+        max-width: 96vw;
+        max-height: 94vh;
+        border: 1px solid #8aa277;
+        border-radius: 8px;
+        padding: 0;
+        background: #fff;
+        overflow: auto;
+        box-shadow: 0 15px 80px #173a2840;
+      }
+      dialog::backdrop {
+        background: #10251ae0;
+      }
+      dialog img {
+        width: 100%;
+        display: block;
+      }
+      dialog button {
+        position: sticky;
+        top: 10px;
+        float: right;
+        margin: 10px;
+        background: #173f2d;
+        color: white;
+        border: 0;
+        border-radius: 20px;
+        padding: 7px 16px;
+        z-index: 1;
+      }
+      dialog p {
+        padding: 14px 20px;
+        font-size: 12px;
+        color: #5b7951;
+      }
+      .legend {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 12px;
+        color: #5f7b52;
+      }
+      .legend b {
+        display: inline-block;
+        border-radius: 4px;
+        background: #e9f0e2;
+        padding: 2px 7px;
+        font-size: 11px;
+      }
+      .mini-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 18px;
+        margin-top: 22px;
+      }
+      .mini-grid .design-meta {
+        padding: 16px;
+      }
+      .mini-grid h3 {
+        font-size: 14px;
+      }
+      .decision {
+        margin-top: 25px;
+        border-left: 3px solid #6e9260;
+        background: #eff5e9;
+        padding: 18px 23px;
+        font-size: 13px;
+        line-height: 1.9;
+        color: #506e43;
+      }
+      @media (max-width: 1000px) {
+        header {
+          padding: 14px 20px;
+        }
+        header span {
+          display: none;
+        }
+        nav {
+          gap: 13px;
+        }
+        .intro {
+          display: block;
+        }
+        .intro .cta {
+          margin-top: 20px;
+        }
+        .two,
+        .status-grid,
+        .phase-list {
+          grid-template-columns: 1fr;
+        }
+        .mini-grid {
+          grid-template-columns: 1fr;
+        }
+        main {
+          padding: 30px 20px;
+        }
+        .section {
+          margin-top: 45px;
+        }
+        .section-heading {
+          align-items: flex-start;
+        }
+        .comparison-controls {
+          flex-wrap: wrap;
+        }
+        h1 {
+          font-size: 29px;
+        }
+        .caption {
+          display: block;
+        }
+        .caption p {
+          margin-top: 8px;
+        }
+        .coverage td,
+        .coverage th {
+          padding: 10px;
+        }
+        .coverage td:last-child {
+          width: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div><strong>知识中台 / 设计评审</strong><span>2026.11.26 · 方案阶段</span></div>
+      <nav>
+        <a href="#directions">方向对比</a><a href="#proposal">推荐设计</a
+        ><a href="#comparison">前后对比</a><a href="#coverage">全站覆盖</a
+        ><a class="cta" href="./index.html">打开交互原型 ↗</a>
+      </nav>
+    </header>
+    <main>
+      <div class="intro">
+        <div>
+          <div class="eyebrow">KNOWLEDGE WORKSPACE · DESIGN PROPOSAL</div>
+          <h1>让界面围绕工作展开。</h1>
+          <p class="lead">
+            把全局导航、对象上下文与工作内容重新分工。以更清楚的信息层级、更紧凑的操作路径和更完整的工作区域，建立整个平台的设计语言。
+          </p>
+        </div>
+        <a class="cta" href="./index.html?direction=a&page=assets">体验推荐方案 <span>→</span></a>
+      </div>
+      <section class="section" id="directions">
+        <div class="section-heading">
+          <div>
+            <h2>两个方向，同一个资产库</h2>
+            <p>同样的 14 条合成数据；区别体现在导航方式、信息组织和工作密度。</p>
+          </div>
+          <span class="chip">可点击图片放大</span>
+        </div>
+        <div class="two">
+          <article class="design-card recommended">
+            <div class="design-meta">
+              <div>
+                <h3>A · 知识工作室</h3>
+                <p>
+                  紧凑模块导航 / 领域侧栏 / 结构化列表 /
+                  就地检查器。强调快速切换、逐项比较和持续工作。
+                </p>
+              </div>
+              <span class="chip">推荐</span>
+            </div>
+            <img
+              class="preview"
+              data-file="after-assets-1440.png"
+              alt="方向A：知识工作室实体类型列表"
+            />
+            <div class="design-foot">
+              <span>适合建模、配置、排错等高频任务</span
+              ><a href="./index.html?direction=a&page=assets">体验方向 A →</a>
+            </div>
+          </article>
+          <article class="design-card">
+            <div class="design-meta">
+              <div>
+                <h3>B · 知识资料馆</h3>
+                <p>
+                  横向业务导航 / 暖色阅读表面 / 对象目录 / 定义摘要。强调理解业务含义与浏览发现。
+                </p>
+              </div>
+            </div>
+            <img
+              class="preview"
+              data-file="direction-b-assets-1440.png"
+              alt="方向B：知识资料馆实体类型目录"
+            />
+            <div class="design-foot">
+              <span>适合低频浏览、培训和语义发现</span
+              ><a href="./index.html?direction=b&page=assets">体验方向 B →</a>
+            </div>
+          </article>
+        </div>
+        <div class="decision">
+          <strong>推荐 A。</strong> 当前平台的核心任务涉及表格比对、字段配置、关系建模与异常定位。A
+          将这类连续操作保持在稳定工作区中。B
+          的阅读气质更鲜明，但横向导航与对象摘要占用更多工作面积，更适合作为未来的资产浏览视图，而非全平台默认外壳。
+        </div>
+      </section>
+      <section class="section" id="proposal">
+        <div class="section-heading">
+          <div>
+            <h2>同一体系，三种工作方式</h2>
+            <p>首页负责引导，列表负责比较，画布负责建模。每种页面都有自己的布局。</p>
+          </div>
+          <a href="./index.html" class="cta">进入原型 →</a>
+        </div>
+        <div class="design-stack">
+          <article class="wide-shot">
+            <img data-file="after-dashboard-1440.png" alt="推荐方向工作台完整页面" />
+            <div class="caption">
+              <strong>工作台 / 明确下一步</strong>
+              <p>
+                当前工作提供明确入口；待处理资源独立成列；流程入口使用一条连续任务路径。移除重复的统计解释与多重面板标题，保留数量的真实业务含义。
+              </p>
+            </div>
+          </article>
+          <article class="wide-shot">
+            <img data-file="after-asset-detail-1440.png" alt="资产列表与右侧对象检查器" />
+            <div class="caption">
+              <strong>资产库 / 就地理解对象</strong>
+              <p>
+                将统计转为可点击筛选，名称与机读名形成同一对象单元。点击后在右侧检查定义、属性与最近发布版本，列表上下文保留；完整详情可展开，编辑草稿使用明确表单。
+              </p>
+            </div>
+          </article>
+          <article class="wide-shot">
+            <img data-file="after-designer-1440.png" alt="本体设计器与属性检查器" />
+            <div class="caption">
+              <strong>设计器 / 把空间还给画布</strong>
+              <p>
+                本体身份与发布动作合并到一个上下文栏；布局工具放到画布内部。资源树和检查器按需显示，专注模式进一步扩展工作面积。布局保存、校验与发布保持独立。
+              </p>
+            </div>
+          </article>
+        </div>
+        <div class="mini-grid">
+          <article class="design-card">
+            <img class="preview" data-file="after-mapping-1440.png" alt="字段映射配置原型" />
+            <div class="design-meta">
+              <div>
+                <h3>映射 / 来源与目标并排</h3>
+                <p>步骤导航、上下文信息与字段配置各司其职。</p>
+              </div>
+            </div>
+          </article>
+          <article class="design-card">
+            <img class="preview" data-file="after-runs-1440.png" alt="运行记录原型" />
+            <div class="design-meta">
+              <div>
+                <h3>运行 / 从状态定位问题</h3>
+                <p>状态筛选直接连接运行列表，不叠加无依据的趋势。</p>
+              </div>
+            </div>
+          </article>
+          <article class="design-card">
+            <img class="preview" data-file="after-knowledge-1440.png" alt="知识库结构延展示意" />
+            <div class="design-meta">
+              <div>
+                <h3>知识库 / 围绕内容组织</h3>
+                <p>文档与索引状态清楚呈现，深层操作本轮仅规划。</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="section" id="comparison">
+        <div class="section-heading">
+          <div>
+            <h2>同一视口、相同业务数据的对比</h2>
+            <p>左侧为当前源码的真实浏览器页面；右侧为原型的“现状同数据”模式。</p>
+          </div>
+          <div class="comparison-controls">
+            <select id="comparePage" aria-label="选择对比页面">
+              <option value="dashboard">工作台</option>
+              <option value="assets">实体类型库</option>
+              <option value="designer">本体设计器</option></select
+            ><select id="compareWidth" aria-label="选择对比视口">
+              <option value="1440">1440 × 900</option>
+              <option value="1280">1280 × 800</option>
+              <option value="1920">1920 × 1080</option>
+            </select>
+          </div>
+        </div>
+        <div class="two">
+          <article class="design-card">
+            <div class="compare-label">
+              <strong>现状 · 当前正式页面</strong><span>隔离库副本 · 真实 API</span>
+            </div>
+            <img id="before" class="comparison-img" alt="当前正式页面截图" />
+          </article>
+          <article class="design-card recommended">
+            <div class="compare-label">
+              <strong>方案 A · 相同数据场景</strong><span>本地原型 · 不接入 API</span>
+            </div>
+            <img id="after" class="comparison-img" alt="推荐方案同数据截图" />
+          </article>
+        </div>
+        <p class="note">
+          现状共检查工作台、资产、设计器、图谱、映射、运行、知识库、规则库和角色页。三组主要对比固定为
+          2 个实体类型、1 个关系、1
+          个业务域及对应本体和计数；“密集业务示例”与现状库分开展示。截图均为 Chromium、DPR 1、100%
+          缩放。设计器属性仅为原型预览，不代表实现了真实编辑和发布。
+        </p>
+      </section>
+      <section class="section" id="states">
+        <div class="section-heading">
+          <div>
+            <h2>页面在异常和复杂条件下也要成立</h2>
+            <p>右上角可以切换加载、空态和错误。长名称与密集记录直接在资产库中查看。</p>
+          </div>
+        </div>
+        <div class="status-grid">
+          <figure>
+            <img data-file="state-loading-1440.png" alt="保留布局的加载状态" />
+            <figcaption>加载：保持布局与状态说明</figcaption>
+          </figure>
+          <figure>
+            <img data-file="state-empty-1440.png" alt="带条件恢复入口的空状态" />
+            <figcaption>无结果：提供重置条件入口</figcaption>
+          </figure>
+          <figure>
+            <img data-file="state-error-1440.png" alt="明确失败并可重试的错误状态" />
+            <figcaption>失败：明确反馈与重试，避免伪装为空数据</figcaption>
+          </figure>
+        </div>
+        <div class="two" style="margin-top: 24px">
+          <article class="design-card">
+            <img class="preview" data-file="after-long-name-1440.png" alt="长名称与校验状态场景" />
+            <div class="design-meta">
+              <p>长名称可换行；机读名与 IRI 可查看；草稿状态不等同于校验通过。</p>
+            </div>
+          </article>
+          <article class="design-card">
+            <img class="preview" data-file="after-designer-focus-1440.png" alt="设计器专注模式" />
+            <div class="design-meta">
+              <p>专注模式隐藏导航与检查器；保留核心操作、缩放和返回入口。</p>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="section" id="coverage">
+        <div class="section-heading">
+          <div>
+            <h2>全平台覆盖规划</h2>
+            <p>实体身份、操作层级与状态规则共享；工作区按任务类型设计。</p>
+          </div>
+          <span class="chip">本轮正式业务页面未修改</span>
+        </div>
+        <table class="coverage">
+          <thead>
+            <tr>
+              <th>页面家族</th>
+              <th>延展方式</th>
+              <th>本轮交付深度</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>工作台</td>
+              <td>当前范围、处理入口、业务流程、资产入口</td>
+              <td>完整页面 / A、B 两方向</td>
+            </tr>
+            <tr>
+              <td>语义资产与本体库</td>
+              <td>领域筛选 + 对象列表 + 检查器；完整详情承接属性、关系、规则、引用与版本</td>
+              <td>实体类型深度原型</td>
+            </tr>
+            <tr>
+              <td>设计器</td>
+              <td>上下文栏 + 资源面板 + SVG 画布 + 对象检查器</td>
+              <td>深度原型 / 选中、平移、缩放、专注</td>
+            </tr>
+            <tr>
+              <td>图谱与证据</td>
+              <td>复用工作区外壳；保留实例、关系事实、路径与来源的专用语义</td>
+              <td>当前页面已检查；类型概览示意</td>
+            </tr>
+            <tr>
+              <td>数据源与映射</td>
+              <td>数据源列表与源表目录；分步骤配置；源字段、目标属性、转换和空值策略同排</td>
+              <td>字段配置原型；其他步骤结构示意</td>
+            </tr>
+            <tr>
+              <td>运行与任务</td>
+              <td>状态筛选 + 运行列表 + 日志、计数、结果集与证据详情</td>
+              <td>运行列表、筛选原型</td>
+            </tr>
+            <tr>
+              <td>标准与治理</td>
+              <td>条款—规则—报告互相定位；四态与版本独立表达</td>
+              <td>完整路由规划 / 入口示意</td>
+            </tr>
+            <tr>
+              <td>知识库</td>
+              <td>库目录 → 文档与处理 → 检索／问答 → 来源证据</td>
+              <td>目录示意 / 深层规划</td>
+            </tr>
+            <tr>
+              <td>系统与账户</td>
+              <td>用户、固定角色、审计、模型配置；账户与认证延续同一表单体系</td>
+              <td>入口示意 / 权限语义保留</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="section" id="system">
+        <div class="section-heading">
+          <div>
+            <h2>克制的视觉规范，明确的语义</h2>
+            <p>主操作只有一种强调色；状态与图谱语义各自有定义。</p>
+          </div>
+        </div>
+        <div class="tokens">
+          <div class="swatch">
+            <i style="background: #142e29"></i>
+            <div>全局导航<span>#142E29</span></div>
+          </div>
+          <div class="swatch">
+            <i style="background: #166b59"></i>
+            <div>主操作<span>#166B59</span></div>
+          </div>
+          <div class="swatch">
+            <i style="background: #182b29"></i>
+            <div>主文字<span>#182B29</span></div>
+          </div>
+          <div class="swatch">
+            <i style="background: #61716e"></i>
+            <div>辅助文字<span>#61716E</span></div>
+          </div>
+          <div class="swatch">
+            <i style="background: #f6f8f6"></i>
+            <div>画布与底层<span>#F6F8F6</span></div>
+          </div>
+          <div class="swatch">
+            <i style="background: #956026"></i>
+            <div>草稿 / 待处理<span>#956026</span></div>
+          </div>
+          <div class="swatch">
+            <i style="background: #b24443"></i>
+            <div>错误 / 违反<span>#B24443</span></div>
+          </div>
+        </div>
+        <p class="note">
+          页面标题 23–26px；对象标题 18–19px；表格主字段 13–14px；控件 32–36px；双行数据行
+          60px；间距以 4px 为基准；控件圆角 5px、面板
+          7–9px。键盘焦点有明确轮廓，状态使用文字与颜色共同表达。正式实施将映射回现有
+          tokens.css，延续组件、国际化、权限与 API 契约。
+        </p>
+      </section>
+      <section class="section">
+        <div class="section-heading">
+          <div>
+            <h2>确认方向后的实施顺序</h2>
+            <p>按页面家族推进，每阶段都以浏览器操作与前后截图验收。</p>
+          </div>
+        </div>
+        <div class="phase-list">
+          <div class="phase">
+            <span>01 / FOUNDATION</span>
+            <h3>应用壳与设计变量</h3>
+            <p>全局导航、模块上下文、键盘跳转、滚动边界。保留管理员与隐藏路由身份。</p>
+          </div>
+          <div class="phase">
+            <span>02 / OBJECTS</span>
+            <h3>工作台与资产试点</h3>
+            <p>实体类型列表、详情、草稿编辑；验证长文本、双语、空态与失败保护。</p>
+          </div>
+          <div class="phase">
+            <span>03 / WORKSPACE</span>
+            <h3>设计器、映射与图谱</h3>
+            <p>统一工作区结构，分别验证资源版本、布局、冻结结果、关系和证据身份。</p>
+          </div>
+          <div class="phase">
+            <span>04 / COMPLETION</span>
+            <h3>全平台与验收</h3>
+            <p>推广到治理、任务、知识库、系统账户；检查权限、响应式、真实数据与完整链路。</p>
+          </div>
+        </div>
+        <div class="decision">
+          当前方案不引入最近访问、个人待办、资产趋势或跨模块全局资源搜索等未获接口支持的能力。后续若需要，须单独设计数据契约。此原型只演示本地交互，未执行真实发布、编译、校验、抽取和数据写入。
+        </div>
+      </section>
+      <footer>
+        <span>设计提案与交互原型 · 2026-11-26 · Linyer K</span
+        ><a href="../README.md">查看完整诊断、规范与验证记录 →</a>
+      </footer>
+    </main>
+    <dialog id="imageDialog">
+      <button id="closeImage" aria-label="关闭图片">关闭 ×</button><img id="fullImage" alt="" />
+      <p id="imageCaption"></p>
+    </dialog>
+    <script type="module">
+      const evidence =
+        location.port === '4156'
+          ? '/@fs/Users/linyer/Public/Private/knowledge/docs/ui-redesign-2026-11-26/evidence/'
+          : '../evidence/'
+      document
+        .querySelectorAll('[data-file]')
+        .forEach((img) => (img.src = evidence + img.dataset.file))
+      const page = document.querySelector('#comparePage'),
+        width = document.querySelector('#compareWidth')
+      function update() {
+        document.querySelector('#before').src = evidence + `before-${page.value}-${width.value}.png`
+        document.querySelector('#after').src = evidence + `paired-${page.value}-${width.value}.png`
+      }
+      page.addEventListener('change', update)
+      width.addEventListener('change', update)
+      update()
+      const dialog = document.querySelector('#imageDialog'),
+        full = document.querySelector('#fullImage')
+      let origin
+      document.querySelectorAll('main img').forEach((img) => {
+        img.tabIndex = 0
+        img.setAttribute('role', 'button')
+        img.setAttribute('aria-label', '放大：' + img.alt)
+        const open = () => {
+          origin = img
+          full.src = img.src
+          full.alt = img.alt
+          document.querySelector('#imageCaption').textContent = img.alt
+          dialog.showModal()
+        }
+        img.addEventListener('click', open)
+        img.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            open()
+          }
+        })
+      })
+      document.querySelector('#closeImage').addEventListener('click', () => dialog.close())
+      dialog.addEventListener('close', () => origin?.focus())
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) dialog.close()
+      })
+    </script>
+  </body>
+</html>
