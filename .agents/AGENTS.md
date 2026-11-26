@@ -16,7 +16,7 @@ server/         后端 FastAPI（venv 在 server/.venv）
   app/models/   SQLAlchemy ORM      app/schemas/  Pydantic 模型
   app/connectors/ 只读数据源连接器   app/core/ 配置、错误码、加密、日志
 samples/        只读样例源库（M2 交付）
-docs/           开发计划与 ADR
+docs/           产品、用户、运维、开发文档与历史 ADR
 .agents/        工程约定（本目录）
 ```
 
@@ -24,15 +24,16 @@ docs/           开发计划与 ADR
 
 ## 2. 必读顺序
 
-| 你在做的事            | 先读                                                        |
-| --------------------- | ----------------------------------------------------------- |
-| 写前端页面 / 组件     | `conventions/code-style.md` + `conventions/i18n.md`         |
-| 写后端接口 / 领域逻辑 | `conventions/code-style.md` + `conventions/api-contract.md` |
-| 新增模块 / 调整目录   | `conventions/application-architecture.md`                   |
-| 补测试                | `conventions/testing.md`                                    |
-| 提交 / 开 PR          | `conventions/commit.md`                                     |
-| 引入新依赖            | `conventions/security-and-license.md`                       |
-| 任何改动收尾          | 根目录 `AGENTS.md`「完工自检」                              |
+| 你在做的事                     | 先读                                                        |
+| ------------------------------ | ----------------------------------------------------------- |
+| 写前端页面 / 组件              | `conventions/code-style.md` + `conventions/i18n.md`         |
+| 写后端接口 / 领域逻辑          | `conventions/code-style.md` + `conventions/api-contract.md` |
+| 新增模块 / 调整目录            | `conventions/application-architecture.md`                   |
+| 补测试                         | `conventions/testing.md`                                    |
+| 提交 / 开 PR                   | `conventions/commit.md`                                     |
+| 功能、流程、配置变化及文档维护 | `conventions/documentation.md`；入口 `docs/README.md`       |
+| 引入新依赖                     | `conventions/security-and-license.md`                       |
+| 任何改动收尾                   | 根目录 `AGENTS.md`「完工自检」                              |
 
 ## 3. 硬规则、常用命令与完工自检
 

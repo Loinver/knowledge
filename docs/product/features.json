@@ -1,0 +1,933 @@
+{
+  "reviewedAt": "2026-11-26",
+  "baseline": "9222236f35ab5ff1df738eca2c438f7ad33c5c70 + uncommitted A-style UI and documentation workspace; not a release",
+  "verification": "docs/maintenance/verification-2026-11-26.md",
+  "features": [
+    {
+      "id": "APP-001",
+      "title": "工作台与工作统计",
+      "routes": ["/"],
+      "sources": [
+        "web/src/views/dashboard",
+        "server/app/api/v1/dashboard.py",
+        "server/app/domain/dashboard_service.py"
+      ],
+      "tests": [
+        "server/tests/test_dashboard.py",
+        "web/src/views/dashboard/__tests__/dashboard.test.mjs",
+        "e2e/m3-browser-flow.spec.ts"
+      ],
+      "docs": ["docs/product/feature-catalog.md", "docs/user-guide/workbench.md"],
+      "apiModules": ["server/app/api/v1/dashboard.py"]
+    },
+    {
+      "id": "APP-002",
+      "title": "导航、页面搜索、语言与主题",
+      "routes": ["/ontology"],
+      "sources": [
+        "web/src/layout",
+        "web/src/router/index.ts",
+        "web/src/stores/ui.ts",
+        "web/src/locales",
+        "web/src/styles"
+      ],
+      "tests": [
+        "web/src/layout/navigation/__tests__/navigation.test.mjs",
+        "e2e/navigation-migration.spec.ts",
+        "e2e/m3-browser-flow.spec.ts"
+      ],
+      "docs": [
+        "docs/product/feature-catalog.md",
+        "docs/user-guide/workbench.md",
+        "docs/design-system/tokens.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "APP-003",
+      "title": "无权限、未知页面与健康接口",
+      "routes": ["/forbidden", "/:pathMatch(.*)*"],
+      "sources": ["web/src/views/errors", "web/src/router/index.ts", "server/app/main.py"],
+      "tests": ["e2e/m3-browser-flow.spec.ts", "server/tests/test_app_lifespan.py"],
+      "docs": [
+        "docs/product/feature-catalog.md",
+        "docs/user-guide/workbench.md",
+        "docs/operations/deployment.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "SEM-001",
+      "title": "业务域树与成员治理",
+      "routes": ["/ontology/domains"],
+      "sources": [
+        "web/src/views/semantic-assets/business-domains/BusinessDomainsPage.vue",
+        "web/src/api/domains.ts",
+        "server/app/api/v1/domains.py",
+        "server/app/domain/domain_service.py",
+        "server/app/schemas/domain.py"
+      ],
+      "tests": [
+        "server/tests/test_m1_domain.py",
+        "server/tests/test_edit_revision.py",
+        "server/tests/test_resource_lifecycle.py",
+        "web/src/views/semantic-assets/business-domains/__tests__/c1-editor.test.mjs",
+        "e2e/m3-ui-modeling-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/domains.py"]
+    },
+    {
+      "id": "SEM-002",
+      "title": "命名空间登记与保护",
+      "routes": ["/ontology/namespaces"],
+      "sources": [
+        "web/src/views/semantic-assets/namespaces/NamespacesPage.vue",
+        "web/src/views/semantic-assets/components/NamespaceCreateModal.vue",
+        "server/app/api/v1/namespaces.py",
+        "server/app/domain/iri_service.py"
+      ],
+      "tests": [
+        "server/tests/test_iri.py",
+        "web/src/views/semantic-assets/namespaces/__tests__/namespaces.test.mjs",
+        "e2e/m3-ui-modeling-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/namespaces.py"]
+    },
+    {
+      "id": "SEM-003",
+      "title": "实体类型、属性、继承与详情追溯",
+      "routes": ["/ontology/entity-types", "/ontology/entity-types/:id"],
+      "sources": [
+        "web/src/views/semantic-assets/entity-types/EntityTypesPage.vue",
+        "web/src/views/semantic-assets/entity-types/EntityTypeDetailPage.vue",
+        "server/app/api/v1/types.py",
+        "server/app/domain/type_service.py",
+        "server/app/domain/status_service.py",
+        "server/app/domain/resource_lifecycle.py",
+        "server/app/domain/iri_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m1_entity_type.py",
+        "server/tests/test_ontology_input_contract.py",
+        "server/tests/test_edit_revision.py",
+        "server/tests/test_resource_lifecycle.py",
+        "web/src/views/semantic-assets/entity-types/__tests__/property-validation.test.mjs",
+        "e2e/m3-ui-modeling-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/types.py"]
+    },
+    {
+      "id": "SEM-004",
+      "title": "关系类型、端点及关联实体建模",
+      "routes": ["/ontology/relation-types", "/ontology/relation-types/:id"],
+      "sources": [
+        "web/src/views/semantic-assets/relation-types/RelationTypesPage.vue",
+        "web/src/views/semantic-assets/relation-types/RelationTypeDetailPage.vue",
+        "web/src/views/semantic-assets/relation-types/components/RelationSemanticFields.vue",
+        "server/app/api/v1/relations.py",
+        "server/app/domain/relation_service.py",
+        "server/app/schemas/relation.py",
+        "server/app/domain/resource_lifecycle.py"
+      ],
+      "tests": [
+        "server/tests/test_m1_relation.py",
+        "server/tests/test_ontology_input_contract.py",
+        "server/tests/test_resource_lifecycle.py",
+        "web/src/views/semantic-assets/relation-types/__tests__/relation-edit-lifecycle.test.mjs",
+        "e2e/relation-edit-lifecycle.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/relations.py"]
+    },
+    {
+      "id": "SEM-005",
+      "title": "版本化枚举字典与引用影响",
+      "routes": ["/governance/enum-dictionaries"],
+      "sources": [
+        "web/src/views/semantic-assets/configuration/enum-dictionaries/EnumDictionariesPage.vue",
+        "server/app/api/v1/enum_dictionaries.py",
+        "server/app/domain/enum_dictionary_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m4_enum_dictionaries.py",
+        "server/tests/test_m4_export.py",
+        "web/src/views/semantic-assets/configuration/__tests__/enum-dictionaries.test.mjs",
+        "web/src/views/semantic-assets/configuration/__tests__/enum-dictionaries-form.test.mjs"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/enum_dictionaries.py"]
+    },
+    {
+      "id": "SEM-006",
+      "title": "装配模板与核心成员核对",
+      "routes": ["/governance/templates"],
+      "sources": [
+        "web/src/views/semantic-assets/configuration/assembly-templates/AssemblyTemplatesPage.vue",
+        "web/src/views/semantic-assets/configuration/assembly-templates/components/TemplateCoreCheck.vue",
+        "server/app/api/v1/templates.py",
+        "server/app/domain/template_service.py",
+        "server/app/domain/core_check_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m4_templates.py",
+        "web/src/views/semantic-assets/configuration/__tests__/assembly-templates.test.mjs"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/templates.py"]
+    },
+    {
+      "id": "SEM-007",
+      "title": "IRI 辅助与同义词元数据 API",
+      "routes": [],
+      "sources": [
+        "server/app/api/v1/namespaces.py",
+        "server/app/domain/iri_service.py",
+        "server/app/schemas/type.py",
+        "server/app/schemas/ontology.py",
+        "server/app/iri.py",
+        "web/src/api/namespaces.ts"
+      ],
+      "tests": ["server/tests/test_iri.py", "server/tests/test_ontology_input_contract.py"],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": [
+        "server/app/api/v1/namespaces.py",
+        "server/app/api/v1/types.py",
+        "server/app/api/v1/relations.py",
+        "server/app/api/v1/ontologies.py"
+      ]
+    },
+    {
+      "id": "ONT-001",
+      "title": "本体工作内容与资源装配",
+      "routes": ["/ontology/ontologies", "/ontology/designer"],
+      "sources": [
+        "web/src/views/ontology/ontologies/OntologiesPage.vue",
+        "web/src/views/ontology/designer/DesignerPage.vue",
+        "web/src/api/ontology.ts",
+        "server/app/api/v1/ontologies.py",
+        "server/app/domain/ontology_service.py",
+        "server/app/schemas/ontology.py"
+      ],
+      "tests": [
+        "server/tests/test_m1_ontology.py",
+        "server/tests/test_ontology_domain_assembly.py",
+        "server/tests/test_ontology_dependencies.py",
+        "server/tests/test_edit_revision.py",
+        "web/src/api/__tests__/ontology.test.mjs",
+        "e2e/m3-ui-modeling-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontologies.py"]
+    },
+    {
+      "id": "ONT-002",
+      "title": "设计器画布、检查器与布局保存",
+      "routes": ["/ontology/designer"],
+      "sources": [
+        "web/src/views/ontology/designer/DesignerPage.vue",
+        "web/src/views/ontology/designer/components/designerGeometry.ts",
+        "web/src/components/graph/viewport.ts",
+        "server/app/api/v1/ontologies.py",
+        "server/app/domain/ontology_service.py"
+      ],
+      "tests": [
+        "web/src/views/ontology/designer/__tests__/designer-interactions.test.mjs",
+        "web/src/views/ontology/designer/components/modeling/__tests__/designer-history.test.mjs",
+        "server/tests/test_edit_revision.py",
+        "e2e/ontology-modeling.browser.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontologies.py"]
+    },
+    {
+      "id": "ONT-003",
+      "title": "本体发布、冻结依赖与版本演进",
+      "routes": ["/ontology/ontologies", "/ontology/designer"],
+      "sources": [
+        "server/app/api/v1/ontologies.py",
+        "server/app/domain/ontology_service.py",
+        "server/app/domain/ontology_dependencies.py",
+        "server/app/domain/ontology_validation_context.py",
+        "server/app/domain/validation_service.py",
+        "server/app/semantics/rdflib_backend.py",
+        "web/src/views/ontology/designer/DesignerPage.vue"
+      ],
+      "tests": [
+        "server/tests/test_ontology_publication_validation.py",
+        "server/tests/test_ontology_dependencies.py",
+        "server/tests/test_m1_ontology.py",
+        "server/tests/test_edit_revision.py",
+        "server/tests/test_semantics_consistency.py"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontologies.py", "server/app/api/v1/validation.py"]
+    },
+    {
+      "id": "ONT-004",
+      "title": "冻结版本历史与资源规则详情",
+      "routes": ["/ontology/designer", "/governance/export"],
+      "sources": [
+        "server/app/api/v1/ontology_history.py",
+        "server/app/domain/ontology_history_service.py",
+        "web/src/views/governance/exchange/components/OntologyHistory.vue",
+        "web/src/views/ontology/designer/composables/useDesignerHistory.ts"
+      ],
+      "tests": [
+        "server/tests/test_ontology_history.py",
+        "web/src/views/ontology/designer/components/modeling/__tests__/designer-history.test.mjs",
+        "web/src/views/governance/exchange/__tests__/ontology-transfer.test.mjs"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontology_history.py"]
+    },
+    {
+      "id": "ONT-005",
+      "title": "AI 业务建模候选审阅与草稿应用",
+      "routes": ["/ontology/designer"],
+      "sources": [
+        "web/src/views/ontology/designer/components/modeling/AiModeling.vue",
+        "web/src/views/ontology/designer/components/modeling/useAiModeling.ts",
+        "server/app/api/v1/ontology_modeling.py",
+        "server/app/domain/ontology_modeling_service.py",
+        "server/app/domain/ontology_modeling_context.py",
+        "server/app/domain/ontology_modeling_apply.py",
+        "server/app/schemas/ontology_modeling.py"
+      ],
+      "tests": [
+        "server/tests/test_ontology_modeling_api.py",
+        "server/tests/test_ontology_modeling_apply.py",
+        "server/tests/test_ontology_modeling_context.py",
+        "server/tests/test_ontology_modeling_plan.py",
+        "web/src/views/ontology/designer/components/modeling/__tests__/ai-modeling.test.mjs",
+        "e2e/ontology-modeling.browser.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontology_modeling.py"]
+    },
+    {
+      "id": "ONT-006",
+      "title": "AI 元数据补全与逐条确认",
+      "routes": ["/ontology/designer"],
+      "sources": [
+        "web/src/views/ontology/designer/components/AiSuggestions.vue",
+        "web/src/views/ontology/designer/components/useAiSuggestions.ts",
+        "server/app/api/v1/ai.py",
+        "server/app/domain/ai_suggestion_service.py"
+      ],
+      "tests": [
+        "server/tests/test_ai_completion_safety.py",
+        "server/tests/test_m5_ai_suggestions.py",
+        "web/src/views/ontology/designer/components/__tests__/ai-suggestions.test.mjs",
+        "e2e/ai-evidence-ux.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ai.py"]
+    },
+    {
+      "id": "GOV-001",
+      "title": "标准条款索引与自撰说明",
+      "routes": ["/governance/clauses"],
+      "sources": [
+        "web/src/views/governance/clauses/StandardClausesPage.vue",
+        "server/app/api/v1/clauses.py",
+        "server/app/domain/clause_service.py",
+        "server/app/schemas/governance.py"
+      ],
+      "tests": [
+        "server/tests/test_m4_clauses.py",
+        "web/src/views/governance/clauses/__tests__/c4-clauses.test.mjs",
+        "web/src/views/governance/clauses/__tests__/c4-query-isolation.test.mjs"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/clauses.py"]
+    },
+    {
+      "id": "GOV-002",
+      "title": "规则库、来源及保存版本试跑",
+      "routes": ["/governance/rules"],
+      "sources": [
+        "web/src/views/governance/rules/GovernanceRulesPage.vue",
+        "server/app/api/v1/governance.py",
+        "server/app/domain/rule_service.py",
+        "server/app/schemas/governance.py",
+        "server/app/semantics/rule_examples.py",
+        "server/app/semantics/ontology_rules.py",
+        "server/app/semantics/ontology_rule_validation.py"
+      ],
+      "tests": [
+        "server/tests/test_m4_rules.py",
+        "server/tests/test_ontology_rule_examples.py",
+        "server/tests/test_ontology_rule_execution.py",
+        "server/tests/test_m1_rule_trace.py",
+        "web/src/views/governance/rules/__tests__/c4-rules.test.mjs",
+        "web/src/views/governance/rules/__tests__/c4-query-isolation.test.mjs"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/governance.py"]
+    },
+    {
+      "id": "GOV-003",
+      "title": "资产层四态校验与报告读取",
+      "routes": ["/ontology/designer", "/graph/reports"],
+      "sources": [
+        "web/src/views/ontology/validation/ValidationReportsPage.vue",
+        "web/src/views/ontology/designer/DesignerPage.vue",
+        "server/app/api/v1/validation.py",
+        "server/app/domain/validation_service.py",
+        "server/app/domain/ontology_validation_context.py",
+        "server/app/domain/instance_validation_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m1_validation.py",
+        "server/tests/test_ontology_publication_validation.py",
+        "server/tests/test_m3_instance_validation.py",
+        "server/tests/test_ontology_rule_validation.py",
+        "web/src/views/ontology/validation/__tests__/validation-reports.test.mjs"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/validation.py"]
+    },
+    {
+      "id": "GOV-004",
+      "title": "已发布本体 RDF 导出与交换",
+      "routes": ["/governance/export"],
+      "sources": [
+        "web/src/views/governance/exchange/OntologyExchangePage.vue",
+        "web/src/api/ontology.ts",
+        "server/app/api/v1/ontologies.py",
+        "server/app/domain/ontology_export_service.py",
+        "server/app/semantics/ontology_rdf.py"
+      ],
+      "tests": [
+        "server/tests/test_m4_export.py",
+        "server/tests/test_semantics_roundtrip.py",
+        "server/tests/test_ontology_input_contract.py",
+        "web/src/views/governance/exchange/__tests__/ontology-transfer.test.mjs",
+        "e2e/ontology-restore-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontologies.py"]
+    },
+    {
+      "id": "GOV-005",
+      "title": "完整 RDF 恢复预览与新本体建立",
+      "routes": ["/governance/export"],
+      "sources": [
+        "web/src/views/governance/exchange/components/OntologyRestore.vue",
+        "server/app/api/v1/ontology_restore.py",
+        "server/app/domain/ontology_restore_service.py",
+        "server/app/semantics/ontology_restore.py",
+        "server/app/semantics/ontology_rdf.py"
+      ],
+      "tests": [
+        "server/tests/test_ontology_restore_parser.py",
+        "server/tests/test_ontology_restore_preview.py",
+        "server/tests/test_ontology_restore_apply.py",
+        "server/tests/test_ontology_restore_concurrency.py",
+        "server/tests/test_ontology_input_contract.py",
+        "e2e/ontology-restore-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontology_restore.py"]
+    },
+    {
+      "id": "GOV-006",
+      "title": "按已有资源 IRI 导入草稿引用 API",
+      "routes": [],
+      "sources": [
+        "server/app/api/v1/ontologies.py",
+        "server/app/domain/ontology_import_service.py",
+        "server/app/schemas/ontology_import.py",
+        "server/app/semantics/ontology_rdf.py"
+      ],
+      "tests": ["server/tests/test_m4_import.py", "server/tests/test_ontology_input_contract.py"],
+      "docs": ["docs/product/features-modeling.md", "docs/user-guide/modeling-governance.md"],
+      "apiModules": ["server/app/api/v1/ontologies.py"]
+    },
+    {
+      "id": "DAT-001",
+      "title": "只读数据源配置与连接测试",
+      "routes": ["/datasources"],
+      "sources": [
+        "web/src/views/data-integration/sources",
+        "server/app/api/v1/datasources.py",
+        "server/app/domain/source_service.py",
+        "server/app/connectors/sql.py"
+      ],
+      "tests": ["server/tests/test_m2_datasource.py", "server/tests/test_source_connector.py"],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/datasources.py"]
+    },
+    {
+      "id": "DAT-002",
+      "title": "元数据快照、差异与引用",
+      "routes": ["/datasources/catalog"],
+      "sources": [
+        "web/src/views/data-integration/catalog",
+        "server/app/api/v1/metadata.py",
+        "server/app/domain/metadata_service.py"
+      ],
+      "tests": ["server/tests/test_m2_metadata.py"],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/metadata.py"]
+    },
+    {
+      "id": "DAT-003",
+      "title": "实时样例预览",
+      "routes": ["/datasources/preview"],
+      "sources": [
+        "web/src/views/data-integration/catalog/preview",
+        "web/src/views/data-integration/catalog/components/CatalogSamples.vue",
+        "server/app/api/v1/preview.py",
+        "server/app/domain/preview_service.py",
+        "server/app/schemas/preview.py"
+      ],
+      "tests": [
+        "server/tests/test_m2_preview.py",
+        "web/src/views/data-integration/catalog/__tests__/catalog-samples.test.mjs"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/preview.py"]
+    },
+    {
+      "id": "MAP-001",
+      "title": "映射草稿、字段与关系配置",
+      "routes": ["/extraction"],
+      "sources": [
+        "web/src/views/data-integration/mapping/MappingWorkbenchPage.vue",
+        "server/app/api/v1/mappings.py",
+        "server/app/domain/mapping_service.py",
+        "server/app/schemas/mapping.py",
+        "server/app/domain/fusion_policy.py"
+      ],
+      "tests": [
+        "server/tests/test_m2_mapping.py",
+        "server/tests/test_edit_revision.py",
+        "server/tests/test_m3_mapping_fusion.py",
+        "server/tests/test_fusion_attributes.py"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/mappings.py"]
+    },
+    {
+      "id": "MAP-002",
+      "title": "编译预览与发布冻结",
+      "routes": [],
+      "sources": [
+        "server/app/domain/mapping_service.py",
+        "server/app/domain/mapping_compiler.py",
+        "server/app/api/v1/mapping_preview.py",
+        "web/src/views/data-integration/mapping/components/FrozenMapping.vue"
+      ],
+      "tests": [
+        "server/tests/test_m2_compiler.py",
+        "server/tests/test_m2_mapping.py",
+        "e2e/audit-correction-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/mapping_preview.py"]
+    },
+    {
+      "id": "MAP-003",
+      "title": "AI映射建议与文本候选审阅",
+      "routes": ["/extraction/ai-assist"],
+      "sources": [
+        "web/src/views/data-integration/mapping/ai-assist",
+        "server/app/api/v1/ai.py",
+        "server/app/domain/ai_suggestion_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m5_ai_suggestions.py",
+        "server/tests/test_ai_completion_safety.py"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/ai.py"]
+    },
+    {
+      "id": "RUN-001",
+      "title": "抽取运行、校验与结果保护",
+      "routes": ["/extraction/runs"],
+      "sources": [
+        "web/src/views/data-integration/runs",
+        "server/app/api/v1/extraction.py",
+        "server/app/domain/extraction_service.py",
+        "server/app/domain/run_export_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m3_extraction.py",
+        "server/tests/test_m3_pipeline.py",
+        "server/tests/test_m3_instance_validation.py",
+        "server/tests/test_m4_run_export.py"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/extraction.py"]
+    },
+    {
+      "id": "RUN-002",
+      "title": "异步任务、延后执行与协作取消",
+      "routes": ["/extraction/tasks"],
+      "sources": [
+        "web/src/views/data-integration/tasks",
+        "server/app/domain/extraction_task_service.py",
+        "server/app/models/extraction.py"
+      ],
+      "tests": [
+        "server/tests/test_m5_extraction_tasks.py",
+        "web/src/views/data-integration/tasks/__tests__/extraction-tasks.test.mjs"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": []
+    },
+    {
+      "id": "RUN-003",
+      "title": "受限追加增量与水位",
+      "routes": [],
+      "sources": [
+        "server/app/domain/extraction_incremental.py",
+        "server/app/domain/extraction_task_service.py",
+        "server/app/domain/extraction_service.py"
+      ],
+      "tests": ["server/tests/test_m5_extraction_tasks.py"],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": []
+    },
+    {
+      "id": "GRF-001",
+      "title": "图谱探索、布局、选择与路径",
+      "routes": ["/graph"],
+      "sources": [
+        "web/src/views/graph/browse",
+        "server/app/domain/graph_view_service.py",
+        "server/app/domain/graph_analysis_service.py",
+        "server/app/domain/graph_recommendation_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m3_graph_view.py",
+        "server/tests/test_m4_graph_analysis.py",
+        "e2e/m3-browser-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": []
+    },
+    {
+      "id": "GRF-002",
+      "title": "实体详情、来源证据与融合决策",
+      "routes": ["/graph/entities", "/graph/entities/:id", "/graph/evidence"],
+      "sources": [
+        "web/src/views/graph/entities",
+        "web/src/views/graph/evidence",
+        "server/app/domain/evidence_service.py",
+        "server/app/domain/fusion_service.py"
+      ],
+      "tests": [
+        "server/tests/test_m3_evidence.py",
+        "server/tests/test_fusion_attributes.py",
+        "e2e/audit-correction-flow.spec.ts"
+      ],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": []
+    },
+    {
+      "id": "GRF-003",
+      "title": "历史结果切换与差异",
+      "routes": [],
+      "sources": [
+        "server/app/api/v1/extraction.py",
+        "server/app/domain/graph_analysis_service.py",
+        "server/app/domain/extraction_service.py",
+        "web/src/views/data-integration/runs/ExtractionRunsPage.vue"
+      ],
+      "tests": ["server/tests/test_m3_graph_revision.py", "server/tests/test_m4_graph_analysis.py"],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": []
+    },
+    {
+      "id": "GRF-004",
+      "title": "图谱视图模板与语义字段",
+      "routes": [],
+      "sources": [
+        "server/app/api/v1/graph_templates.py",
+        "server/app/domain/graph_template_service.py",
+        "web/src/views/graph/browse/GraphBrowsePage.vue"
+      ],
+      "tests": ["server/tests/test_graph_template_semantics.py"],
+      "docs": ["docs/product/features-data-graph.md", "docs/user-guide/data-graph.md"],
+      "apiModules": ["server/app/api/v1/graph_templates.py"]
+    },
+    {
+      "id": "KNO-001",
+      "title": "知识库目录与生命周期",
+      "routes": ["/knowledge-bases", "/knowledge-bases/:id"],
+      "sources": [
+        "web/src/views/knowledge/KnowledgeBaseListPage.vue",
+        "web/src/views/knowledge/KnowledgeBaseDetailPage.vue",
+        "server/app/api/v1/knowledge.py",
+        "server/app/domain/knowledge_service.py",
+        "server/app/models/knowledge.py"
+      ],
+      "tests": ["server/tests/test_knowledge_service.py", "e2e/knowledge-base.spec.ts"],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": ["server/app/api/v1/knowledge.py"]
+    },
+    {
+      "id": "KNO-002",
+      "title": "文档上传、原文与归档管理",
+      "routes": ["/knowledge-bases/:id"],
+      "sources": [
+        "web/src/views/knowledge/components/DocumentDrawer.vue",
+        "server/app/domain/knowledge_parser.py",
+        "server/app/domain/knowledge_service.py",
+        "server/app/api/v1/knowledge.py",
+        "server/app/api/v1/knowledge_retrieval.py"
+      ],
+      "tests": [
+        "server/tests/test_knowledge_parser.py",
+        "server/tests/test_knowledge_service.py",
+        "e2e/knowledge-base.spec.ts"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "KNO-003",
+      "title": "持久化处理任务与索引代际",
+      "routes": [],
+      "sources": [
+        "server/app/api/knowledge_runtime.py",
+        "server/app/domain/knowledge_service.py",
+        "server/app/models/knowledge.py"
+      ],
+      "tests": [
+        "server/tests/test_app_lifespan.py",
+        "server/tests/test_knowledge_service.py",
+        "server/tests/test_ai_model_publication.py"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "KNO-004",
+      "title": "关键词、语义与混合检索",
+      "routes": ["/knowledge-bases/:id/search"],
+      "sources": [
+        "web/src/views/knowledge/KnowledgeSearchPage.vue",
+        "server/app/api/v1/knowledge_retrieval.py",
+        "server/app/domain/knowledge_retrieval.py",
+        "server/app/domain/knowledge_ranking.py"
+      ],
+      "tests": [
+        "server/tests/test_knowledge_retrieval.py",
+        "server/tests/test_knowledge_ranking.py",
+        "e2e/knowledge-base.spec.ts"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": ["server/app/api/v1/knowledge_retrieval.py"]
+    },
+    {
+      "id": "KNO-005",
+      "title": "基于引用的证据摘录问答",
+      "routes": ["/knowledge-bases/:id/search"],
+      "sources": [
+        "server/app/domain/knowledge_answering.py",
+        "server/app/api/v1/knowledge_retrieval.py",
+        "web/src/views/knowledge/KnowledgeSearchPage.vue"
+      ],
+      "tests": ["server/tests/test_knowledge_answering.py", "e2e/knowledge-ai.browser.ts"],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "KNO-006",
+      "title": "片段原文定位与人工图事实关联",
+      "routes": [],
+      "sources": [
+        "web/src/views/knowledge/components/EvidenceDrawer.vue",
+        "web/src/views/knowledge/components/GraphLinkForm.vue",
+        "server/app/domain/knowledge_retrieval.py",
+        "server/app/models/knowledge_links.py"
+      ],
+      "tests": ["server/tests/test_knowledge_retrieval.py", "e2e/knowledge-ai.browser.ts"],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "ACC-001",
+      "title": "首个管理员、登录会话与可选注册",
+      "routes": ["/login", "/register"],
+      "sources": [
+        "scripts/seed_admin.py",
+        "server/app/api/v1/auth.py",
+        "server/app/domain/account_service.py",
+        "server/app/models/account.py",
+        "web/src/stores/auth.ts",
+        "web/src/views/auth"
+      ],
+      "tests": [
+        "server/tests/test_account.py",
+        "e2e/account-admin-ui.spec.ts",
+        "server/tests/test_permissions_matrix.py"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": ["server/app/api/v1/auth.py"]
+    },
+    {
+      "id": "ACC-002",
+      "title": "个人资料与账号改密",
+      "routes": ["/account/profile", "/account/security"],
+      "sources": [
+        "web/src/views/account",
+        "server/app/api/v1/accounts.py",
+        "server/app/domain/account_service.py",
+        "server/app/schemas/account.py"
+      ],
+      "tests": [
+        "server/tests/test_account.py",
+        "web/src/views/account/__tests__/c4-forms.test.mjs",
+        "e2e/account-admin-ui.spec.ts"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": ["server/app/api/v1/accounts.py"]
+    },
+    {
+      "id": "ACC-003",
+      "title": "受控密码找回与一次性重置",
+      "routes": ["/forgot-password", "/reset-password"],
+      "sources": [
+        "server/app/api/v1/auth.py",
+        "server/app/api/v1/accounts.py",
+        "server/app/domain/account_service.py",
+        "web/src/views/auth/ForgotPasswordPage.vue",
+        "web/src/views/auth/ResetPasswordPage.vue"
+      ],
+      "tests": ["server/tests/test_account.py", "e2e/account-admin-ui.spec.ts"],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "SYS-001",
+      "title": "管理员用户管理",
+      "routes": ["/system/users"],
+      "sources": [
+        "web/src/views/system/users/UsersPage.vue",
+        "server/app/api/v1/accounts.py",
+        "server/app/domain/account_service.py"
+      ],
+      "tests": ["server/tests/test_account.py", "e2e/account-admin-ui.spec.ts"],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "SYS-002",
+      "title": "固定角色及成员数查看",
+      "routes": ["/system/roles"],
+      "sources": [
+        "web/src/views/system/roles/RolesPage.vue",
+        "server/app/api/v1/accounts.py",
+        "server/app/api/v1/deps.py",
+        "server/app/models/enums.py"
+      ],
+      "tests": [
+        "server/tests/test_permissions_matrix.py",
+        "server/tests/test_business_access.py",
+        "e2e/m3-browser-flow.spec.ts"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": []
+    },
+    {
+      "id": "SYS-003",
+      "title": "AI服务配置与默认能力",
+      "routes": ["/system/ai-models"],
+      "sources": [
+        "web/src/views/system/ai-models/AiModelsPage.vue",
+        "server/app/api/v1/ai_model_configs.py",
+        "server/app/domain/ai_model_service.py",
+        "server/app/core/ai_client.py",
+        "server/app/models/ai_model.py"
+      ],
+      "tests": [
+        "server/tests/test_ai_model_configs.py",
+        "server/tests/test_ai_model_runtime.py",
+        "server/tests/test_ai_model_publication.py"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": ["server/app/api/v1/ai_model_configs.py"]
+    },
+    {
+      "id": "SYS-004",
+      "title": "账号审计与业务资产审计",
+      "routes": ["/system/audit-logs"],
+      "sources": [
+        "web/src/views/system/audit-logs",
+        "server/app/api/v1/asset_audit.py",
+        "server/app/api/v1/asset_audit_context.py",
+        "server/app/domain/asset_audit_service.py",
+        "server/app/models/asset_audit.py",
+        "server/app/api/v1/accounts.py",
+        "server/app/domain/account_service.py"
+      ],
+      "tests": [
+        "server/tests/test_asset_audit.py",
+        "server/tests/test_account.py",
+        "e2e/asset-audit.spec.ts"
+      ],
+      "docs": [
+        "docs/product/features-knowledge-system.md",
+        "docs/user-guide/knowledge-system.md",
+        "docs/user-guide/roles-permissions.md"
+      ],
+      "apiModules": ["server/app/api/v1/asset_audit.py"]
+    }
+  ]
+}

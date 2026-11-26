@@ -9,7 +9,7 @@ description: 知识中台仓库的交付前完工自检：按顺序跑 lint、�
 
 ## 步骤
 
-在仓库根目录依次执行，前一步失败先修复再继续：
+先按[文档同步规范](../../conventions/documentation.md)确认适用步骤；纯文档与文档工具任务直接执行相应结构、格式、内容及工具行为验证，不运行全仓自动修复。业务改动在仓库根目录依次执行以下适用步骤，前一步失败先修复再继续：
 
 1. **自动修复**：`make fix`（ESLint --fix、Prettier、Ruff），然后确认没有顺带改动无关文件。
 2. **静态检查**：`make lint`。包含 ESLint、vue-tsc、Prettier、Ruff、Mypy 与 `server/tests/test_architecture.py` 架构边界测试。
@@ -19,7 +19,8 @@ description: 知识中台仓库的交付前完工自检：按顺序跑 lint、�
 6. **主流程**：改动涉及抽取、映射、图谱或页面主流程时跑 `make test-e2e`（首次需 `pnpm exec playwright install chromium`）。
 7. **新依赖**：跑 `pnpm run check:licenses:web` 或 `pnpm run check:licenses:server`，并按 `.agents/conventions/security-and-license.md` 在 PR 描述中写明许可。
 8. **人工核对**：逐条过根 `AGENTS.md`「完工自检」，重点是后端不返回中文句子、未执行校验返回 `NOT_RUN`、`git status` 中没有 `demo/`、`.workbuddy/`、`node_modules/`、`.venv/`、`dist/`。
-9. **提交**：`pnpm run commit`，不要 `git commit -m`。
+9. **文档影响**：按 [文档同步规范](../../conventions/documentation.md)核对功能编号、实现和指南，运行 `pnpm run check:docs`；提交前运行 `pnpm run check:docs:staged`。交付写明文档更新或具体无需更新依据。纯文档任务执行相关结构、格式和内容核验，不重复全量业务测试；检查脚本变化补定向行为测试。
+10. **提交**：`pnpm run commit`，不要 `git commit -m`。
 
 ## 汇报
 

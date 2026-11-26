@@ -1,2 +1,3 @@
 cd "$(dirname "$0")/.."
 npx --no-install lint-staged
+node scripts/check-docs.mjs --staged

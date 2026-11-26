@@ -1,6 +1,6 @@
 # samples · 样例源库
 
-M2 阶段的正式交付物，用于端到端验证与 CI。
+用于端到端验证与 CI 的虚构业务数据。核验日期：2026-11-26；当前随仓 SQLite 含17张表，不是早期六表快照。操作入口见[快速入门](../docs/user-guide/quickstart.md)。
 
 ## 要求（缺一不可）
 
@@ -32,5 +32,8 @@ M2 阶段的正式交付物，用于端到端验证与 CI。
 M3 的 8 步贯通测试跑在这份数据上：建类型 → 装配本体 → 配映射 → 跑抽取 → 验证幂等 → 制造失败 → 追溯证据。
 五场景数据用于验收：多态股东判别映射、跨表业务键融合、部门无环/持股合计/签约方规则、组织树与股权穿透图谱形态。
 
-> 注意：`enterprise_demo.sqlite` 是旧版六表快照。重建五场景完整库请执行
-> `sqlite3 enterprise_demo.sqlite < seed.sql`。
+## 当前表与安全重建
+
+当前表：`enterprise`、`hr_employee`、`ct_contract`、`ct_contract_project`、`ct_contract_party`、`pm_project`、`pm_project_member`、`org_department`、`org_position`、`org_employment`、`org_executive_role`、`eq_shareholder`、`eq_equity_holding`、`person_relation`、`crm_customer`、`crm_supplier`、`crm_trade_transaction`。
+
+样例包含异常与冲突记录，用于校验和失败处理，不保证零隔离。源库与平台元数据库必须分开。`seed.sql` 包含 DROP；需要重建时按[快速入门](../docs/user-guide/quickstart.md)创建新临时文件，不能对已有业务库或元数据库执行。后端读取路径必须指向后端机器可访问的文件。

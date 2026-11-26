@@ -1,6 +1,6 @@
 # 本机预览与视觉证据
 
-最终构建预览：[http://127.0.0.1:8145/](http://127.0.0.1:8145/)。它使用独立复制的合成数据快照，关闭知识后台处理与外部模型；没有连接开发数据库。账号为 `e2e_admin`，密码为 `E2E-Admin-Password-2026!`。
+2026-11-23迁移任务的历史构建预览：[http://127.0.0.1:8145/](http://127.0.0.1:8145/)。它使用独立复制的合成数据快照，关闭知识后台处理与外部模型；没有连接开发数据库。历史预览使用独立测试账号；不在文档提供可复用口令。重新启动时按部署指南在新的隔离库初始化账号。
 
 已实际打开的页面：
 
@@ -21,29 +21,8 @@ before来自HEAD `13b5a3a`，after来自最终迁移工作区。两阶段使用�
 
 视口1440×900、1280×720、768×1024、390×844；DPR1、浏览器scale1、CSS zoom1。`before/manifest.json` 与 `after/manifest.json` 记录URL、主题、尺寸、品牌/顶栏几何与页面宽度；`pair-verification.json`记录配对结果，`SHA256SUMS`记录96图像指纹。截图不是像素自动回归基线；功能、四态、冻结、权限与失败保护请同时查看 [verification.md](./verification.md)。
 
-## 重新启动
+## 当前访问与重新准备
 
-预览与画廊绑定127.0.0.1，属于本机临时服务，不是部署或共享网络服务。当前预览进程94786，画廊94788；停止前先核对PID仍属于这些服务，避免复用PID误停其他进程。临时目录被系统清理后，链接与数据需重新生成。
+这些地址、截图目录和日志属于当时本机会话，可能已停止或被清理；本轮没有重新验收该历史预览，不能视为正在运行的服务。不得沿用历史PID停止进程，也不要把历史测试账号当作默认部署账号。
 
-需要重新启动时，在项目根目录构建 `pnpm -C web build`，然后使用独立预览库：
-
-```sh
-KG_ENVIRONMENT=development \
-KG_CREATE_TABLES_ON_STARTUP=false \
-KG_DATABASE_URL=sqlite:////private/tmp/knowledge-design-system-preview/metadata.sqlite \
-KG_KNOWLEDGE_WORKERS_ENABLED=false \
-KG_ALLOW_PUBLIC_REGISTRATION=false \
-KG_EXPOSE_RESET_TOKEN=false \
-KG_PASSWORD_ITERATIONS=1000 \
-KG_LLM_BASE_URL='' KG_LLM_API_KEY='' KG_LLM_MODEL='' \
-KG_EMBEDDING_BASE_URL='' KG_EMBEDDING_API_KEY='' KG_EMBEDDING_MODEL='' \
-./server/.venv/bin/uvicorn app.main:app --app-dir server --host 127.0.0.1 --port 8145
-```
-
-画廊单独启动：
-
-```sh
-python3 -m http.server 5260 --bind 127.0.0.1 --directory /private/tmp/knowledge-design-system-final
-```
-
-before/after专用库为 `/private/tmp/knowledge-e2e-design-pair`；只允许用于同数据渲染，不运行CRUD/故障测试。可复现after命令见 `e2e/design-system-visual.config.ts` 的环境契约。
+当前初始化、配置隔离和构建启动步骤见[部署指南](../operations/deployment.md)。需要复现旧截图时参阅当时的 `e2e/design-system-visual.config.ts` 与版本记录，使用新临时数据库并核对数据配对条件；不要向开发库写入视觉测试数据。

@@ -1,71 +1,83 @@
 # Knowledge Platform
 
-An end-to-end platform for enterprise semantic modeling and knowledge extraction:
-ontology modeling → data onboarding → mapping configuration → extraction → graph with evidence tracing.
+A self-hosted workspace for enterprise semantic modeling, read-only data extraction, graph exploration and evidence tracing. A parallel document knowledge base supports retrieval, source excerpts and extractive answers.
 
-Chinese by default, English supported. MIT licensed. Self-hostable.
+Chinese is the default UI language; English is supported. MIT licensed. Suitable for business pilots and integration evaluation; production capacity and operational readiness require deployment-specific acceptance.
 
-## Why it exists
+[中文](README.md) · [Documentation](docs/README.md) · [Feature catalog](docs/product/feature-catalog.md) · [Getting started](docs/user-guide/quickstart.md)
 
-- **Reusable semantic assets**: entity types, relation types, business domains and ontologies are versioned, publishable and frozen at publish time — upstream revisions never silently change published downstream artifacts.
-- **From real data to a real graph**: connect a read-only source, configure mappings, run extraction, get a graph version with evidence.
-- **Honest validation**: results are always one of four states — pass / violation / not-applicable / **not-run**. A check that never ran is never reported as passing.
-- **Traceable facts**: every triple can be traced back to source connection, table, row key, column and run batch.
+Reviewed on 2026-11-26 against `9222236` plus the uncommitted A-style UI workspace. This is not a released version. See the [verification record](docs/maintenance/verification-2026-11-26.md).
 
-Reference specification: GB/T 48000.3—2026 (only clause numbers and short original descriptions are kept in this repo; the standard's text is not redistributed).
+## Capabilities and workflow
 
-## Stack
+**Semantic assets → published ontology → data onboarding → published mappings → extraction → graph exploration → evidence tracing.**
 
-| Layer          | Choice                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------- |
-| Frontend       | Vue 3 + TypeScript + Vite                                                                    |
-| Backend        | Python 3.12 + FastAPI                                                                        |
-| Metadata store | PostgreSQL (SQLite for development)                                                          |
-| Semantics      | rdflib (RDF/SPARQL) + pySHACL (real SHACL validation) + owlrl (minimal reasoning), pluggable |
-| Graph storage  | relational triple tables (a graph database is reconsidered only at scale)                    |
+- Reusable entity/relation types, domains, enumerations and assembly templates; publication pins upstream versions.
+- Read-only source discovery, metadata snapshots, mapping configuration, sample compilation and extraction histories.
+- Graph facts, source rows, fields, runs and frozen mapping versions; manually linked documents are supplementary evidence, not extraction provenance.
+- UTF-8 TXT/Markdown/CSV knowledge bases, keyword/semantic/hybrid search and evidence-based extractive answers. Keyword search works without a model; other capabilities require available default model services.
+- Governance rules and four-state validation: PASS, VIOLATION, NA and NOT_RUN. A check that did not run is never a pass.
+- Global ADMIN/EDITOR/VIEWER roles, account management, business audit records and model configuration.
 
-## Getting started
+See the [product overview](docs/product/overview.md), [module guides](docs/README.md) and [limitations](docs/product/limitations.md). Detailed guides currently use Chinese.
 
-```bash
-make install     # install dependencies and git hooks
-make dev         # run frontend and backend together
-make lint        # ESLint + Prettier + vue-tsc + Ruff + Mypy + architecture boundary tests
-make test        # frontend and backend tests
-make test-e2e    # Playwright main-flow and responsive UI checks
-pnpm run commit  # interactive commit (Conventional Commits)
+## Run locally
+
+Requirements: Node.js ≥22.18.0, pnpm 11.7.0, Python ≥3.12. Installation requires network access. From the repository root:
+
+```sh
+make install
+make seed-admin
+make dev
 ```
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR. Design docs live in [docs/](./docs/).
+Open `http://127.0.0.1:4010/`; the API runs on port 4000. `make seed-admin` creates the first administrator only in an empty account store. Its default username is `admin`, with a randomly generated password displayed once. **There is no universal default password.** The command refuses an existing account store and is not a password reset tool. Public registration is disabled by default.
 
-## Knowledge-base MVP
+The default development metadata database is `server/knowledge.db`. Configuration is read relative to the backend process working directory; these Make targets run it from `server/`. Initialization, migration and startup must use the same database configuration.
 
-The Knowledge bases navigation entry supports creation, UTF-8 TXT / Markdown / CSV uploads, processing tasks, keyword search, original evidence, and reversible archiving. All authenticated users can read; ADMIN / EDITOR can maintain content under the existing global roles. Per-base ACLs are not implemented. Limits are 2 MiB per file, 100 documents per base including archived documents, 10,000 active chunks per base, and 2,000 chunks per document. PDF, Word and OCR are unsupported.
+`make start` builds the frontend and serves UI/API on `0.0.0.0:4000`. It does not automatically enable production mode. Production needs PostgreSQL, a protected independent encryption key, migrations, HTTPS/process management and environment validation. See [deployment](docs/operations/deployment.md) and [configuration](docs/operations/configuration.md).
 
-Semantic search uses bounded exact cosine scoring over embeddings stored in SQL. Hybrid search combines BM25 and semantic ranks with RRF. Extractive answers return only exact quotations from retrieved evidence. Manual graph links pin existing graph/fact versions; they do not create facts or represent extraction provenance.
+## Environments and boundaries
 
-Administrators create, browse, edit and delete OpenAI-compatible services under System management → AI models (`/system/ai-models`):
+- Development, preview and E2E use separate databases and credentials. Default E2E uses temporary data and ports 5199/8123. Isolated prototypes are not business features.
+- No per-base ACL, multi-tenancy, SSO, MFA, billing or SLA commitment. Rule-to-standard references do not constitute certification.
+- PDF, Word and OCR are unsupported. Model quality and external service compatibility have not been verified in this review.
+- PostgreSQL/MySQL source connectors exist, but their required drivers are not fully declared in the default installation. The `production` pg8000 dependency serves the metadata database, not these source connectors.
+- Incremental extraction is restricted to supported immutable append-only integer-key/watermark scenarios; it is not general CDC. Extraction scheduling runs in-process.
+- Production PostgreSQL, high availability, backup recovery and capacity remain deployment acceptance work.
 
-- Configure a name, base URL, model name, version, timeout and API key for each CHAT or EMBEDDING service. Enable it and explicitly select the default for its capability. Saving or selecting a default does not call the service.
-- Keys are encrypted on the server; list and detail responses only indicate whether a key is present. Leaving the key blank when editing preserves it; replacement and clearing are explicit actions. Changing the URL origin requires replacing or clearing the key. Keep the server's `KG_CRYPTO_KEY` stable and manage database and encryption-key backups securely.
-- The client appends `chat/completions` or `embeddings` to the protocol base URL. Update the embedding model version when replacing a deployment/model and reprocess documents. Old vectors are marked stale. Configuration changes during processing abort publication of the new index and preserve the previous successful index.
-- Disabling or deleting a default model clears that selection. Without an available default, uploads and keyword search remain available; other capabilities explicitly show as unavailable. Runtime selection no longer uses legacy `KG_LLM_*` / `KG_EMBEDDING_*` environment variables; existing deployments must enter their settings in the management page.
-- `KG_KNOWLEDGE_WORKERS_ENABLED` defaults to `true`. Workers follow application lifespan and process a durable queue. Failed reprocessing preserves the previous active index. Archived documents and historical indexes remain stored; no physical deletion or retention cleanup is implemented.
+## Architecture
 
-For an existing database, back it up and confirm the target before running `.venv/bin/alembic upgrade head` from `server/`. `0020_knowledge_bases` adds the knowledge tables; `0021_ai_model_configs` adds model configurations and two initially empty default selections. Downgrading to `0020_knowledge_bases` deletes model configurations; downgrading to `0019_asset_audit` also deletes knowledge data. Back up before downgrading. Production must use migrations instead of startup table creation.
+Vue 3, TypeScript, Vite, Pinia and vue-i18n on the frontend; FastAPI, SQLAlchemy and Alembic on the backend. SQLite is the development store; production configuration requires PostgreSQL. rdflib, pySHACL and owlrl provide semantic adapters; graph facts are stored in relational tables.
 
-Local SQLite, browser flows and an isolated model protocol fixture are verified. Real model quality, production PostgreSQL and concurrent capacity still require environment validation. Three local exact semantic searches over a synthetic 10,000-chunk / 384-dimensional corpus on November 19, 2026 had a median of about 4.97 seconds and a maximum of 6.75 seconds. These exclude model network requests and are not a production latency guarantee. Run `make test-e2e-ai` for the local protocol fixture, without calling a real provider.
-
-## Layout
-
+```text
+web/       Application UI and frontend tests
+server/    APIs, domain services, models, migrations and backend tests
+samples/   Fictional source database and seed SQL
+scripts/   Initialization, schema generation and checks
+docs/      Product, user, operations, development and historical records
+.agents/   Engineering conventions and completion checks
 ```
-web/       frontend (Vue 3)
-server/    backend (FastAPI)
-samples/   read-only sample source database (M2)
-docs/      design docs and ADRs
-```
 
-## Roadmap
+Runtime `/openapi.json` and `/docs` describe the API. Generated frontend types are checked with `make check-api`; a drift check does not prove backward compatibility.
 
-M0 foundation and semantic engine → M1 semantic assets → M2 data onboarding and mapping → **M3 extraction and graph loop (v0.1.0, end-to-end)** → M4 specification conformance (v1.0.0) → M5 scale.
+## Common commands
 
-M4 is in development: rule management, real SHACL example checks, and published ontology RDF exports are under validation. See [M4 progress (Chinese)](./docs/m4-progress.zh-CN.md) for the full scope, remaining work, and current limitations.
+| Command                                                                    | Purpose                                          |
+| -------------------------------------------------------------------------- | ------------------------------------------------ |
+| `make dev` / `make start`                                                  | Development / built single-port service          |
+| `make seed-admin`                                                          | First administrator initialization               |
+| `make lint` / `make test`                                                  | Static checks / frontend and backend tests       |
+| `make test-e2e`                                                            | Isolated browser suite                           |
+| `make test-e2e-ai` / `make test-e2e-modeling` / `make test-e2e-governance` | Protocol-fixture, modeling and governance suites |
+| `make check-api`                                                           | Generated API type drift                         |
+| `pnpm run check:docs` / `pnpm run check:docs:staged`                       | Documentation structure / staged impact report   |
+| `pnpm run commit`                                                          | Interactive git-cz commit                        |
+
+Install the browser before first use: `pnpm exec playwright install chromium`. Local model protocol fixtures do not establish real model quality.
+
+## Documentation and contribution
+
+Start with the [documentation hub](docs/README.md), [architecture guide](docs/development/architecture.md), [troubleshooting](docs/operations/troubleshooting.md) and [CONTRIBUTING](CONTRIBUTING.md). Historical milestones retain their original dates and are indexed in the [document inventory](docs/maintenance/document-inventory.md).
+
+Changes to features, permissions, states, workflows or configuration must assess and update related documents under the [single documentation policy](.agents/conventions/documentation.md). A concrete explanation is required when no documentation update is needed; editing an unrelated Markdown file is not sufficient.

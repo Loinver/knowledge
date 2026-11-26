@@ -1,5 +1,7 @@
 # 知识中台（Knowledge Middle Platform）· 开源项目开发计划
 
+> 历史资料说明（2026-11-26补注）：本文保留原日期、基线和当时结论，不代表当前能力或本轮验收；当前入口见[文档中心](README.md)。
+
 > 编制：2026-09-21
 > 仓库：**https://github.com/Loinver/knowledge**（main 分支，已含 MIT LICENSE）
 > 输入：`demo/知识中台Demo.html`（19 路由 / 6 一级菜单，单文件可运行）、`demo/知识中台功能清单与优先级.xlsx`（47 项功能）、`demo/知识中台开发功能清单与分阶段计划.md`（S0–S5 / H-M-L 编号）、`demo/tests/*.cjs`、`GB/T 48000.3—2026 本体建模标准.pdf`

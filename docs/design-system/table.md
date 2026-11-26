@@ -1,5 +1,7 @@
 # 表格与搜索共享契约
 
+> 2026-11-26维护说明：组件契约继续供当前A风格页面复用；尺寸与外观以[tokens](tokens.md)为准。原文的阶段测试结果保留其时间范围，本轮执行见[核验记录](../maintenance/verification-2026-11-26.md)。
+
 本页以 2026-11-23 当前 [tableTypes.ts](../../web/src/components/ui/tableTypes.ts)、[UiDataTable.vue](../../web/src/components/ui/UiDataTable.vue) 和 [SearchTable.vue](../../web/src/components/business/SearchTable.vue) 为依据。表格只管理展示与受控交互；请求、路由、权限、对象/revision 和旧请求失效由页面持有。组件消费总表见 [components.md](./components.md)。
 
 ## 正式输入与数据边界

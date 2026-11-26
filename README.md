@@ -1,88 +1,88 @@
 # 知识中台 · Knowledge Platform
 
-本体建模 → 数据接入 → 映射配置 → 抽取执行 → 图谱与证据追溯，端到端闭环的企业语义建模与知识抽取平台。
-默认中文，支持英文；MIT 协议；可自托管。
+面向企业语义建模、数据抽取与证据追溯的自托管知识工作平台。通过可复用语义资产和版本化本体，把只读业务数据转为图谱；通过文档知识库提供检索、原文定位和证据摘录问答。
 
-English: see below / [README.en.md](./README.en.md)
+默认中文，支持英文界面，项目采用 MIT 许可。当前定位是可开展业务试点和集成评估的应用；生产容量、外部系统兼容与运维保障需针对部署环境验收。
 
-## 它解决什么
+[文档中心](docs/README.md) · [功能台账](docs/product/feature-catalog.md) · [快速入门](docs/user-guide/quickstart.md) · [English](README.en.md)
 
-- **语义资产可复用**：实体类型 / 关系类型 / 业务域 / 本体，各自版本化、可发布、可冻结，上游改版不会静默影响下游。
-- **从真实数据到图谱**：接一个只读库，配置映射，跑抽取，产出带证据的图谱版本。
-- **结论可信**：校验只有「通过 / 违反 / 不适用 / 未执行」四态，未执行绝不显示为通过；每条事实都能反查到来源表、行键、字段与运行批次。
+> 内容核验于2026-11-26，基于 `9222236` 加当前未提交的 A 风格界面工作区，非已发布版本。实现状态与验证状态见[核验记录](docs/maintenance/verification-2026-11-26.md)。
 
-规范依据：GB/T 48000.3—2026《标准数字化 第 3 部分：本体建模要求》（仓库内只保留条款编号与自撰描述，不收录标准正文）。
+## 核心能力
 
-## 技术栈
+| 能力           | 业务用途                                               | 详细说明                                             |
+| -------------- | ------------------------------------------------------ | ---------------------------------------------------- |
+| 语义资产与本体 | 统一业务概念，维护类型、关系、域、枚举、模板和版本     | [建模与治理](docs/user-guide/modeling-governance.md) |
+| 数据接入与映射 | 检查源结构，配置字段、关系、业务键及冻结的目标版本     | [数据到图谱](docs/user-guide/data-graph.md)          |
+| 抽取与运行     | 执行任务，查看状态、异常、隔离数据和历史结果集         | [数据功能台账](docs/product/features-data-graph.md)  |
+| 图谱与证据     | 探索实体及关系，追溯来源表、行键、字段和运行           | [图谱操作](docs/user-guide/data-graph.md)            |
+| 文档知识库     | 处理TXT/Markdown/CSV，关键词、语义与混合检索，引用原文 | [知识库与系统](docs/user-guide/knowledge-system.md)  |
+| 治理与管理     | 四态校验、规则条款、业务审计、用户角色和模型配置       | [权限说明](docs/user-guide/roles-permissions.md)     |
 
-| 层       | 选型                                                                          |
-| -------- | ----------------------------------------------------------------------------- |
-| 前端     | Vue 3 + TypeScript + Vite                                                     |
-| 后端     | Python 3.12 + FastAPI                                                         |
-| 元数据库 | PostgreSQL（开发可用 SQLite）                                                 |
-| 语义     | rdflib（RDF/SPARQL）+ pySHACL（真实 SHACL 校验）+ owlrl（推理最小集），可替换 |
-| 图谱存储 | 关系表三元组（规模上量后再评估图库）                                          |
+业务主线：**语义资产 → 本体建模与发布 → 数据接入 → 映射配置与发布 → 抽取执行 → 图谱探索与证据追溯**。文档知识库是并行知识来源，人工关联已有图事实不等于自动抽取来源证据。
 
-## 快速开始
+## 快速启动
 
-```bash
-make install     # 安装依赖与 git hooks
-make dev         # 前后端一体启动（后端 :4000，前端 :4010 代理 /api）
-make start       # 构建前端 + 单端口启动（:4000 同时提供页面与 API）
-make lint        # 全量代码校验（ESLint + Prettier + vue-tsc + Ruff + Mypy + 架构边界测试）
-make test        # 前端 + 后端测试
-make test-e2e    # Playwright 8 步主流程与页面响应式验收
-pnpm run commit  # 交互式提交（Conventional Commits）
+要求 Node.js ≥22.18.0、pnpm 11.7.0、Python ≥3.12。首次安装需要网络；从仓库根目录执行：
+
+```sh
+make install
+make seed-admin
+make dev
 ```
 
-贡献前请先读 [CONTRIBUTING.md](./CONTRIBUTING.md)。
+`make seed-admin` 仅在账号库为空时创建首个管理员，默认用户名 `admin`，随机密码只在终端显示一次。**没有通用默认密码**；已有账号时该命令拒绝再次创建，不用于重置密码。公开注册默认关闭，后续用户由管理员发放。
 
-## 知识库 MVP
+打开 `http://127.0.0.1:4010/`，后端默认 `http://127.0.0.1:4000`。开发元数据库默认位于 `server/knowledge.db`，`.env` 读取位置随后端进程工作目录而定。详见[安装与部署](docs/operations/deployment.md)。
 
-导航中的「知识库」支持创建、上传 UTF-8 TXT / Markdown / CSV、查看处理任务、关键词检索、原文定位和可恢复归档。所有登录用户可读，ADMIN / EDITOR 可维护，沿用全局权限；尚无逐库 ACL。单文件最多 2 MiB，每库最多 100 份文档（含归档）、10,000 个活动片段，每文档最多 2,000 个片段。PDF / Word / OCR 未支持。
+单端口构建启动使用 `make start`，在4000端口提供页面与API，默认绑定所有网卡。生产环境还需 PostgreSQL、独立密钥、迁移、反向代理与运维验收，不能只执行该命令就视为完成生产部署。
 
-语义与混合检索使用 SQL 中保存的 embedding 做有界精确余弦检索；混合排序为 BM25 + RRF。证据摘录问答只返回本次检索证据中的原文引用。图谱人工关联固定结果集和事实版本，不会自动创建事实，也不冒充已有抽取证据。
+## 环境与能力边界
 
-管理员在「系统管理 → AI 模型」中新增、查询、编辑和删除 OpenAI 兼容服务配置（`/system/ai-models`）：
+- **开发、预览、测试账号不通用**：隔离预览连接独立数据库；E2E使用临时数据库和专用端口，不操作开发库。设计原型不作为正式业务入口。
+- **版本与状态真实**：已发布本体固定成员资源版本，已发布映射固定本体版本；校验严格区分PASS、VIOLATION、NA、NOT_RUN。冻结不代表上游自动升级。
+- **权限范围**：ADMIN、EDITOR、VIEWER全局角色；没有多租户或逐知识库ACL，不承诺SSO、MFA、计费与SLA。
+- **知识库范围**：UTF-8 TXT/Markdown/CSV；不支持PDF、Word或OCR。模型能力需管理员配置可用的CHAT/EMBEDDING默认服务。关键词检索不要求模型。
+- **连接范围**：SQLite源可用于本地验证；PostgreSQL/MySQL源连接器实现存在，但默认安装不包含全部所需源驱动，目标环境需验证。元数据库驱动与源库驱动不同。
+- **商业采用**：标准条款关联和校验报告不等于第三方认证。容量、生产PostgreSQL、真实模型效果与高可用尚不能作为承诺，见[限制清单](docs/product/limitations.md)。
 
-- 为对话（CHAT）与向量（EMBEDDING）分别填写名称、Base URL、模型名、版本、超时和 API Key，启用后显式选择该能力的默认模型。保存和选择默认模型不会主动调用服务。
-- API Key 由后端加密保存，列表与详情仅显示是否已配置。编辑时留空保留原密钥；替换或清除需要明确操作。更换服务地址的 origin 必须同时替换或清除密钥。请保持服务端 `KG_CRYPTO_KEY` 稳定，并妥善管理数据库及加密密钥的备份。
-- Base URL 是协议前缀，客户端追加 `chat/completions` 或 `embeddings`。更换 embedding 模型/部署时更新模型版本并重新处理文档，旧向量会标为过期。处理中配置发生变化会终止本次索引发布，保留上一成功索引。
-- 禁用或删除默认模型会清除对应默认选择；未选择可用默认模型时仍可上传和关键词检索，其他能力明确禁用。运行时不再读取旧的 `KG_LLM_*` / `KG_EMBEDDING_*` 环境变量来选择服务；既有部署需在管理界面重新录入配置。
-- `KG_KNOWLEDGE_WORKERS_ENABLED` 默认 `true`；进程生命周期管理持久化队列，失败重处理保留旧活动索引。文档和历史索引保留，归档不释放文档额度，尚无物理删除或历史清理策略。
+## 架构与目录
 
-已有数据库需在备份并确认目标库后，于 `server/` 执行 `.venv/bin/alembic upgrade head`。`0020_knowledge_bases` 创建知识库表，`0021_ai_model_configs` 新增模型配置和两类默认选择，初始默认均为空。降级到 `0020_knowledge_bases` 会删除模型配置；降级到 `0019_asset_audit` 还会删除知识库数据，必须先备份。生产环境使用迁移，不以启动时自动建表代替迁移。
+Vue 3 + TypeScript + Vite前端，FastAPI + SQLAlchemy后端；开发SQLite、生产配置要求PostgreSQL；语义适配使用rdflib、pySHACL及owlrl。图谱数据保存在关系表中，后台知识处理由应用生命周期管理。
 
-本地 SQLite、浏览器和本地模型协议夹具已验证；真实 AI 效果、生产 PostgreSQL 与并发容量仍需环境验收。2026-11-19 在本机对 1 万片段 / 384 维合成样本做三次精确语义检索，中位约 4.97 秒、最大约 6.75 秒；不含模型网络请求，也不代表生产延迟承诺。协议回归运行 `make test-e2e-ai`，不调用真实模型。
-
-## 目录
-
+```text
+web/       正式前端与页面测试
+server/    API、领域服务、数据模型、迁移与测试
+samples/   虚构样例源库与SQL种子
+scripts/   初始化、契约生成和检查工具
+docs/      产品、用户、运维、开发文档及历史决策
+.agents/   项目规范与完工自检
 ```
-web/      前端（Vue 3 + Vite）
-server/   后端（FastAPI + Ruff/Mypy/Pytest）
-samples/  只读样例源库与 seed（M2 交付）
-docs/     开发计划与架构决策记录（ADR）
-```
 
-仓库根只放治理文件（LICENSE / README / CI / hooks / 工具链配置），业务代码一律在 `web/` 与 `server/` 内。
-开发计划见 [docs/development-plan.zh-CN.md](./docs/development-plan.zh-CN.md)，后端选型理由见 [docs/adr/0001-backend-stack.md](./docs/adr/0001-backend-stack.md)。
+架构与契约见[开发指南](docs/development/architecture.md)。接口以运行服务 `/openapi.json`、`/docs` 为准，前端生成类型通过 `make check-api` 校验漂移。
 
-## 路线图
+## 常用命令
 
-M0 基座与语义引擎 → M1 语义资产闭环 → M2 数据接入与映射 → **M3 抽取与图谱闭环（v0.1.0，主流程贯通）** → M4 规范符合性（v1.0.0）→ M5 规模化。
+| 命令                                                                       | 用途                             |
+| -------------------------------------------------------------------------- | -------------------------------- |
+| `make dev` / `make start`                                                  | 开发双端口 / 构建后单端口启动    |
+| `make seed-admin`                                                          | 空账号库初始化，生成独立口令     |
+| `make lint` / `make test`                                                  | 静态检查 / 前后端测试            |
+| `make test-e2e`                                                            | 隔离浏览器主套件                 |
+| `make test-e2e-ai` / `make test-e2e-modeling` / `make test-e2e-governance` | 模型协议、本体建模与治理专项     |
+| `make check-api`                                                           | OpenAPI类型漂移检查              |
+| `pnpm run check:docs`                                                      | 文档链接、功能登记和入口覆盖检查 |
+| `pnpm run check:docs:staged`                                               | 暂存变更的文档影响检查           |
+| `pnpm run commit`                                                          | git-cz交互式提交                 |
 
-M4 正在开发：规则资产管理、真实 SHACL 正反例检查及已发布本体 RDF 导出已进入验证。完整范围、剩余工作及当前限制见 [M4 开发进度](./docs/m4-progress.zh-CN.md)。
+首次运行浏览器测试需安装Chromium：`pnpm exec playwright install chromium`。真实模型协议与业务效果分别验收；本地模型夹具不能代表真实服务。
 
----
+## 文档与贡献
 
-## English
+- 产品评估：[介绍](docs/product/overview.md)、[术语](docs/product/glossary.md)、[全功能台账](docs/product/feature-catalog.md)、[限制](docs/product/limitations.md)。
+- 使用操作：[快速入门](docs/user-guide/quickstart.md)、[工作台](docs/user-guide/workbench.md)、[模块指南](docs/README.md)。
+- 实施运维：[部署](docs/operations/deployment.md)、[配置](docs/operations/configuration.md)、[故障排查](docs/operations/troubleshooting.md)。
+- 开发维护：[贡献指南](CONTRIBUTING.md)、[架构](docs/development/architecture.md)、[文档同步规则](.agents/conventions/documentation.md)。
+- 历史资料：[盘点与归档索引](docs/maintenance/document-inventory.md)。历史里程碑不是当前发布或认证声明。
 
-An end-to-end platform for enterprise semantic modeling and knowledge extraction:
-ontology modeling → data onboarding → mapping → extraction → graph with evidence tracing.
-
-- Versioned semantic assets (entity/relation/domain/ontology) with publish-time freezing.
-- Real read-only sources, real SHACL validation, four-state validation results (pass / violation / not-applicable / not-run).
-- Every fact is traceable back to source table, row key, column and run batch.
-- Chinese by default, English supported. Licensed under MIT.
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR.
+功能、权限、状态、配置或流程变化时，必须评估并同步对应功能台账、指南和验证说明。无需文档更新时给出具体依据，不能仅修改无关Markdown来通过检查。

@@ -1,5 +1,7 @@
 # 设计系统依赖、许可与上游维护
 
+> 2026-11-26维护说明：组件契约继续供当前A风格页面复用；尺寸与外观以[tokens](tokens.md)为准。原文的阶段测试结果保留其时间范围，本轮执行见[核验记录](../maintenance/verification-2026-11-26.md)。
+
 核对日期：2026-11-23。本页以 [web/package.json](../../web/package.json)、[pnpm-lock.yaml](../../pnpm-lock.yaml)、[许可门禁脚本](../../scripts/check-web-licenses.mjs)、[THIRD_PARTY_LICENSES.md](../../web/src/components/ui/THIRD_PARTY_LICENSES.md) 及实际完成日志为依据。上游缓存和版权记录是维护来源；本轮只更新文档，不安装依赖或运行产品。
 
 ## 当前状态

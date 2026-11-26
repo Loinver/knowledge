@@ -10,6 +10,7 @@ AI Agent 协作者请先读这里。本文件会被 Agent 自动加载，所以�
 - [.agents/conventions/api-contract.md](./.agents/conventions/api-contract.md) — API 契约与错误码
 - [.agents/conventions/testing.md](./.agents/conventions/testing.md) — 测试策略与必测断言
 - [.agents/conventions/security-and-license.md](./.agents/conventions/security-and-license.md) — 合规红线
+- [.agents/conventions/documentation.md](./.agents/conventions/documentation.md) — 功能文档同步、证据与提交前检查
 
 ## 硬规则（不可协商）
 
@@ -40,10 +41,11 @@ pnpm run commit   # 交互式提交（禁止手写 git commit -m）
 
 ## 完工自检（交付前逐条确认）
 
-- [ ] `make lint` 全绿、`make test` 通过。
+- [ ] 按改动范围完成校验：业务改动核对 `make lint`、`make test`；纯文档及文档工具任务按[文档同步规范](.agents/conventions/documentation.md)选择对应检查，不自动运行全仓修复。
 - [ ] 新增前端文案已进 `web/src/locales/zh-CN.json` 与 `en-US.json`，`node scripts/check-i18n-keys.mjs` 通过。
 - [ ] 新增后端返回值是错误码与枚举，不是中文句子；新状态码已同步前端 i18n 码表。
 - [ ] 新增行为有对应测试；涉及抽取/图谱的改动不影响幂等性与失败保护断言。
 - [ ] 新模块位于复用范围相符的目录，前后端依赖方向符合 `application-architecture.md`。
 - [ ] `git status` 中无 `demo/`、`.workbuddy/`、`node_modules/`、`.venv/`、`dist/`。
 - [ ] 提交信息由 git-cz 生成，类型与 scope 正确。
+- [ ] 按文档同步规范核对功能编号与受影响指南；运行 `pnpm run check:docs`，提交前运行 `pnpm run check:docs:staged`，交付说明文档更新或具体无需更新依据。纯文档修改执行相应结构、格式与内容验证，不重复全量业务测试。

@@ -20,7 +20,9 @@
 
 ## 使用方式
 
-- **人**：提 PR 前按根目录 [AGENTS.md](../AGENTS.md) 的自检清单过一遍，`make lint` 与 `make test` 必须通过。
+产品与使用资料从[文档中心](../docs/README.md)进入。功能变化、来源路径与验证证据按[文档同步规范](conventions/documentation.md)维护；根自检、Skill与PR模板引用该唯一规则。
+
+- **人**：提 PR 前按根目录 [AGENTS.md](../AGENTS.md) 的自检清单核对适用验证；业务改动检查 `make lint` 与 `make test`，文档任务按文档同步规范执行。
 - **AI Agent**：根目录 `AGENTS.md` 会被自动加载，再按 [AGENTS.md](./AGENTS.md) 的必读顺序加载 `conventions/` 下相应文件。
 - **Knowledge skill**：Codex 等工具直接识别 `.agents/skills/`；Claude Code 通过软链 `.claude/skills/knowledge-code-style` 加载同一份文件。
 

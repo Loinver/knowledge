@@ -1,5 +1,7 @@
 # ADR 0002 · 账号体系与认证方案
 
+> 历史资料说明（2026-11-26补注）：本文保留原日期、基线和当时结论，不代表当前能力或本轮验收；当前入口见[文档中心](../README.md)。
+
 - 状态：已接受
 - 日期：2026-09-22
 - 相关：`server/app/models/account.py`、`server/app/domain/account_service.py`（原 `docs/frontend-redesign-plan.zh-CN.md` 第 3 节已随改版计划删除，账号体系前后端契约以本 ADR 为准）

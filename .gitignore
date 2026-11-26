@@ -8,6 +8,13 @@ __pycache__/
 dist/
 build/
 docs/*
+# 持续维护的产品、使用、运维、开发文档；历史临时验收素材仍按原规则忽略。
+!docs/README.md
+!docs/product/
+!docs/user-guide/
+!docs/operations/
+!docs/development/
+!docs/maintenance/
 .gitkeep
 !.gitkeep
 !docs/knowledge-information-architecture-2026-11-21.zh-CN.md

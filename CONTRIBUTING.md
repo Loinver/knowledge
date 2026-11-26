@@ -20,7 +20,7 @@ AI Agent 协作者从根目录 [AGENTS.md](./AGENTS.md) 开始。
 ## 三句话版本
 
 1. **提交**：`pnpm run commit`（Commitizen + cz-git，中文交互），**不要手写 `git commit -m`**，commitlint 会拦。
-2. **校验**：`make lint`（ESLint + vue-tsc + Prettier + Ruff + Mypy + 架构边界测试）全绿、`make test`（前端 + 后端）通过；提交时 husky + lint-staged 自动校验改动文件。
+2. **校验**：业务改动执行 `make lint`（ESLint + vue-tsc + Prettier + Ruff + Mypy + 架构边界测试）与 `make test`（前端 + 后端）；纯文档及文档工具任务按下方文档同步规范定向验证。提交时 husky + lint-staged 自动校验改动文件。
 3. **红线**：文案不硬编码、后端不返回中文句子（只返回错误码）、`demo/` 不入库、依赖禁 GPL/AGPL、GB/T 标准正文不入库。
 
 ## 本地环境
@@ -37,3 +37,11 @@ make start        # 构建前端 + 单端口 :4000
 
 仓库内 `.agents/skills/knowledge-code-style/SKILL.md` 是交付前的完工自检 Skill。
 Codex 等工具直接识别 `.agents/skills/`，Claude Code 通过 `.claude/skills/` 下的软链加载同一份文件。
+
+## 功能与文档同步
+
+按[文档同步规范](.agents/conventions/documentation.md)定位[功能编号](docs/product/feature-catalog.md)，核对用户行为、权限、状态、配置与限制是否变化。PR说明同步了哪些文档，或给出具体无需更新依据。
+
+运行 `pnpm run check:docs`；选择暂存内容后运行 `pnpm run check:docs:staged`。提交钩子读取暂存区并执行结构检查及影响提示，未暂存的文档不能替代待提交文档。脚本变更还应运行 `pnpm run test:docs`。语义是否准确仍由开发者与审查者核对；纯文档任务按相应结构、格式与内容验证范围执行。
+
+首次管理员初始化和各环境区别见[部署指南](docs/operations/deployment.md)；接口、目录和测试入口见[开发指南](docs/development/architecture.md)。

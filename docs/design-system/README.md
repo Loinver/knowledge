@@ -1,7 +1,15 @@
-# 知识中台设计系统与迁移规格
+# 知识中台设计系统与迁移记录
 
 规格日期：2026-11-23。项目：`/Users/linyer/Public/Private/knowledge`（Linyer K）。
-源码基线：`13b5a3a`；工作区初始干净。此文件是本任务唯一的当前规格，实施与验证结果持续更新。
+源码基线：`13b5a3a`；工作区初始干净。以下迁移规格及验收表保留2026-11-23任务的时间语义，不作为当前工作区的新验收结论。
+
+## 当前维护入口（2026-11-26）
+
+正式工作区已采用A方向：深绿模块轨道、横向模块导航、紧凑顶栏，资产列表可结合域导航与对象检查器。当前尺寸为轨道80px（小桌面72px）、顶栏52px、模块导航40px、对象行60px；以 [tokens.md](tokens.md) 与源码为准。组件与语义契约继续复用 [components.md](components.md)、[table.md](table.md)、[controls.md](controls.md)。
+
+本轮文档核验基于 `9222236` 加未提交UI工作区；现状与实际验证见[功能台账](../product/feature-catalog.md)及[核验记录](../maintenance/verification-2026-11-26.md)。以下迁移批次、截图和测试数字属于当时快照；旧本地地址与账号不构成当前部署入口。当前启动见[部署指南](../operations/deployment.md)，未来变化遵守[文档同步规范](../../.agents/conventions/documentation.md)。
+
+## 2026-11-23迁移规格（历史）
 
 ## 目标、范围与授权
 

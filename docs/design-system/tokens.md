@@ -1,6 +1,6 @@
 # Token 语义与实际映射
 
-本页核对日期为 2026-11-23。值与语义别名的真值源是 [tokens.css](../../web/src/styles/tokens.css)；[global.css](../../web/src/styles/global.css) 通过 `@theme inline` 暴露 Tailwind 名称。[ui.css](../../web/src/styles/ui.css)、业务 CSS 和 SVG 消费相同变量。
+本页尺寸与色值核对日期为 2026-11-26（9222236加未提交A风格工作区）。值与语义别名的真值源是 [tokens.css](../../web/src/styles/tokens.css)；[global.css](../../web/src/styles/global.css) 通过 `@theme inline` 暴露 Tailwind 名称。[ui.css](../../web/src/styles/ui.css)、业务 CSS 和 SVG 消费相同变量。
 
 main.ts 只导入 global.css；该入口依次组织 Tailwind theme、项目 tokens、tw-animate-css、ui.css 与 Tailwind utilities，并显式定义 base 样式。Naive theme 与 legacy.css 已移除；下面仍存在的旧变量名是项目 CSS 语义别名。
 
@@ -36,8 +36,8 @@ surface-input/canvas/selected/raised/inset、foreground-disabled、border-muted/
 | font-display/h1/h2/h3/body/small/caption                            | 24 / 20 / 16 / 14 / 14 / 13 / 12px；line-height=1.5、line-height-heading=1.35 |
 | font-sans / font-mono                                               | 系统中西文字体栈 / 系统等宽栈，完整列表以 tokens.css 为准                     |
 | control-height / small / large                                      | 36 / 32 / 40px                                                                |
-| table-row-height / object-row-height / header-height                | 44 / 48 / 56px                                                                |
-| sider-width / sider-collapsed-width / inspector-width / page-gutter | 默认 232 / 64 / 344 / 24px，响应式覆盖见下                                    |
+| table-row-height / object-row-height / header-height                | 44 / 60 / 52px                                                                |
+| sider-width / sider-collapsed-width / inspector-width / page-gutter | 默认 80 / 64 / 344 / 24px，响应式覆盖见下                                     |
 | radius-small/control/panel/overlay/pill                             | 4 / 6 / 10 / 12 / 999px；border-width=1px                                     |
 | Tailwind radius-sm/md/lg/xl                                         | 分别映射 radius-small/control/panel/overlay                                   |
 | shadow-low/raised/overlay                                           | 随明暗主题变化；shadow-sm/md 是 low/raised 的旧别名，elev-1/2/3 加上对应边框  |
@@ -50,7 +50,7 @@ Tailwind 的编译期 `@theme` 断点为 sm=48rem、md=64rem、lg=80rem；breakp
 
 | 源码条件                                          | 实际变化                                                                    |
 | ------------------------------------------------- | --------------------------------------------------------------------------- |
-| tokens.css：max-width:1279px                      | sider-width=216px、inspector-width=320px、page-gutter=20px                  |
+| tokens.css：max-width:1279px                      | sider-width=72px、inspector-width=320px、page-gutter=20px                   |
 | tokens.css：max-width:767px                       | page-gutter=16px                                                            |
 | ui store、AdminLayout、AppSider：max-width:1023px | 导航进入窄屏遮罩抽屉模式；64px 折叠宽度 token 不代表 900px 必须显示固定窄栏 |
 
@@ -72,3 +72,7 @@ Dialog/Sheet、Popover/菜单、Tooltip、Toast 使用对应层级变量；页�
 duration-fast/normal/graph 为 120/160/220ms，ease-out 为 cubic-bezier(0.22, 0.61, 0.36, 1)；dur-fast/base/graph 与 transition-base 是旧别名。global.css 的 prefers-reduced-motion 分支将动画/过渡时长压到 0.01ms，并改用 scroll-behavior:auto。
 
 修改值同步 tokens.css，新增 Tailwind 语义同步 global.css；涉及主题、层级或导航断点时同步消费者与本页。此文档轮只核对源码和映射，未编译样式、运行浏览器或重新进行视觉验收。
+
+## A方向应用壳补充
+
+浅色页面背景 `#f6f8f6`、主操作 `#166b59`；深色页面背景 `#111c19`、主操作 `#84cdb0`。模块轨道使用独立 `rail-*` 语义（背景 `#142e29`），模块导航高度为40px。操作、校验状态、AI与图谱业务色仍分工使用，不用主色代替失败或未执行状态。数值来自当前源码，非对比度或全站视觉认证。

@@ -1,5 +1,7 @@
 # 前端架构与交互实现只读审计
 
+> 历史资料说明（2026-11-26补注）：本文保留原日期、基线和当时结论，不代表当前能力或本轮验收；当前入口见[文档中心](../README.md)。
+
 日期：2026-11-06。项目：`/Users/linyer/Public/Private/knowledge`。
 
 基线与结束核对：`HEAD=3e729e4213db3cd61a2430aa49962f226e65f312`，开始与结束 `git status --short` 均为空，`git diff --stat` 为空。未修改业务代码、真实数据、仓库配置；未提交、部署或访问外网服务。临时报告、源码编译产物和隔离测试在 `/private/tmp/knowledge-audit-20261106/`。现有测试按其原有实现短暂使用并清理 `web/node_modules/.tmp`。
