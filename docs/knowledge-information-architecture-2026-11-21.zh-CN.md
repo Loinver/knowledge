@@ -1061,7 +1061,6 @@ docs/
 │   ├── 0003-business-asset-audit.md
 │   ├── 0004-information-architecture-gbt48000.md            # 方案批准后新增
 │   └── ...
-├── audit-2026-11-06/                                         # 历史审计，不作为当前证明
 ├── knowledge-mvp-2026-11-08/                                 # 历史验证
 ├── ui-redesign-2026-11-07/                                   # 历史设计证据
 └── ...

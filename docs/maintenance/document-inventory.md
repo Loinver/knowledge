@@ -29,13 +29,6 @@
 | [docs/adr/0002-account-auth.md](../adr/0002-account-auth.md)                                                                               | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [docs/adr/0003-business-asset-audit.md](../adr/0003-business-asset-audit.md)                                                               | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [docs/adr/0004-frozen-restore-and-fusion.md](../adr/0004-frozen-restore-and-fusion.md)                                                     | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/README.md](../audit-2026-11-06/README.md)                                                                           | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/backend-audit.md](../audit-2026-11-06/backend-audit.md)                                                             | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/continuation-2026-11-07.md](../audit-2026-11-06/continuation-2026-11-07.md)                                         | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/evidence/continuation-review.md](../audit-2026-11-06/evidence/continuation-review.md)                               | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/frontend-audit.md](../audit-2026-11-06/frontend-audit.md)                                                           | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/product-coverage.md](../audit-2026-11-06/product-coverage.md)                                                       | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/audit-2026-11-06/remaining-scope.md](../audit-2026-11-06/remaining-scope.md)                                                         | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [docs/design-system/README.md](../design-system/README.md)                                                                                 | 更新               | 同步启动、账号、当前界面或文档维护入口；规则职责保持单一 |
 | [docs/design-system/acceptance.md](../design-system/acceptance.md)                                                                         | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [docs/design-system/c1-configuration.md](../design-system/c1-configuration.md)                                                             | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
@@ -59,7 +52,6 @@
 | [docs/kg-platform-remaining-tasks.zh-CN.md](../kg-platform-remaining-tasks.zh-CN.md)                                                       | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [docs/knowledge-information-architecture-2026-11-21.zh-CN.md](../knowledge-information-architecture-2026-11-21.zh-CN.md)                   | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [docs/optimization-execution-plan.zh-CN.md](../optimization-execution-plan.zh-CN.md)                                                       | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
-| [docs/ui-redesign-2026-11-21/README.md](../ui-redesign-2026-11-21/README.md)                                                               | 保留／历史归档标记 | 正文与历史日期保留；加当前入口，不把旧验收改写为现状     |
 | [samples/README.md](../../samples/README.md)                                                                                               | 更新               | 同步启动、账号、当前界面或文档维护入口；规则职责保持单一 |
 | [web/src/components/ui/THIRD_PARTY_LICENSES.md](../../web/src/components/ui/THIRD_PARTY_LICENSES.md)                                       | 保留               | 职责未改变；第三方许可及政策原文不重写                   |
 | [web/src/views/graph/browse/**tests**/interaction-verification.md](../../web/src/views/graph/browse/__tests__/interaction-verification.md) | 保留               | 仍为对应规范、模板或专项记录；不重复复制到产品指南       |
@@ -67,7 +59,7 @@
 ## 内容合并与新增维护资料
 
 - 中英文README的长篇知识库实现细节移到知识库指南与台账，README保留一致的定位、启动、边界与导航；历史M0～M5计划不再作为当前发布范围。
-- 现有零散交付报告继续保留，通过本索引区分历史；当前产品/使用/运维/开发说明从[文档中心](../README.md)进入。
+- 本次清理移除了历史审计报告、验收截图、改版截图及其校验清单；其他零散交付报告通过本索引区分历史。被移除文件可从源提交 `ca86da1d98ee401bb0adc528b562ea1aa0533717` 恢复，例如：`git show ca86da1d98ee401bb0adc528b562ea1aa0533717:docs/audit-2026-11-06/README.md > /tmp/README.md`。当前产品/使用/运维/开发说明从[文档中心](../README.md)进入。
 - 新增 `docs/product/`、`user-guide/`、`operations/`、`development/`、`maintenance/` 以及功能登记；`.gitignore`仅放行这些维护目录，不整体加入本地报告与截图。
 - 文档同步唯一规则位于[documentation.md](../../.agents/conventions/documentation.md)；根规则、完工Skill、贡献指南与PR模板引用，检查脚本验证结构并提示影响。
 

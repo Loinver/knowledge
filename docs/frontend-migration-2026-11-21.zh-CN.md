@@ -74,7 +74,7 @@
 - 结构：41 个页面级 route name 全部解析到新 `XxxPage.vue`；菜单叶子、权限身份、详情归属和搜索索引共用 `web/src/layout/navigation/` 单一真值。
 - 前端门禁：`make test` 通过前端 382 项、后端 1757 项；`make lint`、`pnpm -C web typecheck`、`pnpm -C web build` 通过；i18n key 检查通过，中英文各 2114 键。Naive UI 仍有 >500 kB chunk 警告，不影响构建成功。
 - 全量 Playwright：最终代码版本运行 255 项，253/255 一次通过；两项仅属于同一实体创建并发测试，隔离复跑 2/2 通过。分层套件另通过导航 22/22、图形/证据/权限定向 29/29、截图 1/1、AI 1/1、建模 2/2、治理 5/5。
-- 截图完整性：21 张正式截图已重新计算校验，`shasum -a 256 -c docs/ui-redesign-2026-11-21/SHA256SUMS` 全部通过。
+- 截图完整性：历史验收记录中，21 张正式截图曾重新计算校验并全部通过；截图与校验清单已从当前文档树清理。Git 来源及取回方法见[文档盘点](maintenance/document-inventory.md)。
 - 导航 E2E：`pnpm exec playwright test e2e/navigation-migration.spec.ts` 通过 22/22，覆盖 ADMIN / EDITOR / VIEWER、三级菜单、隐藏工具归属、对象面包屑、旧 URL 与 query/hash/IRI、回退与前进、双主题和 1440/1024/768/375 屏幕。
 
 正式页面的事实边界仍按本文件前文：接口未提供的能力不被伪造；页面覆盖与验收以正式实现、真实 API 及相应验证为依据。

@@ -1,1 +1,0 @@
-license MIT-0 not in allow-only licenses was found for package cffi:2.1.1

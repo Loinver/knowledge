@@ -19,7 +19,7 @@
 | `make test-e2e`  | 通过：`e2e/m3-browser-flow.spec.ts` 单套件含新增第二批验收段，1 passed  |
 | i18n             | `check-i18n-keys.mjs` 通过，zh-CN / en-US 各 1068 键                    |
 | 许可扫描         | Web 85 包通过；Python 扫描通过（含两项新增 allow-only 决策，见第 5 节） |
-| 五场景浏览器实测 | 10 张截图核验通过（`docs/assets/kg-accept-*.png`），见第 4 节           |
+| 五场景浏览器实测 | 10 张截图核验通过；图像已从当前文档树清理，文件名及取回方法见[文档盘点](maintenance/document-inventory.md) |
 
 五场景装配结果（隔离库，`scripts/seed_five_scenarios.py` 驱动真实 API 全流程）：73 实体、46 条直接事实、**18 条派生边**、43 条隔离记录（含规则命中 12 份缺签约方合同与 1 组持股合计超限证据行），运行状态如实为 PARTIAL。
 
@@ -42,18 +42,18 @@
 
 | 形态              | 说明                                                                | 验收截图                                                |
 | ----------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
-| G-01 组织架构树   | 自引用边折线树，父子分层；环结构退化为网格（环检测由规则阶段承担）  | ![组织架构树](./assets/kg-accept-02-org-tree.png)       |
-| G-06 股权穿透图   | 按持股方向分层（股东在上、被投企业在下），比例在边上（props）       | ![股权穿透图](./assets/kg-accept-03-equity.png)         |
+| G-01 组织架构树   | 自引用边折线树，父子分层；环结构退化为网格（环检测由规则阶段承担）  | 历史截图：`docs/assets/kg-accept-02-org-tree.png`       |
+| G-06 股权穿透图   | 按持股方向分层（股东在上、被投企业在下），比例在边上（props）       | 历史截图：`docs/assets/kg-accept-03-equity.png`         |
 | G-07 实际控制人链 | 优先用派生乘积边（间接持股）分层成链                                | （与股权穿透同族，控件内切换）                          |
-| G-10 力导向网络   | d3-force 确定性模拟（固定初值/迭代，可复现），直接/派生线型图例     | ![力导向网络](./assets/kg-accept-06-force.png)          |
+| G-10 力导向网络   | d3-force 确定性模拟（固定初值/迭代，可复现），直接/派生线型图例     | 历史截图：`docs/assets/kg-accept-06-force.png`          |
 | G-11 自我中心环   | 原有 1/2 度距离环，中心高亮                                         | （原有能力，回归通过）                                  |
-| G-16 本体模式图   | 类型级聚合视图，节点显示类型与实例计数，点击下钻                    | ![本体模式图](./assets/kg-accept-07-schema.png)         |
-| G-17 客商供应链图 | 买卖两端分列、双角色节点居中，金额在边上                            | ![客商供应链图](./assets/kg-accept-04-supply-chain.png) |
-| G-21 时间轴       | 按类型分泳道，横轴按首个日期属性，无日期节点排尾部                  | ![时间轴](./assets/kg-accept-05-timeline.png)           |
+| G-16 本体模式图   | 类型级聚合视图，节点显示类型与实例计数，点击下钻                    | 历史截图：`docs/assets/kg-accept-07-schema.png`         |
+| G-17 客商供应链图 | 买卖两端分列、双角色节点居中，金额在边上                            | 历史截图：`docs/assets/kg-accept-04-supply-chain.png`   |
+| G-21 时间轴       | 按类型分泳道，横轴按首个日期属性，无日期节点排尾部                  | 历史截图：`docs/assets/kg-accept-05-timeline.png`       |
 | G-24 版本差异     | `GET /extraction/graph/{a}/diff/{b}` 集合差 + 抽屉展示实体/事实增删 | （抽屉在 e2e 中断言）                                   |
 | G-12 关系路径     | `GET /extraction/graph/{id}/path` 有向 BFS + 抽屉结果与画布高亮     | （抽屉在 e2e 中断言）                                   |
-| G-26 证据溯源链   | 证据表"查看链"→ 事实→来源行→运行→四类冻结版本链卡                   | ![证据溯源链](./assets/kg-accept-10-evidence-chain.png) |
-| G-28 质量叠加     | 隔离命中节点红标 + 图例（截图：12 份缺签约方合同全部命中）          | ![质量叠加](./assets/kg-accept-08-quality-overlay.png)  |
+| G-26 证据溯源链   | 证据表"查看链"→ 事实→来源行→运行→四类冻结版本链卡                   | 历史截图：`docs/assets/kg-accept-10-evidence-chain.png` |
+| G-28 质量叠加     | 隔离命中节点红标 + 图例（截图：12 份缺签约方合同全部命中）          | 历史截图：`docs/assets/kg-accept-08-quality-overlay.png`|
 | G-30 实体 360     | 实体详情页分区跳转各形态 + 证据链入口                               | （详情页控件在 e2e 路由冒烟内）                         |
 | G-02/G-09         | 缩进目录树随树族实现；环路以规则阶段 + 布局环安全承担               |                                                         |
 
@@ -61,9 +61,9 @@
 
 ## 4. 五场景浏览器实测
 
-环境：隔离元数据库 + `samples/enterprise_demo.sqlite`（五场景版），uvicorn :8010 托管构建产物；登录、导航与操作均为界面路径（环境准备使用脚本装配数据，未预触发被测功能）。截图存于 `docs/assets/kg-accept-*.png`：
+环境：隔离元数据库 + `samples/enterprise_demo.sqlite`（五场景版），uvicorn :8010 托管构建产物；登录、导航与操作均为界面路径（环境准备使用脚本装配数据，未预触发被测功能）。下列截图曾存于 `docs/assets/`，现已从当前文档树清理；文件名与取回方法见[文档盘点](maintenance/document-inventory.md)：
 
-1. 总览类型网格：73 节点/64 边、隔离警告 43 条如实展示、推荐条与全部控件（![总览](./assets/kg-accept-01-overview.png)）
+1. 总览类型网格：73 节点/64 边、隔离警告 43 条如实展示、推荐条与全部控件（历史截图：`docs/assets/kg-accept-01-overview.png`）
 2. 组织架构树（以总部为中心的子树）
 3. 股权穿透（持股分层 + 比例边；含刻意保留的 1002↔1007 环，布局环安全）
 4. 客商供应链（两端分列 + 金额边）
@@ -71,7 +71,7 @@
 6. 力导向网络（图例、直接/派生线型）
 7. 本体模式图（类型计数：Contract 16、Department 6、Partner 3……）
 8. 质量叠加（12 份缺签约方合同红标 = 规则命中数一致）
-9. 反向追溯：`eq_equity_holding#3001` → 1 条事实 → Person/8001 与 Enterprise/1001 双实体链接（![反向追溯](./assets/kg-accept-09-reverse-trace.png)）
+9. 反向追溯：`eq_equity_holding#3001` → 1 条事实 → Person/8001 与 Enterprise/1001 双实体链接（历史截图：`docs/assets/kg-accept-09-reverse-trace.png`）
 10. 证据链：事实 → 来源行 → 运行批次 → 冻结版本（隔离命中行标"存在隔离问题"）
 
 实测中发现并修复一个真实缺陷：**分层布局在环数据上死循环**（股权穿透页卡死渲染进程）——`assignLevels` 增加层级上限（节点数）后修复，回归测试与全部截图通过。该缺陷正是五场景样例中刻意保留的持股环暴露的，属于本轮验收的有效产出。
@@ -105,7 +105,7 @@
 | 规模压测（P2-03）                          | `scripts/benchmark_scale.py` 实测：1 万企业源 + 5 万任职行 → 抽取成功产出 6 万实体（含 5 万 stub）/ 5 万事实，耗时 299 秒（SQLite+逐行证据写入为主瓶颈）；图谱视图全图查询 0.08 秒；结果存 `/tmp/kg-benchmark/result.json`                                                                         | `scripts/benchmark_scale.py`                                                                                   |
 | 主 chunk 拆包（P2-04 部分）                | Vite `manualChunks`：业务主 chunk 700 kB → 121 kB；naive-ui（792 kB，可缓存）与 vue/d3 各自成块                                                                                                                                                                                                    | `web/vite.config.ts` 构建产物                                                                                  |
 
-划分图补充（2026-09-27 第二轮）：G-03 旭日图、G-04 矩形树图、G-05 圆形打包图已实现——布局层新增 marks 标记通道（扇形/矩形/圆，d3-hierarchy partition/treemap/pack 真实布局），画布按标记渲染，层级为"本体 → 类型 → 实例"（面积按实例计数），实例点击下钻、类型色图例、双语；形态选择器与推荐通用列表同步。实测截图：![旭日图](./assets/kg-accept-11-sunburst.png)、![矩形树图](./assets/kg-accept-12-treemap.png)、![圆形打包图](./assets/kg-accept-13-pack.png)。
+划分图补充（2026-09-27 第二轮）：G-03 旭日图、G-04 矩形树图、G-05 圆形打包图已实现——布局层新增 marks 标记通道（扇形/矩形/圆，d3-hierarchy partition/treemap/pack 真实布局），画布按标记渲染，层级为"本体 → 类型 → 实例"（面积按实例计数），实例点击下钻、类型色图例、双语；形态选择器与推荐通用列表同步。实测截图：`docs/assets/kg-accept-11-sunburst.png`、`docs/assets/kg-accept-12-treemap.png`、`docs/assets/kg-accept-13-pack.png`（历史截图，取回方法见文档盘点）。
 
 诚实说明：G-22 甘特需要区间条渲染、G-29 融合解释图与 G-31 小多图未实现——均保持未实现结论，不以近似实现冒充。许可 allow-only 追加 `cryptography`（Apache-2.0 OR BSD-3-Clause）与 `cffi`（MIT-0），均在白名单许可族内。
 
