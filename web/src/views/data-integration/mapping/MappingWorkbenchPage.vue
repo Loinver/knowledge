@@ -1571,7 +1571,7 @@ usePageIdentity(() =>
     <PageHeader
       :title="t('page.mappingWizard')"
       :description="t('dataAccess.mapping.description')"
-      :eyebrow="t('dataAccess.mapping.designTitle')"
+      :eyebrow="t('dataAccess.sources.breadcrumb')"
       :identity="selectedMapping ? `${selectedMapping.id}` : undefined"
     >
       <template #actions>
@@ -1665,7 +1665,7 @@ usePageIdentity(() =>
               :disabled="number > step + 1"
               @click="gotoStep(number)"
             >
-              <span class="step-number">{{ number }}</span
+              <span class="step-number">{{ String(number).padStart(2, '0') }}</span
               ><span>{{ t('dataAccess.mapping.steps.' + number) }}</span>
             </UiButton>
           </div>
@@ -1685,6 +1685,36 @@ usePageIdentity(() =>
           @clear="resetSampleSearch"
           @reset="resetSampleSearch"
         />
+        <section class="mapping-context-bar" :aria-label="t('extractionUi.versionChain')">
+          <div>
+            <span>{{ t('tasks.datasource') }}</span>
+            <strong>{{
+              datasources.find((item) => item.id === selectedDatasourceId)?.name ??
+              t('dataAccess.mapping.unselected')
+            }}</strong>
+            <span v-if="metadataRevision !== null">{{
+              t('dataAccess.mapping.snapshotRevision', { revision: metadataRevision })
+            }}</span>
+          </div>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6" /></svg>
+          <div>
+            <span>{{ t('dataAccess.mapping.targetOntology') }}</span>
+            <strong>{{
+              selectedOntology
+                ? resourceLabel(selectedOntology)
+                : (selectedOntologyId ?? t('dataAccess.mapping.unselected'))
+            }}</strong>
+            <span>{{
+              isPublished
+                ? t('extractionUi.frozenVersion', {
+                    version: publishedRevision?.onto_version ?? '—',
+                  })
+                : t('extractionUi.workingVersion', {
+                    version: selectedOntology?.current_revision ?? '—',
+                  })
+            }}</span>
+          </div>
+        </section>
         <div class="mapping-workspace">
           <FormContainer
             ref="mappingForm"
@@ -2012,8 +2042,8 @@ usePageIdentity(() =>
                       <UiTable>
                         <thead>
                           <tr>
-                            <th>{{ t('dataAccess.mapping.targetAttribute') }}</th>
                             <th>{{ t('dataAccess.mapping.sourceField') }}</th>
+                            <th>{{ t('dataAccess.mapping.targetAttribute') }}</th>
                             <th>{{ t('dataAccess.mapping.transform') }}</th>
                             <th>{{ t('dataAccess.mapping.nullPolicy') }}</th>
                             <th>{{ t('dataAccess.mapping.defaultValue') }}</th>
@@ -2038,9 +2068,6 @@ usePageIdentity(() =>
                             }"
                           >
                             <td>
-                              <span class="mono">{{ field.target_attr }}</span>
-                            </td>
-                            <td>
                               <FormField
                                 :path="`entityMaps.${mapIndex}.field_maps.${fieldIndex}.source_field`"
                                 :label="`${t('dataAccess.mapping.sourceField')} ${field.target_attr}`"
@@ -2055,6 +2082,9 @@ usePageIdentity(() =>
                                   filterable
                                   @update:value="invalidatePreview"
                               /></FormField>
+                            </td>
+                            <td>
+                              <span class="mono">{{ field.target_attr }}</span>
                             </td>
                             <td>
                               <FormField
@@ -2126,23 +2156,25 @@ usePageIdentity(() =>
                         t('dataAccess.mapping.noStableKey')
                       }}</span>
                     </FormField>
-                    <FormField
-                      :path="`entityMaps.${mapIndex}.incremental_field`"
-                      :label="t('dataAccess.mapping.incrementalField')"
-                    >
-                      <UiSelect
-                        v-model:value="map.incremental_field"
-                        :options="
-                          tableColumns(map.schema, map.table)
-                            .filter((column) => /INT/i.test(column.type))
-                            .map((column) => ({ label: column.name, value: column.name }))
-                        "
-                        :disabled="readOnly || working"
-                        clearable
-                        :aria-label="t('dataAccess.mapping.incrementalField')"
-                      />
-                    </FormField>
-                    <p class="muted-copy">{{ t('dataAccess.mapping.incrementalHint') }}</p>
+                    <div class="mapping-advanced">
+                      <FormField
+                        :path="`entityMaps.${mapIndex}.incremental_field`"
+                        :label="t('dataAccess.mapping.incrementalField')"
+                      >
+                        <UiSelect
+                          v-model:value="map.incremental_field"
+                          :options="
+                            tableColumns(map.schema, map.table)
+                              .filter((column) => /INT/i.test(column.type))
+                              .map((column) => ({ label: column.name, value: column.name }))
+                          "
+                          :disabled="readOnly || working"
+                          clearable
+                          :aria-label="t('dataAccess.mapping.incrementalField')"
+                        />
+                      </FormField>
+                      <p class="muted-copy">{{ t('dataAccess.mapping.incrementalHint') }}</p>
+                    </div>
                     <div v-if="getTable(map.schema, map.table)" class="key-fields">
                       <span>{{ t('dataAccess.mapping.matchKeys') }}</span>
                       <div
@@ -2828,35 +2860,6 @@ usePageIdentity(() =>
             </div>
           </FormContainer>
           <aside class="mapping-inspector" :aria-label="t('extractionUi.versionChain')">
-            <h2>{{ t('extractionUi.versionChain') }}</h2>
-            <div class="object-context" aria-live="polite">
-              <span
-                >{{ t('dataAccess.mapping.ontology') }}:
-                {{
-                  selectedOntology ? resourceLabel(selectedOntology) : (selectedOntologyId ?? '—')
-                }}</span
-              >
-              <UiTag :type="isPublished ? 'info' : 'default'">{{
-                isPublished
-                  ? t('extractionUi.frozenVersion', {
-                      version: publishedRevision?.onto_version ?? '—',
-                    })
-                  : t('extractionUi.workingVersion', {
-                      version: selectedOntology?.current_revision ?? '—',
-                    })
-              }}</UiTag>
-              <span
-                >{{ t('tasks.datasource') }}:
-                {{
-                  datasources.find((item) => item.id === selectedDatasourceId)?.name ??
-                  t('dataAccess.mapping.unselected')
-                }}</span
-              >
-              <span v-if="metadataRevision !== null">{{
-                t('dataAccess.mapping.snapshotRevision', { revision: metadataRevision })
-              }}</span>
-            </div>
-
             <section class="mapping-checks">
               <h2>{{ t('dataAccess.mapping.previewTitle') }}</h2>
               <dl class="integration-facts">

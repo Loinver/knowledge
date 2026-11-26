@@ -12,6 +12,7 @@ import { useAsyncData } from '@/composables/useAsyncData'
 import { entityName } from '@/views/graph/components/graphWorkspace'
 
 const { t } = useI18n()
+const shortName = (iri: string) => iri.split(/[/#]/).filter(Boolean).at(-1) || iri
 const route = useRoute()
 const router = useRouter()
 const input = ref(String(route.query.q ?? ''))
@@ -80,40 +81,29 @@ const columns = computed<DataTableColumns<GraphEntity>>(() => [
   {
     key: 'name',
     title: t('common.name'),
-    width: 220,
+    width: 360,
     ellipsis: { tooltip: true },
     render: (row) =>
       h(
         RouterLink,
         {
+          class: 'entity-cell',
           to: {
             name: 'graph-entity-detail',
             params: { id: row.iri },
             query: { ...listContext.value, graph: row.graph_revision_id },
           },
         },
-        () => entityName(row),
+        () => [h('strong', entityName(row)), h('small', { title: row.iri }, row.iri)],
       ),
   },
   {
-    key: 'iri',
-    title: t('common.iri'),
-    width: 440,
+    key: 'type_iri',
+    title: t('graph.type'),
+    width: 260,
     ellipsis: { tooltip: true },
-    render: (row) =>
-      h(
-        RouterLink,
-        {
-          to: {
-            name: 'graph-entity-detail',
-            params: { id: row.iri },
-            query: { ...listContext.value, graph: row.graph_revision_id },
-          },
-        },
-        () => row.iri,
-      ),
+    render: (row) => h('span', { title: row.type_iri }, shortName(row.type_iri)),
   },
-  { key: 'type_iri', title: t('graph.type'), width: 300, ellipsis: { tooltip: true } },
   { key: 'row_key', title: t('graph.rowKey'), width: 160 },
 ])
 async function applyQuery(changes: Record<string, string | number | undefined>) {
@@ -147,11 +137,7 @@ function goEvidence() {
 
 <template>
   <section class="graph-page">
-    <PageHeader
-      :title="t('page.graphEntities')"
-      :eyebrow="t('studio.entityLedger')"
-      :description="t('graph.searchHint')"
-    >
+    <PageHeader :title="t('page.graphEntities')" :eyebrow="t('studio.entityLedger')">
       <template #context
         ><span v-if="data" class="ledger-context"
           >{{ t('graph.resultSet', { id: data.graph_revision_id }) }} ·
@@ -203,7 +189,7 @@ function goEvidence() {
       :empty-text="t(query ? 'ui.emptyFiltered' : 'graph.noVisibleNodes')"
       :label="t('page.graphEntities')"
       :max-height="520"
-      :scroll-x="1120"
+      :scroll-x="780"
       @update:page="applyQuery({ page: $event })"
       @update:page-size="applyQuery({ page: 1, size: $event })"
       @retry="reload"
@@ -218,7 +204,7 @@ function goEvidence() {
 <style scoped>
 .graph-page {
   display: grid;
-  gap: var(--space-4);
+  gap: 20px;
   min-width: 0;
 }
 .graph-page > * {
@@ -229,6 +215,22 @@ function goEvidence() {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
+}
+.graph-page :deep(.entity-cell) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-block: 4px;
+}
+.graph-page :deep(.entity-cell strong) {
+  font-weight: 500;
+  color: var(--foreground-primary);
+}
+.graph-page :deep(.entity-cell small) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 11px var(--font-mono, monospace);
+  color: var(--foreground-secondary);
 }
 .ledger-sort {
   min-width: 11rem;

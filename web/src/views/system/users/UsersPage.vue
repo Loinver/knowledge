@@ -351,7 +351,16 @@ async function copyResetLink() {
 }
 
 const columns = computed<DataTableColumns<AuthUser>>(() => [
-  { title: t('auth.username'), key: 'username' },
+  {
+    title: t('auth.username'),
+    key: 'username',
+    minWidth: 180,
+    render: (row) =>
+      h('div', { class: 'system-object' }, [
+        h('strong', row.display_name || row.username),
+        h('code', row.username),
+      ]),
+  },
   { title: t('auth.email'), key: 'email' },
   {
     title: t('account.role'),
@@ -427,15 +436,17 @@ watch(
           {{ t('system.createUser') }}
         </UiButton>
       </template>
+      <template #context>
+        <div class="system-context">
+          <div>
+            <span class="context-label">{{ t('account.currentSession') }}</span
+            ><strong>{{ auth.user?.username ?? t('common.noneValue') }}</strong>
+          </div>
+          <UiTag size="small">{{ t(`account.roles.${auth.user?.role ?? 'VIEWER'}`) }}</UiTag>
+          <p>{{ t('system.cannotEditSelf') }}</p>
+        </div>
+      </template>
     </PageHeader>
-    <div class="system-context">
-      <div>
-        <span class="context-label">{{ t('account.currentSession') }}</span
-        ><strong>{{ auth.user?.username ?? t('common.noneValue') }}</strong>
-      </div>
-      <UiTag size="small">{{ t(`account.roles.${auth.user?.role ?? 'VIEWER'}`) }}</UiTag>
-      <p>{{ t('system.cannotEditSelf') }}</p>
-    </div>
     <UiCard size="small" class="ledger-panel">
       <header class="ledger-heading">
         <h2>{{ t('operationsUi.ledger') }}</h2>

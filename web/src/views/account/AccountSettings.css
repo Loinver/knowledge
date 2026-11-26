@@ -1,25 +1,25 @@
 /* Account-only settings and identity panels. */
 .account-page {
   min-width: 0;
-  max-width: 1180px;
+  max-width: 1120px;
 }
 .account-workspace {
   display: grid;
-  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.6fr);
-  gap: 16px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 .identity-panel,
 .settings-panel {
   min-width: 0;
   background: var(--bg-panel, var(--bg-surface));
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
   overflow: hidden;
 }
 .group-heading {
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 24px;
+  border-bottom: 1px solid var(--border-muted);
 }
 .group-heading span {
   color: var(--text-secondary);
@@ -40,11 +40,11 @@
 .identity-list {
   margin: 0;
   padding: 0 20px;
-  background: var(--bg-inset);
+  background: transparent;
 }
 .identity-list > div {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--rail-foreground) 22%, transparent);
 }
 .identity-list > div:last-child {
   border-bottom: 0;
@@ -59,13 +59,13 @@
   overflow-wrap: anywhere;
 }
 .settings-form {
-  padding: 24px 20px 0;
+  padding: 24px 24px 0;
 }
 .form-actions {
   display: flex;
   gap: 12px;
   padding: 16px 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-muted);
 }
 .session-help {
   color: var(--text-secondary);
@@ -83,6 +83,52 @@
 }
 .alert {
   margin-bottom: 16px;
+}
+.identity-panel {
+  background: var(--rail-background);
+  color: var(--rail-selected);
+  border-color: var(--rail-background);
+}
+.identity-panel .group-heading {
+  border-color: color-mix(in srgb, var(--rail-foreground) 22%, transparent);
+}
+.identity-panel .group-heading span,
+.identity-panel .identity-list dt,
+.identity-panel .session-help {
+  color: var(--rail-foreground);
+}
+.identity-panel .identity-list dd {
+  color: var(--rail-selected);
+}
+.identity-panel .session-help {
+  border-color: color-mix(in srgb, var(--rail-foreground) 22%, transparent);
+}
+.identity-panel :deep(.ui-tag) {
+  background: var(--surface-panel);
+}
+.account-nav {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+}
+.account-nav a {
+  padding: 10px 12px;
+  color: var(--rail-foreground);
+  font-size: var(--font-small);
+  text-decoration: none;
+  border-radius: var(--radius-control);
+}
+.account-nav a:hover,
+.account-nav a[aria-current='page'] {
+  color: var(--rail-selected);
+  background: var(--rail-active);
+}
+.account-nav a:focus-visible {
+  outline: 2px solid var(--rail-foreground);
+  outline-offset: 2px;
+}
+.settings-panel .group-heading p {
+  margin-top: 6px;
 }
 @media (max-width: 720px) {
   .account-workspace {

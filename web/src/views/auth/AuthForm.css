@@ -1,6 +1,9 @@
 .auth-flow {
   min-width: 0;
 }
+.auth-flow :deep(.ui-field) {
+  margin-bottom: 20px;
+}
 .form-alert {
   margin-bottom: 20px;
   overflow-wrap: anywhere;
@@ -12,7 +15,7 @@
   gap: 12px;
   padding-top: 20px;
   margin-top: 20px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-muted);
   font-size: 13px;
 }
 .form-links a {
@@ -28,8 +31,8 @@
   outline-offset: 4px;
 }
 .auth-flow :deep(.ui-field-label) {
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--foreground-primary);
+  font-size: var(--font-small);
 }
 .auth-flow :deep(.ui-button) {
   min-height: 44px;

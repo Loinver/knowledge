@@ -863,15 +863,15 @@ const renameVisible = useDraftGuard(
 </script>
 
 <template>
-  <div class="asset-page">
+  <div class="asset-page asset-detail-page">
     <PageHeader
       :title="t('page.entityDetail')"
       :eyebrow="t('page.entityTypes')"
       :identity="data?.name"
-      :description="t('entityType.description')"
     >
-      <template #context
-        ><AssetIdentity
+      <template #context>
+        <strong v-if="data" class="detail-object-label">{{ localized(data.label_i18n) }}</strong>
+        <AssetIdentity
           v-if="data"
           :name="data.name"
           :iri="data.iri"

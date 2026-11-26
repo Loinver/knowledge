@@ -57,14 +57,20 @@ async function saveOverlay(page: Page): Promise<void> {
 }
 
 async function checkCompanyAttribute(page: Page, value: string): Promise<string> {
-  const entities = page.getByRole('link', { name: '实体实例', exact: true }).first()
+  const entities = page
+    .locator('#main-content')
+    .getByRole('link', { name: '实体实例', exact: true })
+    .first()
   await expect(entities).toHaveAttribute('href', /graph=\d+/)
   const graph = new URL((await entities.getAttribute('href'))!, page.url()).searchParams.get(
     'graph',
   )!
   await entities.click()
   await page
-    .getByRole('link', { name: 'https://example.org/audit/ontology#AuditCompany/1', exact: true })
+    .getByRole('link')
+    .filter({
+      has: page.getByText('https://example.org/audit/ontology#AuditCompany/1', { exact: true }),
+    })
     .click()
   await expect(page.getByRole('table').first()).toContainText(value)
   return graph
@@ -161,7 +167,7 @@ async function publishEntityType(page: Page, name: string): Promise<void> {
   // 卡片视图的卡片可访问名含机读名（cell-sub），按子串匹配。
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page.getByRole('button', { name: name }).first().click()
-  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
+  await page.locator('.asset-inspector').getByRole('button', { name: '查看', exact: true }).click()
   await expect(page).toHaveURL(/\/ontology\/entity-types\/\d+/)
   const typeId = Number(/entity-types\/(\d+)/.exec(page.url())![1])
   await addDataProperty(page, typeId, 'Name', '名称')
@@ -268,7 +274,7 @@ with sqlite3.connect(sys.argv[1]) as db:
   await expect(page.getByRole('button', { name: '保存布局', exact: true })).toBeDisabled()
   await page.screenshot({ path: testInfo.outputPath('designer.png'), fullPage: true })
   await page.getByRole('button', { name: '发布', exact: true }).click()
-  await expect(page.locator('.status-tag')).toContainText('已发布')
+  await expect(page.getByText(/最近发布 r1 · 编辑版本/)).toBeVisible()
   await page.goto('/datasources')
   await page.getByRole('button', { name: '新建数据源' }).click()
   const modal = page.locator('.source-modal')
@@ -370,10 +376,9 @@ with sqlite3.connect(sys.argv[1]) as db:
     .filter({ hasText: `图谱 #${originalGraph} ·` })
   await older.getByRole('button', { name: '设为当前' }).click()
   await page.getByRole('button', { name: '确认', exact: true }).click()
-  await expect(page.getByRole('link', { name: '实体实例', exact: true })).toHaveAttribute(
-    'href',
-    `/graph/entities?graph=${originalGraph}`,
-  )
+  await expect(
+    page.locator('#main-content').getByRole('link', { name: '实体实例', exact: true }),
+  ).toHaveAttribute('href', `/graph/entities?graph=${originalGraph}`)
   await page.getByRole('button', { name: '历史图谱版本' }).click()
   await expect(older).toContainText('当前版本')
   await page.screenshot({
@@ -434,7 +439,7 @@ with sqlite3.connect(sys.argv[1]) as db:
   await page.goto('/ontology/entity-types')
   await page.getByRole('button', { name: '卡片', exact: true }).click()
   await page.getByRole('button', { name: 'AuditCompany' }).first().click()
-  await overlay(page).getByRole('button', { name: '查看', exact: true }).click()
+  await page.locator('.asset-inspector').getByRole('button', { name: '查看', exact: true }).click()
   await page.getByRole('button', { name: '修订下一版' }).click()
   await page.getByRole('button', { name: '确认', exact: true }).click()
   await page.getByRole('button', { name: '编辑', exact: true }).first().click()

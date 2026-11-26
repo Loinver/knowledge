@@ -198,8 +198,8 @@ function restoreFocus() {
     >
     <section class="kb-panel kb-stack kb-query-panel">
       <header class="kb-panel-heading">
-        <h2>{{ t('kb.queryPlaceholder') }}</h2>
-        <span class="kb-muted">{{ t('kb.scoreExplanation') }}</span>
+        <h2>{{ t('kb.searchTitle') }}</h2>
+        <span class="kb-muted">{{ t('kb.evidence') }}</span>
       </header>
       <SearchPanel
         v-model:query="q"
@@ -307,9 +307,7 @@ function restoreFocus() {
                 @update:page="router.push({ query: { ...route.query, page: $event } })"
               />
             </div>
-            <p class="kb-muted">{{ t('kb.scoreExplanation') }}</p>
-            <p class="kb-muted">{{ t('kb.resultLimit') }}</p></template
-          >
+          </template>
         </main>
         <aside class="kb-stack kb-retrieval-inspector" :aria-label="t('kb.coverage')">
           <section class="kb-panel kb-stack">
@@ -331,6 +329,10 @@ function restoreFocus() {
               </dd>
             </dl>
             <p class="kb-muted">{{ t('kb.resultLimit') }}</p>
+            <details class="kb-score-help">
+              <summary>{{ t('kb.rankScore', { score: '' }) }}</summary>
+              <p class="kb-muted">{{ t('kb.scoreExplanation') }}</p>
+            </details>
           </section>
           <section v-if="current.answer" class="kb-panel kb-stack">
             <h2>{{ t('kb.answer') }}</h2>

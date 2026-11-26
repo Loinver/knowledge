@@ -160,7 +160,11 @@ onBeforeUnmount(() => controller.abort())
         />
         <div class="exchange-workspace">
           <section class="exchange-controls">
-            <h2>{{ t('governanceUi.exportTab') }}</h2>
+            <header class="exchange-step-heading">
+              <span class="exchange-step-number">{{ t('export.ontology') }}</span>
+              <h2>{{ t('governanceUi.exportTab') }}</h2>
+              <p>{{ t('export.snapshotHint') }}</p>
+            </header>
             <FormContainer label-placement="top" :disabled="downloading || loading">
               <FormField :label="t('export.ontology')">
                 <UiSelect
@@ -185,7 +189,6 @@ onBeforeUnmount(() => controller.abort())
               <FormField :label="t('export.format')"
                 ><UiSelect v-model:value="format" :options="formats"
               /></FormField>
-              <UiAlert type="info">{{ t('export.snapshotHint') }}</UiAlert>
               <UiSpace class="actions">
                 <UiButton
                   type="primary"
@@ -201,6 +204,10 @@ onBeforeUnmount(() => controller.abort())
             </FormContainer>
           </section>
           <section class="exchange-inspector">
+            <header class="exchange-preview-heading">
+              <h2>{{ t('common.revision') }}</h2>
+              <span>{{ t('export.snapshotHint') }}</span>
+            </header>
             <div v-if="selected" class="exchange-identity">
               <GovernanceIdentity
                 :name="selected.name"

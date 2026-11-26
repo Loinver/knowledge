@@ -88,7 +88,11 @@ async function usePreviewSource(page: Page, datasourceId: number) {
 }
 
 function selectedMenu(page: Page): Locator {
-  return sider(page).getByRole('button').and(page.locator('[aria-current="page"]'))
+  if ((page.viewportSize()?.width ?? 1440) < 1024)
+    return sider(page).getByRole('button').and(page.locator('[aria-current="page"]'))
+  return page.locator(
+    '.module-navigation [aria-current="page"], .admin-layout:not(:has(.module-navigation)) .rail-item[aria-current="page"]',
+  )
 }
 
 function commandOption(page: Page, route: string): Locator {
@@ -137,47 +141,45 @@ async function openGraphDetail(page: Page, path: string, iri: string): Promise<s
   return detail.entity.attrs.name
 }
 
-test('test_root_order_three_level_expansion_selection_and_hidden_tools @navigation @real-api', async ({
+test('test_module_rail_local_navigation_selection_and_hidden_tools @navigation @real-api', async ({
   signedIn: page,
   evidence,
 }, info) => {
-  await expect(sider(page).locator('.sider-scroll > ul > .nav-branch > button')).toHaveText(
-    ROOT_MENU,
-  )
-  const before = page.url()
-  await sider(page).getByText('标准语义资产', { exact: true }).click()
-  await expect(page).toHaveURL(before)
-  const configuration = sider(page).getByText('资产配置与模板', { exact: true })
-  await expect(configuration).toBeVisible()
-  await expect(sider(page).getByText('枚举词典', { exact: true })).not.toBeVisible()
-  await configuration.click()
-  await expect(page).toHaveURL(before)
-  const dictionary = sider(page).getByText('枚举词典', { exact: true })
-  await expect(dictionary).toBeVisible()
-  await dictionary.click()
+  const rail = sider(page).locator('.module-rail .rail-item')
+  await expect(rail).toHaveCount(ROOT_MENU.length)
+  expect(
+    await rail.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label'))),
+  ).toEqual(ROOT_MENU)
+  await sider(page).getByRole('button', { name: '标准语义资产', exact: true }).click()
+  await expectLocation(page, '/ontology/entity-types')
+  const local = page.getByRole('navigation', { name: '模块内导航', exact: true })
+  await expect(local.getByText('资产配置与模板', { exact: true })).toBeVisible()
+  await local.getByRole('link', { name: '枚举词典', exact: true }).click()
   await expectLocation(page, '/governance/enum-dictionaries')
   await expect(selectedMenu(page)).toHaveCount(1)
   await expect(selectedMenu(page)).toHaveText('枚举词典')
   await expect(crumbs(page)).toHaveText(['标准语义资产', '资产配置与模板', '枚举词典'])
   await page.reload()
   await expect(selectedMenu(page)).toHaveText('枚举词典')
-  await expect(sider(page).getByText('装配模板', { exact: true })).toBeVisible()
-  await sider(page).getByText('装配模板', { exact: true }).click()
+  await local.getByRole('link', { name: '装配模板', exact: true }).click()
   await expectLocation(page, '/governance/templates')
   await expect(crumbs(page)).toHaveText(['标准语义资产', '资产配置与模板', '装配模板'])
   await expect(selectedMenu(page)).toHaveText('装配模板')
-  await sider(page).getByText('数据接入与抽取', { exact: true }).click()
-  await expect(sider(page).getByText('AI 抽取', { exact: true })).toHaveCount(0)
-  await expect(sider(page).getByText('样例预览', { exact: true })).toHaveCount(0)
-  // Knowledge bases is a root destination, not a group requiring a second click.
-  await sider(page).getByText('知识库', { exact: true }).click()
+  await sider(page).getByRole('button', { name: '数据接入与抽取', exact: true }).click()
+  await expect(local.getByText('AI 抽取', { exact: true })).toHaveCount(0)
+  await expect(local.getByText('样例预览', { exact: true })).toHaveCount(0)
+  await sider(page).getByRole('button', { name: '知识库', exact: true }).click()
   await expectLocation(page, '/knowledge-bases')
   await expect(selectedMenu(page)).toHaveText('知识库')
   await expect(crumbs(page)).toHaveText(['知识库'])
-  // Graph recommendations/fields are independent requests. The route and
-  // selected object are already asserted; wait for visible loading to settle.
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0)
-  await capture(page, info, evidence, 'navigation-root-and-three-level', 'real recursive menu')
+  await capture(
+    page,
+    info,
+    evidence,
+    'studio-module-navigation',
+    'real module rail and local navigation',
+  )
 })
 
 test('test_object_breadcrumbs_use_loaded_identity_and_link_to_owner @navigation @real-api', async ({
@@ -421,6 +423,34 @@ test('test_language_synchronizes_heading_menu_breadcrumb_search_and_document_tit
   await settleApi(page, evidence)
 })
 
+test('test_module_navigation_keeps_active_item_visible_after_resize_and_language_change @navigation @real-api', async ({
+  signedIn: page,
+}) => {
+  await page.goto('/governance/templates')
+  const navigation = page.locator('.module-navigation')
+  const active = navigation.locator('[aria-current="page"]')
+  await expect(active).toBeVisible()
+  await page.getByRole('button', { name: '切换语言', exact: true }).click()
+  await page.setViewportSize({ width: 375, height: 812 })
+  const fullyVisible = () =>
+    active.evaluate((item) => {
+      const bounds = item.parentElement!.getBoundingClientRect()
+      const target = item.getBoundingClientRect()
+      return target.left >= bounds.left && target.right <= bounds.right
+    })
+  await expect.poll(fullyVisible).toBe(true)
+  await expect.poll(() => navigation.evaluate((element) => element.clientHeight)).toBeLessThan(50)
+  await page.getByRole('button', { name: 'Switch language', exact: true }).click()
+  await expect.poll(fullyVisible).toBe(true)
+  await expect.poll(() => navigation.evaluate((element) => element.clientHeight)).toBeLessThan(50)
+  await navigation.getByRole('link').first().focus()
+  const last = navigation.getByRole('link').last()
+  await last.focus()
+  await expect(last).toBeFocused()
+  await expect.poll(fullyVisible).toBe(true)
+  await expectNoPageOverflow(page)
+})
+
 test('test_legacy_deep_links_keep_query_hash_iri_reload_back_and_forward @navigation @real-api', async ({
   signedIn: page,
   routeCatalog: data,
@@ -473,13 +503,13 @@ test('test_legacy_deep_links_keep_query_hash_iri_reload_back_and_forward @naviga
   await expect(page.locator('[aria-busy="true"]:visible')).toHaveCount(0)
 })
 
-test('test_default_dark_and_both_saved_theme_preferences_survive_reload @navigation @real-api', async ({
+test('test_default_light_and_both_saved_theme_preferences_survive_reload @navigation @real-api', async ({
   signedIn: page,
   evidence,
 }) => {
   await page.evaluate(() => localStorage.removeItem('kg-theme-mode'))
   await page.reload()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme')
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => localStorage.setItem('kg-theme-mode', value), theme)
     await page.reload()
@@ -524,7 +554,7 @@ test('test_375_drawer_expands_three_levels_closes_on_destination_and_backdrop @n
 
 // Sixteen shell samples supplement the existing 41-page inventory, not a second site matrix.
 for (const width of [1440, 1024, 768, 375]) {
-  test(`test_graphite_shell_${width}_both_themes_and_languages @navigation @visual @real-api`, async ({
+  test(`test_studio_shell_${width}_both_themes_and_languages @navigation @visual @real-api`, async ({
     signedIn: page,
     entityCatalog,
     evidence,
@@ -560,7 +590,7 @@ for (const width of [1440, 1024, 768, 375]) {
           page,
           info,
           evidence,
-          `graphite-shell-${width}-${theme}-${locale}`,
+          `studio-shell-${width}-${theme}-${locale}`,
           'real namespace page and application shell',
         )
         const search = await openSearch(page, false, locale === 'zh-CN' ? SEARCH : SEARCH_EN)

@@ -1,7 +1,7 @@
 /* Component rules share values from tokens.css. */
 .ui-button {
   min-height: var(--control-height);
-  font-size: var(--font-body);
+  font-size: var(--font-small);
   border-radius: var(--radius-control);
 }
 .ui-button[data-size='small'] {
@@ -408,8 +408,8 @@
 .ui-tabs-list {
   display: flex;
   flex: none;
-  gap: var(--space-1);
-  padding-bottom: var(--space-1);
+  gap: var(--space-4);
+  padding-bottom: 0;
   overflow-x: auto;
   border-bottom: 1px solid var(--border-default);
 }
@@ -419,16 +419,19 @@
   align-items: center;
   justify-content: center;
   min-height: var(--control-height);
-  padding: 6px 12px;
+  padding: 6px 2px;
   font-size: var(--font-small);
   color: var(--foreground-secondary);
   background: transparent;
   border: 0;
-  border-radius: var(--radius-control);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
 }
 .ui-tab[data-state='active'] {
   color: var(--action-primary);
-  background: var(--action-soft);
+  background: transparent;
+  border-bottom-color: var(--action-primary);
+  font-weight: 600;
 }
 .ui-tabs-content {
   min-width: 0;

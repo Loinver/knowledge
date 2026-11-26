@@ -3,6 +3,8 @@ import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import type { DomainBrief } from '@/api/domains'
+import { domainsApi } from '@/api/domains'
 import type { EntityTypeBrief, ResourceStatus } from '@/api/entity-types'
 import { entityTypesApi } from '@/api/entity-types'
 import type { Namespace } from '@/api/namespaces'
@@ -37,6 +39,8 @@ import { useApiError } from '@/composables/useApiError'
 import { useDraftGuard } from '@/composables/useDraftGuard'
 import { useAuthStore } from '@/stores/auth'
 
+import AssetDomainFilter from '../components/AssetDomainFilter.vue'
+import AssetInspector from '../components/AssetInspector.vue'
 import NamespaceCreateModal from '../components/NamespaceCreateModal.vue'
 import RelationSemanticFields from './components/RelationSemanticFields.vue'
 
@@ -85,26 +89,39 @@ const statusFilter = ref<ResourceStatus | ''>(
     ? (route.query.status as ResourceStatus)
     : '',
 )
+const domains = ref<DomainBrief[]>([])
+const domainsError = ref('')
+const domainsLoading = ref(false)
+const domainFilter = ref<number | null>(Number(route.query.domain) || null)
+const domainMembers = ref<number[] | null>(null)
+const domainMembersLoading = ref(false)
+const domainMembersError = ref('')
+const previewDetail = ref<RelationTypeDetail | null>(null)
+const previewLoading = ref(false)
+const previewError = ref('')
+let domainController: AbortController | undefined
+let previewController: AbortController | undefined
 const page = ref(Math.max(1, Number(route.query.page) || 1))
 const pageSize = ref(20)
 const view = ref<'table' | 'card'>(route.query.view === 'card' ? 'card' : 'table')
 /** 列表搜索词。后端 /relations 支持 q（按机读名过滤），此前页面没接。 */
 const searchQuery = ref(String(route.query.q ?? ''))
 watch(
-  [searchQuery, statusFilter, view, page],
+  [searchQuery, statusFilter, view, page, domainFilter],
   () =>
     void router.replace({
       query: {
         ...route.query,
         q: searchQuery.value || undefined,
         status: statusFilter.value || undefined,
+        domain: domainFilter.value || undefined,
         view: view.value,
         page: page.value > 1 ? page.value : undefined,
       },
     }),
 )
 
-watch([searchQuery, statusFilter], () => {
+watch([searchQuery, statusFilter, domainFilter], () => {
   page.value = 1
 })
 
@@ -119,6 +136,8 @@ const DETAIL_CAP = 40
 let listGeneration = 0
 let detailGeneration = 0
 onBeforeUnmount(() => {
+  domainController?.abort()
+  previewController?.abort()
   alive = false
   createGeneration++
   listGeneration++
@@ -180,8 +199,69 @@ const counts = computed(() => {
 })
 
 const filtered = computed(() =>
-  statusFilter.value ? items.value.filter((row) => row.status === statusFilter.value) : items.value,
+  items.value.filter(
+    (row) =>
+      (!statusFilter.value || row.status === statusFilter.value) &&
+      (domainFilter.value === null || (domainMembers.value?.includes(row.id) ?? false)),
+  ),
 )
+const selected = computed(() =>
+  filtered.value.find((row) => row.id === Number(route.query.preview)),
+)
+function preview(id: number | null) {
+  void router.replace({ query: { ...route.query, preview: id ?? undefined } })
+}
+async function loadDomains() {
+  domainsLoading.value = true
+  domainsError.value = ''
+  try {
+    const next = await domainsApi.list()
+    if (alive) domains.value = next
+  } catch (error) {
+    if (alive) domainsError.value = toMessage(error)
+  } finally {
+    if (alive) domainsLoading.value = false
+  }
+}
+async function loadDomainMembers() {
+  domainController?.abort()
+  domainMembers.value = null
+  domainMembersError.value = ''
+  domainMembersLoading.value = false
+  if (domainFilter.value === null) return
+  const controller = new AbortController()
+  domainController = controller
+  domainMembersLoading.value = true
+  try {
+    const members = await domainsApi.members(domainFilter.value, controller.signal)
+    if (!controller.signal.aborted)
+      domainMembers.value = members.map((member) => member.resource_id)
+  } catch (error) {
+    if (!controller.signal.aborted) domainMembersError.value = toMessage(error)
+  } finally {
+    if (!controller.signal.aborted) domainMembersLoading.value = false
+  }
+}
+async function loadPreview() {
+  previewController?.abort()
+  previewDetail.value = null
+  previewError.value = ''
+  previewLoading.value = false
+  if (!selected.value) return
+  const controller = new AbortController()
+  previewController = controller
+  previewLoading.value = true
+  try {
+    const detail = await relationsApi.get(selected.value.id, controller.signal)
+    if (!controller.signal.aborted) previewDetail.value = detail
+  } catch (error) {
+    if (!controller.signal.aborted) previewError.value = toMessage(error)
+  } finally {
+    if (!controller.signal.aborted) previewLoading.value = false
+  }
+}
+watch(domainFilter, () => void loadDomainMembers(), { immediate: true })
+watch(selected, () => void loadPreview())
 
 const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
   {
@@ -193,7 +273,7 @@ const columns = computed<DataTableColumns<RelationTypeBrief>>(() => [
     render(row) {
       const label = pickLabel(row.label_i18n, row.name)
       return h('div', { class: 'cell-name' }, [
-        h('button', { class: 'name-link', onClick: () => goToDetail(row.id) }, label),
+        h('button', { class: 'name-link', onClick: () => preview(row.id) }, label),
         label === row.name ? null : h('span', { class: 'cell-sub mono' }, row.name),
       ])
     },
@@ -534,6 +614,7 @@ function search() {
 function resetFilters() {
   searchQuery.value = ''
   statusFilter.value = ''
+  domainFilter.value = null
   search()
 }
 
@@ -542,8 +623,10 @@ function changePageSize(value: number) {
   page.value = 1
 }
 
-function countText(value: number) {
-  return loading.value || loadError.value
+function countText(value: number, domainScoped = false) {
+  return loading.value ||
+    loadError.value ||
+    (domainScoped && (domainMembersLoading.value || domainMembersError.value))
     ? t('ui.unknown')
     : new Intl.NumberFormat(locale.value).format(value)
 }
@@ -845,6 +928,7 @@ watch(
 onMounted(async () => {
   await Promise.all([
     load(),
+    loadDomains(),
     namespacesApi
       .list()
       .then((r) => {
@@ -866,7 +950,7 @@ const editVisible = useDraftGuard(
 </script>
 
 <template>
-  <section class="page asset-page">
+  <section class="page asset-page asset-catalog">
     <PageHeader :title="t('page.relationTypes')" :description="t('relation.description')">
       <template #actions>
         <UiButton type="primary" :disabled="!canWrite" @click="openCreate">{{
@@ -881,33 +965,40 @@ const editVisible = useDraftGuard(
     }}</UiAlert>
     <UiAlert v-if="notice" type="success" role="status" class="action-alert">{{ notice }}</UiAlert>
 
-    <div class="ledger-workspace">
-      <div class="stats">
-        <button
-          type="button"
-          class="stat"
-          :class="{ active: statusFilter === '' }"
-          @click="statusFilter = ''"
-        >
-          <span class="stat-value mono">{{ countText(counts[''] ?? 0) }}</span>
-          <span class="stat-label">{{ t('relation.total') }}</span>
-        </button>
-        <button
-          v-for="s in STATUS_ORDER"
-          :key="s"
-          type="button"
-          class="stat"
-          :class="{ active: statusFilter === s }"
-          @click="statusFilter = statusFilter === s ? '' : s"
-        >
-          <span class="stat-value mono" :style="{ color: counts[s] ? STATUS_VAR[s] : undefined }">
-            {{ countText(counts[s] ?? 0) }}
-          </span>
-          <span class="stat-label">{{ t(`resourceStatus.${s}`) }}</span>
-        </button>
-      </div>
-
+    <div class="ledger-workspace" :class="{ 'has-selection': selected }">
+      <AssetDomainFilter
+        v-model:value="domainFilter"
+        :domains="domains"
+        :loading="domainsLoading"
+        :error="domainsError"
+        @retry="loadDomains"
+      />
       <div class="ledger-main">
+        <div class="stats" role="group" :aria-label="t('common.status')">
+          <button
+            type="button"
+            class="stat"
+            :class="{ active: statusFilter === '' }"
+            @click="statusFilter = ''"
+          >
+            <span class="stat-value mono">{{ countText(counts[''] ?? 0) }}</span>
+            <span class="stat-label">{{ t('relation.total') }}</span>
+          </button>
+          <button
+            v-for="s in STATUS_ORDER"
+            :key="s"
+            type="button"
+            class="stat"
+            :class="{ active: statusFilter === s }"
+            @click="statusFilter = statusFilter === s ? '' : s"
+          >
+            <span class="stat-value mono" :style="{ color: counts[s] ? STATUS_VAR[s] : undefined }">
+              {{ countText(counts[s] ?? 0) }}
+            </span>
+            <span class="stat-label">{{ t(`resourceStatus.${s}`) }}</span>
+          </button>
+        </div>
+
         <div class="toolbar">
           <SearchPanel
             v-model:query="searchQuery"
@@ -927,32 +1018,39 @@ const editVisible = useDraftGuard(
           </div>
         </div>
 
-        <UiSpin :show="loading || detailsLoading">
+        <UiAlert v-if="domainMembersError && view === 'card'" type="error" role="alert"
+          >{{ domainMembersError
+          }}<UiButton @click="loadDomainMembers">{{ t('ui.retry') }}</UiButton></UiAlert
+        >
+        <UiSpin :show="loading || detailsLoading || domainMembersLoading">
           <UiAlert v-if="loadError && view === 'card'" type="error" class="list-error"
             >{{ loadError }} <UiButton @click="load">{{ t('ui.retry') }}</UiButton></UiAlert
           >
           <div v-if="view === 'table'" class="card">
             <header class="ledger-caption">
               <h2>{{ t('page.relationTypes') }}</h2>
-              <span>{{ t('assetLedger.resultCount', { count: countText(filtered.length) }) }}</span>
+              <span>{{
+                t('assetLedger.resultCount', { count: countText(filtered.length, true) })
+              }}</span>
             </header>
             <SearchTable
               v-model:page="page"
               :searchable="false"
               :columns="columns"
-              :rows="filtered"
+              :rows="domainMembersError || domainMembersLoading ? [] : filtered"
               mode="local"
               :page-size="pageSize"
-              :loading="loading"
-              :error="loadError"
+              :loading="loading || domainMembersLoading"
+              :error="loadError || domainMembersError"
               :bordered="false"
               size="small"
-              :max-height="600"
               :pagination="{ showSizePicker: true }"
               :scroll-x="1040"
+              :selection="selected ? [selected.id] : []"
               :row-key="(row: RelationTypeBrief) => row.id"
+              @row-click="(row: RelationTypeBrief) => preview(row.id)"
               @update:page-size="changePageSize"
-              @retry="load"
+              @retry="domainMembersError ? loadDomainMembers() : load()"
             >
               <template #empty>
                 <UiEmpty
@@ -966,9 +1064,16 @@ const editVisible = useDraftGuard(
 
           <!-- 卡片视图：每条关系用一张迷你图谱表达「定义域 → 值域」 -->
           <div v-else-if="filtered.length" class="cards">
-            <article v-for="row in filtered" :key="row.id" class="rel-card">
+            <article
+              v-for="row in filtered"
+              :key="row.id"
+              class="rel-card"
+              :class="{ selected: selected?.id === row.id }"
+            >
               <header class="rel-head">
-                <span class="cell-primary">{{ pickLabel(row.label_i18n, row.name) }}</span>
+                <button class="name-link cell-primary" @click="preview(row.id)">
+                  {{ pickLabel(row.label_i18n, row.name) }}
+                </button>
                 <span class="cell-sub mono">{{ row.name }}</span>
                 <span class="mono rev">{{ `v${row.current_revision}` }}</span>
               </header>
@@ -1046,6 +1151,58 @@ const editVisible = useDraftGuard(
           </div>
         </UiSpin>
       </div>
+      <AssetInspector
+        v-if="selected"
+        :label="pickLabel(selected.label_i18n, selected.name)"
+        :name="selected.name"
+        :iri="selected.iri"
+        :status="selected.status"
+        :revision="selected.current_revision"
+        @close="preview(null)"
+        @open="goToDetail(selected.id)"
+      >
+        <UiAlert v-if="previewError" type="error" role="alert"
+          >{{ previewError }}<UiButton @click="loadPreview">{{ t('ui.retry') }}</UiButton></UiAlert
+        >
+        <UiSpin :show="previewLoading">
+          <dl v-if="previewDetail" class="preview-meta">
+            <dt>{{ t('relation.domain') }}</dt>
+            <dd>
+              {{
+                typeNameById[previewDetail.domain_spec.type_id] ??
+                `#${previewDetail.domain_spec.type_id}`
+              }}
+            </dd>
+            <dt>{{ t('relation.range') }}</dt>
+            <dd>
+              {{
+                typeNameById[previewDetail.range_spec.type_id] ??
+                `#${previewDetail.range_spec.type_id}`
+              }}
+            </dd>
+            <dt>{{ t('relation.cardinality') }}</dt>
+            <dd>
+              {{ cardinalityText(previewDetail.domain_spec.cardinality) }} /
+              {{ cardinalityText(previewDetail.range_spec.cardinality) }}
+            </dd>
+            <dt>{{ t('relation.owl') }}</dt>
+            <dd>
+              {{
+                owlTags(previewDetail)
+                  .map((key) => t(`relation.${key}`))
+                  .join(' / ') || t('common.noneValue')
+              }}
+            </dd>
+          </dl>
+        </UiSpin>
+        <template #actions
+          ><UiButton
+            v-if="canWrite && selected.status === 'DRAFT'"
+            @click="openEdit(selected.id)"
+            >{{ t('common.edit') }}</UiButton
+          ></template
+        >
+      </AssetInspector>
     </div>
 
     <!-- 迷你图谱的箭头只定义一次，供所有卡片共用 -->

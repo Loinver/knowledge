@@ -30,9 +30,13 @@ const columns = computed<DataTableColumns<RoleInfo>>(() => [
   {
     title: t('account.role'),
     key: 'code',
-    render: (row) => h(UiTag, { size: 'small' }, { default: () => t(`account.roles.${row.code}`) }),
+    minWidth: 180,
+    render: (row) =>
+      h('div', { class: 'system-object' }, [
+        h(UiTag, { size: 'small' }, { default: () => t(`account.roles.${row.code}`) }),
+        h('code', row.code),
+      ]),
   },
-  { title: t('account.roleCode'), key: 'roleCode', render: (row) => h('code', row.code) },
   {
     title: t('system.description'),
     key: 'description',
@@ -78,16 +82,22 @@ onMounted(load)
       </template>
     </PageHeader>
 
-    <div class="system-context">
-      <div>
-        <span class="context-label">{{ t('operationsUi.access') }}</span
-        ><strong>{{ t('appUi.capabilityScope') }}</strong>
-        <p>{{ t('operationsUi.accessHint') }}</p>
-      </div>
+    <div v-if="!loading && !error && items.length" class="role-overview">
+      <article v-for="role in items" :key="role.code" class="role-card">
+        <header>
+          <code>{{ role.code }}</code
+          ><span>{{ t('system.memberCount') }} · {{ role.member_count }}</span>
+        </header>
+        <h2>{{ t(`account.roles.${role.code}`) }}</h2>
+        <p>{{ t(`account.roleDescriptions.${role.code}`) }}</p>
+      </article>
     </div>
     <UiCard size="small" class="ledger-panel"
       ><header class="ledger-heading">
-        <h2>{{ t('page.systemRoles') }}</h2>
+        <div>
+          <h2>{{ t('appUi.capabilityScope') }}</h2>
+          <p class="ledger-description">{{ t('operationsUi.accessHint') }}</p>
+        </div>
         <UiButton size="small" :loading="loading" @click="load">{{ t('graph.refresh') }}</UiButton>
       </header>
       <SearchTable
@@ -99,7 +109,7 @@ onMounted(load)
         :rows="items"
         :loading="loading"
         :row-key="(row: RoleInfo) => row.code"
-        :scroll-x="1080"
+        :scroll-x="940"
         @retry="load"
       >
         <template #empty><UiEmpty :description="t('common.empty')" /></template>

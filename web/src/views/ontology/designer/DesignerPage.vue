@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FocusScope } from 'reka-ui'
 import type { ComponentPublicInstance } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,7 +21,6 @@ import type { ValidationReport, ValidationResultItem } from '@/api/validation'
 import { validationApi } from '@/api/validation'
 import { fieldRules, readField, validateFieldValue } from '@/components/business/formValidation'
 import { dragPosition, isDrag, wheelCamera, zoomAt } from '@/components/graph/viewport'
-import PageHeader from '@/components/PageHeader.vue'
 import {
   FormContainer,
   FormField,
@@ -54,6 +54,25 @@ const history = useDesignerHistory(toMessage)
 const { revision: frozenRevision, loading: historyLoading, error: historyError } = history
 const roleCanWrite = computed(() => auth.user?.role === 'ADMIN' || auth.user?.role === 'EDITOR')
 const poolOpen = ref(true)
+const focusMode = ref(false)
+let focusOrigin: HTMLElement | null = null
+watch(focusMode, async (active) => {
+  if (active) {
+    focusOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  } else {
+    await nextTick()
+    if (focusOrigin?.isConnected) focusOrigin.focus({ preventScroll: true })
+  }
+})
+function toggleResources() {
+  poolOpen.value = !poolOpen.value
+  focusMode.value = false
+}
+function toggleInspector() {
+  focusMode.value = false
+  if (inspectorOpen.value) closeInspector()
+  else inspectorOpen.value = true
+}
 const inspectorOpen = ref(false)
 const legendOpen = ref(false)
 const legendButton = ref<HTMLButtonElement | null>(null)
@@ -1364,7 +1383,14 @@ function onPointerCancel(event?: PointerEvent) {
 function onEditorEscape(event: KeyboardEvent) {
   // Pointer capture can retain the pointer while a toolbar control owns focus.
   // Cancel the dirty gesture first; Escape only closes the inspector afterwards.
-  if (!dragging.value && !panning.value && !legendOpen.value && !inspectorOpen.value) return
+  if (
+    !dragging.value &&
+    !panning.value &&
+    !legendOpen.value &&
+    !inspectorOpen.value &&
+    !focusMode.value
+  )
+    return
   event.preventDefault?.()
   event.stopPropagation?.()
   if (dragging.value || panning.value) {
@@ -1374,6 +1400,10 @@ function onEditorEscape(event: KeyboardEvent) {
   }
   if (legendOpen.value) {
     closeLegend()
+    return
+  }
+  if (focusMode.value) {
+    focusMode.value = false
     return
   }
   closeInspector()
@@ -1784,829 +1814,875 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="designer" @keydown.esc="onEditorEscape">
-    <!-- Capture-Escape must return the dragged layout to its original state even
+  <FocusScope
+    :trapped="focusMode"
+    :loop="focusMode"
+    :present="focusMode"
+    as-child
+    @mount-auto-focus="$event.preventDefault()"
+    @unmount-auto-focus="$event.preventDefault()"
+  >
+    <section class="designer" :class="{ 'focus-mode': focusMode }" @keydown.esc="onEditorEscape">
+      <!-- Capture-Escape must return the dragged layout to its original state even
          if focus moved from the canvas to the toolbar while the pointer is held. -->
-    <!-- 顶栏：本体选择 + 布局 + 发布 -->
-    <PageHeader
-      class="studio-identity"
-      :title="detail?.name || t('designerUi.title')"
-      :eyebrow="t('studio.ontologyStudio')"
-      :identity="detail?.iri"
-    >
-      <template #context>
-        <div class="identity-context">
-          <UiSelect
-            :value="ontologyId"
-            :options="ontologies.map((o) => ({ label: o.name, value: o.id }))"
-            :placeholder="t('designer.selectOntology')"
-            :loading="catalogLoading"
-            :disabled="catalogLoading || !!catalogError"
-            class="onto-select"
-            :aria-label="t('designer.selectOntology')"
-            @update:value="selectOntology"
-          />
-          <span v-if="detail" class="status-tag" :style="{ '--dot': STATUS_VAR[detail.status] }">
-            <i class="status-dot" />
-            {{ t(`resourceStatus.${detail.status}`) }}
-          </span>
-        </div>
-      </template>
-      <template #actions>
-        <UiButton
-          size="small"
-          :disabled="!canValidate"
-          :loading="validating"
-          @click="runValidation"
-        >
-          {{ t('designer.runValidation') }}
-        </UiButton>
-        <UiButton size="small" :disabled="!canEdit" @click="showAi = true">
-          {{ t('designer.aiAssist') }}
-        </UiButton>
-        <UiButton
-          size="small"
-          :disabled="!canEdit || createDirty || rulesDirty || detail?.status === 'ARCHIVED'"
-          @click="showModeling = true"
-          >{{ t('modeling.open') }}</UiButton
-        >
-        <UiButton size="small" type="primary" :disabled="!canEdit" @click="publish">
-          {{ t('common.publish') }}
-        </UiButton>
-      </template>
-    </PageHeader>
-    <div v-if="detail" class="object-bar">
-      <span class="object-mode">{{
-        t(frozenRevision === null ? 'designerUi.workingContent' : 'designerUi.frozenContent')
-      }}</span>
-      <span>{{
-        t('designerUi.versions', { published: detail.current_revision, edit: detail.edit_revision })
-      }}</span>
-      <UiSelect
-        :value="frozenRevision ?? 0"
-        :options="revisionOptions"
-        :aria-label="t('designerUi.versionView')"
-        :disabled="saving || working"
-        size="small"
-        class="revision-select"
-        @update:value="changeRevision"
-      />
-      <span class="spacer" />
-      <span v-if="!roleCanWrite" class="readonly-note">{{ t('designerUi.viewer') }}</span>
-      <span v-else-if="frozenRevision !== null" class="readonly-note">{{
-        t('designerUi.frozenReadOnly')
-      }}</span>
-      <span v-else class="saving" role="status">{{
-        t(
-          saving
-            ? 'designer.saving'
-            : layoutDirty
-              ? 'designerUi.unsavedLayout'
-              : 'designerUi.layoutSaved',
-        )
-      }}</span>
-    </div>
-    <div v-if="detail" class="view-toolbar">
-      <UiButton
-        size="small"
-        :aria-expanded="poolOpen"
-        aria-controls="designer-resources"
-        @click="poolOpen = !poolOpen"
-        >{{ t('designer.resourcePool') }}</UiButton
-      >
-      <UiButton size="small" :disabled="!canEdit || !nodes.length" @click="autoLayout">{{
-        t('designer.autoLayout')
-      }}</UiButton>
-      <UiButton size="small" :disabled="!canEdit || !layoutDirty" @click="persist">{{
-        t('designerUi.saveLayout')
-      }}</UiButton>
-      <UiButton size="small" :disabled="!canEdit || !layoutDirty" @click="cancelLayout">{{
-        t('designerUi.cancelLayout')
-      }}</UiButton>
-      <span class="spacer" />
-      <UiButton
-        size="small"
-        :aria-expanded="inspectorOpen && !!selected"
-        :disabled="!selected"
-        aria-controls="designer-inspector"
-        @click="inspectorOpen ? closeInspector() : (inspectorOpen = true)"
-        >{{ t('designer.inspector') }}</UiButton
-      >
-    </div>
-
-    <!-- 资产层校验结果：装配完在这里就能看出能不能发布 -->
-    <section v-if="showValidation" class="validation">
-      <header class="validation-head">
-        <b>{{ t('designer.validationTitle') }}</b>
-        <span v-if="validationReport" class="validation-summary mono">
-          {{ validationSummaryText(validationReport) }}
-        </span>
-        <span class="spacer" />
+      <!-- 顶栏：本体选择 + 布局 + 发布 -->
+      <header class="studio-identity">
         <UiButton
           variant="ghost"
           size="small"
-          attr-type="button"
-          class="validation-close"
-          @click="showValidation = false"
+          :aria-expanded="poolOpen && !focusMode"
+          aria-controls="designer-resources"
+          @click="toggleResources"
+          >{{ t('designer.resourcePool') }}</UiButton
         >
-          {{ t('common.close') }}
-        </UiButton>
-      </header>
-      <UiAlert v-if="validationError" type="error" role="alert">{{ validationError }}</UiAlert>
-      <p v-else-if="validating && !validationResults.length" role="status">
-        {{ t('common.loading') }}
-      </p>
-      <ul v-else-if="validationResults.length" class="validation-list">
-        <li
-          v-for="(item, index) in validationResults"
-          :key="`${item.check_code}-${item.focus_node ?? 'root'}-${index}`"
-        >
-          <span class="check-tag" :style="{ '--dot': VALIDATION_STATE_VAR[item.state] }">
-            <i class="status-dot" />
-            {{ t(`report.states.${item.state}`) }}
-          </span>
-          <span class="check-name">{{ checkLabel(item.check_code) }}</span>
-          <span v-if="item.message" class="check-msg">{{ item.message }}</span>
-        </li>
-      </ul>
-    </section>
-
-    <UiAlert v-if="catalogError" type="error" role="alert">
-      {{ catalogError }}
-      <UiButton :loading="catalogLoading" @click="() => loadCatalog()">{{
-        t('graph.refresh')
-      }}</UiButton>
-    </UiAlert>
-    <UiAlert v-if="loadError || actionError" type="error" role="alert">
-      {{ loadError || actionError }}
-      <UiButton :loading="loading" @click="ontologyId !== null && selectOntology(ontologyId)">
-        {{ t('graph.refresh') }}
-      </UiButton>
-    </UiAlert>
-    <UiAlert v-if="saveError" type="error" role="alert">
-      {{ saveError }}
-      <UiButton :disabled="!canEdit" @click="persist">{{ t('common.save') }}</UiButton>
-    </UiAlert>
-    <UiAlert v-if="historyError" type="error" role="alert">
-      {{ t('designerUi.snapshotUnavailable') }} {{ historyError }}
-      <UiButton @click="frozenRevision !== null && changeRevision(frozenRevision)">{{
-        t('graph.refresh')
-      }}</UiButton>
-    </UiAlert>
-    <p v-if="catalogLoading" role="status">{{ t('common.loading') }}</p>
-
-    <div v-if="!catalogLoading && !catalogError && !ontologies.length" class="no-ontology">
-      <!-- 空态要给出可执行动作，而不是只说「去创建一个」却没有入口 -->
-      <UiEmpty :description="t('designer.noOntologyHint')">
-        <template #extra>
+        <div class="studio-object">
+          <h1 :title="detail?.iri">{{ detail?.name || t('designerUi.title') }}</h1>
+          <div v-if="detail" class="object-meta">
+            <span>{{
+              t('designerUi.versions', {
+                published: detail.current_revision,
+                edit: detail.edit_revision,
+              })
+            }}</span>
+            <span v-if="!roleCanWrite">{{ t('designerUi.viewer') }}</span>
+            <span v-else-if="frozenRevision !== null">{{ t('designerUi.frozenReadOnly') }}</span>
+            <span v-else role="status">{{
+              t(
+                saving
+                  ? 'designer.saving'
+                  : layoutDirty
+                    ? 'designerUi.unsavedLayout'
+                    : 'designerUi.layoutSaved',
+              )
+            }}</span>
+          </div>
+        </div>
+        <div class="studio-actions">
           <UiButton
-            type="primary"
             size="small"
-            :disabled="!roleCanWrite"
-            @click="router.push({ name: 'ontologies' })"
+            :disabled="!canValidate"
+            :loading="validating"
+            @click="runValidation"
           >
-            {{ t('ontology.create') }}
+            {{ t('designer.runValidation') }}
           </UiButton>
-        </template>
-      </UiEmpty>
-    </div>
+          <UiButton size="small" :disabled="!canEdit" @click="showAi = true">
+            {{ t('designer.aiAssist') }}
+          </UiButton>
+          <UiButton
+            size="small"
+            :disabled="!canEdit || createDirty || rulesDirty || detail?.status === 'ARCHIVED'"
+            @click="showModeling = true"
+            >{{ t('modeling.open') }}</UiButton
+          >
+          <UiButton size="small" type="primary" :disabled="!canEdit" @click="publish">
+            {{ t('common.publish') }}
+          </UiButton>
+          <UiButton
+            size="small"
+            :aria-expanded="inspectorOpen && !!selected"
+            :disabled="!selected"
+            aria-controls="designer-inspector"
+            @click="toggleInspector"
+            >{{ t('designer.inspector') }}</UiButton
+          >
+          <UiButton size="small" :aria-pressed="focusMode" @click="focusMode = !focusMode">
+            {{ t(focusMode ? 'graphStudio.exitFocus' : 'graphStudio.focus') }}
+          </UiButton>
+        </div>
+      </header>
 
-    <div v-else-if="ontologies.length" class="body">
-      <!-- 左：资源面板 -->
-      <aside
-        v-if="poolOpen"
-        id="designer-resources"
-        class="panel pool"
-        :aria-label="t('designer.resourcePool')"
-      >
-        <div class="panel-head">
-          <span>{{ t('designer.resourcePool') }}</span>
-          <UiButton size="tiny" :disabled="!canEdit" @click="openCreate">
-            {{ t('designer.createOnCanvas') }}
-          </UiButton>
+      <!-- 资产层校验结果：装配完在这里就能看出能不能发布 -->
+      <section v-if="showValidation" class="validation">
+        <header class="validation-head">
+          <b>{{ t('designer.validationTitle') }}</b>
+          <span v-if="validationReport" class="validation-summary mono">
+            {{ validationSummaryText(validationReport) }}
+          </span>
+          <span class="spacer" />
           <UiButton
             variant="ghost"
             size="small"
-            class="panel-close"
             attr-type="button"
-            :aria-label="t('designerUi.closeResources')"
-            @click="poolOpen = false"
+            class="validation-close"
+            @click="showValidation = false"
           >
             {{ t('common.close') }}
           </UiButton>
-        </div>
-        <UiInput
-          v-model:value="poolSearch"
-          class="pool-search"
-          clearable
-          :placeholder="t('designerUi.searchResources')"
-          :aria-label="t('designerUi.searchResources')"
-        />
-        <div class="pool-body">
-          <UiButton size="small" :disabled="!canEdit" @click="openRules">{{
-            t('designer.configureRules')
-          }}</UiButton>
-          <div class="pool-group">
-            <span>{{ t('designer.inCanvas') }}</span>
-            <span class="mono pool-count">{{ canvasTotal }}</span>
-          </div>
-          <template v-for="cat in filteredCanvasCategories" :key="`c-${cat.kind}`">
-            <div v-if="cat.items.length" class="pool-subgroup">
-              <span>{{ cat.label }}</span>
-              <span class="mono">{{ cat.items.length }}</span>
-            </div>
+        </header>
+        <UiAlert v-if="validationError" type="error" role="alert">{{ validationError }}</UiAlert>
+        <p v-else-if="validating && !validationResults.length" role="status">
+          {{ t('common.loading') }}
+        </p>
+        <ul v-else-if="validationResults.length" class="validation-list">
+          <li
+            v-for="(item, index) in validationResults"
+            :key="`${item.check_code}-${item.focus_node ?? 'root'}-${index}`"
+          >
+            <span class="check-tag" :style="{ '--dot': VALIDATION_STATE_VAR[item.state] }">
+              <i class="status-dot" />
+              {{ t(`report.states.${item.state}`) }}
+            </span>
+            <span class="check-name">{{ checkLabel(item.check_code) }}</span>
+            <span v-if="item.message" class="check-msg">{{ item.message }}</span>
+          </li>
+        </ul>
+      </section>
+
+      <UiAlert v-if="catalogError" type="error" role="alert">
+        {{ catalogError }}
+        <UiButton :loading="catalogLoading" @click="() => loadCatalog()">{{
+          t('graph.refresh')
+        }}</UiButton>
+      </UiAlert>
+      <UiAlert v-if="loadError || actionError" type="error" role="alert">
+        {{ loadError || actionError }}
+        <UiButton :loading="loading" @click="ontologyId !== null && selectOntology(ontologyId)">
+          {{ t('graph.refresh') }}
+        </UiButton>
+      </UiAlert>
+      <UiAlert v-if="saveError" type="error" role="alert">
+        {{ saveError }}
+        <UiButton :disabled="!canEdit" @click="persist">{{ t('common.save') }}</UiButton>
+      </UiAlert>
+      <UiAlert v-if="historyError" type="error" role="alert">
+        {{ t('designerUi.snapshotUnavailable') }} {{ historyError }}
+        <UiButton @click="frozenRevision !== null && changeRevision(frozenRevision)">{{
+          t('graph.refresh')
+        }}</UiButton>
+      </UiAlert>
+      <p v-if="catalogLoading" role="status">{{ t('common.loading') }}</p>
+
+      <div v-if="!catalogLoading && !catalogError && !ontologies.length" class="no-ontology">
+        <!-- 空态要给出可执行动作，而不是只说「去创建一个」却没有入口 -->
+        <UiEmpty :description="t('designer.noOntologyHint')">
+          <template #extra>
             <UiButton
-              v-for="item in cat.items"
-              :key="`c-${cat.kind}-${item.id}`"
+              type="primary"
+              size="small"
+              :disabled="!roleCanWrite"
+              @click="router.push({ name: 'ontologies' })"
+            >
+              {{ t('ontology.create') }}
+            </UiButton>
+          </template>
+        </UiEmpty>
+      </div>
+
+      <div v-else-if="ontologies.length" class="body">
+        <!-- 左：资源面板 -->
+        <aside
+          v-if="poolOpen && !focusMode"
+          id="designer-resources"
+          class="panel pool"
+          :aria-label="t('designer.resourcePool')"
+        >
+          <div class="panel-head">
+            <span>{{ t('designer.resourcePool') }}</span>
+            <UiButton size="tiny" :disabled="!canEdit" @click="openCreate">
+              {{ t('designer.createOnCanvas') }}
+            </UiButton>
+            <UiButton
+              variant="ghost"
+              size="small"
+              class="panel-close"
+              attr-type="button"
+              :aria-label="t('designerUi.closeResources')"
+              @click="poolOpen = false"
+            >
+              {{ t('common.close') }}
+            </UiButton>
+          </div>
+          <div class="identity-context">
+            <UiSelect
+              :value="ontologyId"
+              :options="ontologies.map((o) => ({ label: o.name, value: o.id }))"
+              :placeholder="t('designer.selectOntology')"
+              :loading="catalogLoading"
+              :disabled="catalogLoading || !!catalogError"
+              class="onto-select"
+              :aria-label="t('designer.selectOntology')"
+              @update:value="selectOntology"
+            />
+            <span v-if="detail" class="status-tag" :style="{ '--dot': STATUS_VAR[detail.status] }">
+              <i class="status-dot" />
+              {{ t(`resourceStatus.${detail.status}`) }}
+            </span>
+            <UiSelect
+              v-if="detail"
+              :value="frozenRevision ?? 0"
+              :options="revisionOptions"
+              :aria-label="t('designerUi.versionView')"
+              :disabled="saving || working"
+              size="small"
+              class="revision-select"
+              @update:value="changeRevision"
+            />
+          </div>
+          <UiInput
+            v-model:value="poolSearch"
+            class="pool-search"
+            clearable
+            :placeholder="t('designerUi.searchResources')"
+            :aria-label="t('designerUi.searchResources')"
+          />
+          <div class="pool-body">
+            <UiButton size="small" :disabled="!canEdit" @click="openRules">{{
+              t('designer.configureRules')
+            }}</UiButton>
+            <div class="pool-group">
+              <span>{{ t('designer.inCanvas') }}</span>
+              <span class="mono pool-count">{{ canvasTotal }}</span>
+            </div>
+            <template v-for="cat in filteredCanvasCategories" :key="`c-${cat.kind}`">
+              <div v-if="cat.items.length" class="pool-subgroup">
+                <span>{{ cat.label }}</span>
+                <span class="mono">{{ cat.items.length }}</span>
+              </div>
+              <UiButton
+                v-for="item in cat.items"
+                :key="`c-${cat.kind}-${item.id}`"
+                variant="ghost"
+                size="small"
+                attr-type="button"
+                class="pool-item on"
+                :class="{ active: isPoolItemActive(cat.kind, item.id) }"
+                @click="selectPoolItem(cat.kind, item.id)"
+              >
+                <i
+                  class="dot"
+                  :style="{
+                    background:
+                      cat.kind === 'type'
+                        ? 'var(--graph-entity)'
+                        : cat.kind === 'relation'
+                          ? 'var(--graph-relation)'
+                          : 'var(--foreground-secondary)',
+                  }"
+                />
+                <span class="pool-name">{{ item.label }}</span>
+                <!-- 端点没全部入画布的关系画不出连线，明确标出来而不是静默消失 -->
+                <span v-if="item.unconfigured" class="pool-tag">
+                  {{ t('designer.legendUnconfigured') }}
+                </span>
+              </UiButton>
+            </template>
+            <div v-if="!canvasTotal" class="pool-empty">{{ t('common.empty') }}</div>
+
+            <div v-if="frozenRevision === null" class="pool-group">
+              {{ t('designer.notInCanvas') }}
+            </div>
+            <template
+              v-for="cat in frozenRevision === null ? filteredAvailableCategories : []"
+              :key="`a-${cat.kind}`"
+            >
+              <div v-if="cat.items.length" class="pool-subgroup">
+                <span>{{ cat.label }}</span>
+                <span class="mono">{{ cat.items.length }}</span>
+              </div>
+              <UiButton
+                v-for="item in cat.items"
+                :key="`a-${cat.kind}-${item.id}`"
+                variant="ghost"
+                size="small"
+                attr-type="button"
+                class="pool-item addable"
+                :disabled="
+                  !canEdit || (cat.kind === 'domain' && !domainById[item.id]?.current_revision)
+                "
+                :title="cat.kind === 'domain' ? t('designer.addDomainMembersHint') : undefined"
+                @click="addPoolItem(cat.kind, item.id)"
+              >
+                <i class="dot" :style="{ background: STATUS_VAR[item.status] }" />
+                <span class="pool-name">{{ item.label }}</span>
+                <span
+                  class="plus"
+                  :aria-label="
+                    t(cat.kind === 'domain' ? 'designer.addDomainMembers' : 'designer.addToCanvas')
+                  "
+                />
+              </UiButton>
+            </template>
+          </div>
+          <div class="pool-foot">
+            {{ t(frozenRevision === null ? 'designerUi.workingHint' : 'designerUi.frozenHint') }}
+          </div>
+        </aside>
+        <!-- B-7 画布直接建模：新建实体类型弹窗 -->
+        <UiModal
+          :show="showCreate"
+          preset="dialog"
+          :title="t('designer.createOnCanvas')"
+          :mask-closable="false"
+          :close-on-esc="false"
+          @update:show="(value: boolean) => !value && closeCreate()"
+        >
+          <FormContainer
+            ref="createForm"
+            :model="createModel"
+            :rules="createRules"
+            :submitting="createLoading"
+            @submit="submitCreate"
+          >
+            <FormField path="namespace" :label="t('designer.createNamespace')">
+              <UiSelect
+                v-model:value="createNamespace"
+                :options="namespaceOptions"
+                :placeholder="t('designer.createNamespacePlaceholder')"
+                :disabled="createLoading || createdResourceId !== null"
+                filterable
+              />
+            </FormField>
+            <FormField path="name" :label="t('common.name')">
+              <UiInput
+                v-model:value="createName"
+                :placeholder="t('designer.createNamePlaceholder')"
+                :disabled="createLoading || createdResourceId !== null"
+              />
+            </FormField>
+            <FormField path="labelZh" :label="t('common.labelZh')">
+              <UiInput
+                v-model:value="createLabelZh"
+                :placeholder="t('designer.createLabelPlaceholder')"
+                :disabled="createLoading || createdResourceId !== null"
+              />
+            </FormField>
+          </FormContainer>
+          <UiAlert v-if="createError" type="error" class="feedback">{{ createError }}</UiAlert>
+          <template #action>
+            <UiButton :disabled="createLoading" @click="closeCreate">{{
+              t('common.cancel')
+            }}</UiButton>
+            <UiButton
+              type="primary"
+              :loading="createLoading"
+              :disabled="!canEdit || createValidating"
+              @click="submitCreate"
+              >{{ t('common.create') }}</UiButton
+            >
+          </template>
+        </UiModal>
+
+        <UiDrawer
+          :show="showRules"
+          :width="440"
+          :mask-closable="false"
+          :close-on-esc="false"
+          @update:show="(value: boolean) => !value && closeRules()"
+        >
+          <UiDrawerContent :title="t('designer.configureRules')" closable>
+            <p>{{ t('designer.rulesHint') }}</p>
+            <UiAlert v-if="ruleError" type="error">{{ ruleError }}</UiAlert>
+            <UiButton v-if="ruleError" @click="openRules">{{ t('graph.refresh') }}</UiButton>
+            <FormContainer
+              ref="rulesForm"
+              :model="rulesModel"
+              :rules="rulesValidation"
+              :submitting="working"
+              @submit="saveRules"
+            >
+              <FormField path="selectedRules" :label="t('designer.configureRules')">
+                <UiSelect
+                  v-model:value="selectedRules"
+                  :options="ruleOptions"
+                  multiple
+                  filterable
+                  :loading="ruleLoading"
+                  :disabled="ruleLoading || !!ruleError || !canEdit"
+                  :aria-label="t('designer.configureRules')"
+                />
+              </FormField>
+            </FormContainer>
+            <template #footer>
+              <UiButton :disabled="working" @click="closeRules">{{ t('common.cancel') }}</UiButton>
+              <UiButton
+                type="primary"
+                :loading="working"
+                :disabled="ruleLoading || !!ruleError || !canEdit || rulesValidating"
+                @click="saveRules"
+                >{{ t('common.save') }}</UiButton
+              >
+            </template>
+          </UiDrawerContent>
+        </UiDrawer>
+
+        <!-- 中：画布 -->
+        <div
+          ref="canvasEl"
+          class="canvas"
+          :class="{ panning: !!panning }"
+          tabindex="0"
+          :aria-label="t('designerUi.canvas')"
+          @pointerdown="onBackgroundDown"
+          @pointermove="onNodeMove"
+          @pointerup="onNodeUp"
+          @pointercancel="onPointerCancel"
+          @lostpointercapture="onPointerCancel"
+          @keydown="onCanvasKey"
+          @wheel="onWheel"
+        >
+          <div
+            v-if="detail"
+            class="view-toolbar"
+            role="toolbar"
+            :aria-label="t('graphUi.canvasTools')"
+            @pointerdown.stop
+            @wheel.stop
+          >
+            <span class="canvas-mode">{{
+              t(frozenRevision === null ? 'designerUi.workingContent' : 'designerUi.frozenContent')
+            }}</span>
+            <span class="spacer" />
+            <UiButton size="small" :disabled="!canEdit || !nodes.length" @click="autoLayout">{{
+              t('designer.autoLayout')
+            }}</UiButton>
+            <UiButton
+              size="small"
+              :disabled="!canEdit || !layoutDirty"
+              :loading="saving"
+              @click="persist"
+              >{{ t('designerUi.saveLayout') }}</UiButton
+            >
+            <UiButton v-if="layoutDirty" size="small" :disabled="!canEdit" @click="cancelLayout">{{
+              t('designerUi.cancelLayout')
+            }}</UiButton>
+          </div>
+          <UiSpin :show="loading || historyLoading" class="canvas-spin">
+            <div ref="worldEl" class="world" :style="worldStyle">
+              <svg class="edges" :width="WORLD_W" :height="WORLD_H">
+                <defs>
+                  <marker
+                    id="edge-arrow"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path
+                      d="M2 1L8 5L2 9"
+                      fill="none"
+                      stroke="var(--graph-relation)"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </marker>
+                </defs>
+
+                <!-- 业务域分区：画在连线与节点之下，让「域」在画布上可见 -->
+                <g v-for="band in domainBands" :key="`band-${band.id}`" class="band">
+                  <rect
+                    :x="band.x"
+                    :y="band.y"
+                    :width="band.w"
+                    :height="band.h"
+                    rx="14"
+                    class="band-rect"
+                    :class="{ 'band-rect--empty': band.count === 0 }"
+                  />
+                  <text :x="band.x + 14" :y="band.y + 17" class="band-label">
+                    {{ band.label }} · {{ band.count }}
+                  </text>
+                </g>
+
+                <g
+                  v-for="edge in edges"
+                  :key="edge.key"
+                  class="edge"
+                  :class="{ selected: selectedKey === edge.key }"
+                >
+                  <path
+                    class="edge-hit"
+                    :d="edge.d"
+                    fill="none"
+                    stroke="transparent"
+                    stroke-width="18"
+                    pointer-events="stroke"
+                    tabindex="0"
+                    role="button"
+                    :data-selection="edge.key"
+                    :aria-label="t('designer.selectRelation', { name: edge.label })"
+                    @click.stop="selectRelation(edge.id)"
+                    @keydown.enter.stop="selectRelation(edge.id)"
+                    @keydown.space.prevent.stop="selectRelation(edge.id)"
+                  />
+                  <path
+                    :d="edge.d"
+                    fill="none"
+                    :stroke="
+                      selectedKey === edge.key
+                        ? 'var(--action-primary)'
+                        : edge.status === 'PUBLISHED'
+                          ? 'var(--graph-relation)'
+                          : 'var(--border-emphasis)'
+                    "
+                    :stroke-width="selectedKey === edge.key ? 2.6 : 1.6"
+                    marker-end="url(#edge-arrow)"
+                  />
+                  <g
+                    class="edge-label-button"
+                    role="button"
+                    :aria-label="t('designer.selectRelation', { name: edge.label })"
+                    @click.stop="selectRelation(edge.id)"
+                  >
+                    <title>{{ edge.label }}</title>
+                    <rect
+                      :x="edge.lx - edge.labelWidth / 2"
+                      :y="edge.ly - 13"
+                      :width="edge.labelWidth"
+                      height="26"
+                      rx="5"
+                    />
+                    <text :x="edge.lx" :y="edge.ly + 4" text-anchor="middle" class="edge-label">
+                      {{ edge.displayLabel }}
+                    </text>
+                  </g>
+                </g>
+              </svg>
+
+              <div
+                v-for="node in nodes"
+                :key="node.key"
+                class="node"
+                role="button"
+                tabindex="0"
+                :aria-label="node.label"
+                :aria-pressed="selectedKey === node.key"
+                :data-selection="node.key"
+                :title="node.label + '\n' + node.iri"
+                :class="{ on: selectedKey === node.key, dragging: dragging?.key === node.key }"
+                :style="{
+                  left: `${node.x}px`,
+                  top: `${node.y}px`,
+                  width: `${NODE_W}px`,
+                  height: `${NODE_H}px`,
+                }"
+                @pointerdown="onNodeDown(node.key, $event)"
+                @keydown.enter.stop="selectNode(node.key)"
+                @keydown.space.prevent.stop="selectNode(node.key)"
+              >
+                <span class="node-head">
+                  <svg class="node-icon" viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="m10 2 7 4v8l-7 4-7-4V6Zm0 8 7-4M10 10 3 6m7 4v8" />
+                  </svg>
+                  <span class="node-label">{{ node.label }}</span>
+                </span>
+                <span class="node-meta">{{ node.name }}</span>
+                <span class="node-status" :style="{ color: STATUS_VAR[node.status] }">{{
+                  t(`resourceStatus.${node.status}`)
+                }}</span>
+              </div>
+
+              <div
+                v-if="!loading && !historyLoading && !historyError && !loadError && !nodes.length"
+                class="world-empty"
+              >
+                <div class="world-empty-title">{{ t('designer.emptyCanvas') }}</div>
+                <div class="world-empty-hint">{{ t('designer.emptyCanvasHint') }}</div>
+              </div>
+            </div>
+          </UiSpin>
+
+          <div v-if="unconfiguredLabels.length" class="canvas-warn">
+            {{ t('designer.unconfiguredHint', { names: unconfiguredLabels.join('、') }) }}
+          </div>
+
+          <div class="canvas-tools" @pointerdown.stop @wheel.stop>
+            <UiButton
               variant="ghost"
               size="small"
               attr-type="button"
-              class="pool-item on"
-              :class="{ active: isPoolItemActive(cat.kind, item.id) }"
-              @click="selectPoolItem(cat.kind, item.id)"
+              :aria-label="t('designer.zoomOut')"
+              @click="stepZoom(-0.1)"
             >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </UiButton>
+            <span class="mono zoom-val">{{
+              t('designer.zoomLevel', { percent: Math.round(zoom * 100) })
+            }}</span>
+            <UiButton
+              variant="ghost"
+              size="small"
+              attr-type="button"
+              :aria-label="t('designer.zoomIn')"
+              @click="stepZoom(0.1)"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </UiButton>
+            <span class="divider" />
+            <UiButton variant="ghost" size="small" attr-type="button" @click="fitView">{{
+              t('designer.fitView')
+            }}</UiButton>
+            <UiButton
+              variant="ghost"
+              size="small"
+              attr-type="button"
+              :disabled="!previousCamera"
+              @click="restoreView"
+            >
+              {{ t('designerUi.restoreView') }}
+            </UiButton>
+            <UiButton
+              :ref="setLegendButton"
+              variant="ghost"
+              size="small"
+              attr-type="button"
+              :aria-expanded="legendOpen"
+              @click="legendOpen = !legendOpen"
+            >
+              {{ t('designerUi.legend') }}
+            </UiButton>
+          </div>
+
+          <div v-if="legendOpen" class="legend">
+            <div><span class="lg-line solid" />{{ t('designer.legendRelation') }}</div>
+            <div>{{ t('designerUi.legendStatus') }}</div>
+            <div><span class="lg-line warn" />{{ t('designer.legendUnconfigured') }}</div>
+          </div>
+        </div>
+
+        <!-- 右：属性检查器 -->
+        <aside
+          v-if="inspectorOpen && selected && !focusMode"
+          id="designer-inspector"
+          class="panel inspector"
+          :aria-label="t('designer.inspector')"
+        >
+          <div class="panel-head">
+            <span>{{ t('designer.inspector') }}</span
+            ><UiButton
+              variant="ghost"
+              size="small"
+              class="panel-close"
+              attr-type="button"
+              @click="closeInspector"
+            >
+              {{ t('common.close') }}
+            </UiButton>
+          </div>
+          <div v-if="selected" class="inspect-body">
+            <div class="inspect-title">
               <i
                 class="dot"
                 :style="{
                   background:
-                    cat.kind === 'type'
+                    selected.kind === 'entity'
                       ? 'var(--graph-entity)'
-                      : cat.kind === 'relation'
+                      : selected.kind === 'relation'
                         ? 'var(--graph-relation)'
                         : 'var(--foreground-secondary)',
+                  width: '8px',
+                  height: '8px',
                 }"
               />
-              <span class="pool-name">{{ item.label }}</span>
-              <!-- 端点没全部入画布的关系画不出连线，明确标出来而不是静默消失 -->
-              <span v-if="item.unconfigured" class="pool-tag">
-                {{ t('designer.legendUnconfigured') }}
+              <b>{{ selected.label }}</b>
+              <span class="status-tag" :style="{ '--dot': STATUS_VAR[selected.status] }">
+                <i class="status-dot" />
+                {{ t(`resourceStatus.${selected.status}`) }}
               </span>
-            </UiButton>
-          </template>
-          <div v-if="!canvasTotal" class="pool-empty">{{ t('common.empty') }}</div>
-
-          <div v-if="frozenRevision === null" class="pool-group">
-            {{ t('designer.notInCanvas') }}
-          </div>
-          <template
-            v-for="cat in frozenRevision === null ? filteredAvailableCategories : []"
-            :key="`a-${cat.kind}`"
-          >
-            <div v-if="cat.items.length" class="pool-subgroup">
-              <span>{{ cat.label }}</span>
-              <span class="mono">{{ cat.items.length }}</span>
             </div>
-            <UiButton
-              v-for="item in cat.items"
-              :key="`a-${cat.kind}-${item.id}`"
-              variant="ghost"
-              size="small"
-              attr-type="button"
-              class="pool-item addable"
-              :disabled="
-                !canEdit || (cat.kind === 'domain' && !domainById[item.id]?.current_revision)
-              "
-              :title="cat.kind === 'domain' ? t('designer.addDomainMembersHint') : undefined"
-              @click="addPoolItem(cat.kind, item.id)"
-            >
-              <i class="dot" :style="{ background: STATUS_VAR[item.status] }" />
-              <span class="pool-name">{{ item.label }}</span>
-              <span
-                class="plus"
-                :aria-label="
-                  t(cat.kind === 'domain' ? 'designer.addDomainMembers' : 'designer.addToCanvas')
-                "
-              />
-            </UiButton>
-          </template>
-        </div>
-        <div class="pool-foot">
-          {{ t(frozenRevision === null ? 'designerUi.workingHint' : 'designerUi.frozenHint') }}
-        </div>
-      </aside>
-      <!-- B-7 画布直接建模：新建实体类型弹窗 -->
-      <UiModal
-        :show="showCreate"
-        preset="dialog"
-        :title="t('designer.createOnCanvas')"
-        :mask-closable="false"
-        :close-on-esc="false"
-        @update:show="(value: boolean) => !value && closeCreate()"
-      >
-        <FormContainer
-          ref="createForm"
-          :model="createModel"
-          :rules="createRules"
-          :submitting="createLoading"
-          @submit="submitCreate"
-        >
-          <FormField path="namespace" :label="t('designer.createNamespace')">
-            <UiSelect
-              v-model:value="createNamespace"
-              :options="namespaceOptions"
-              :placeholder="t('designer.createNamespacePlaceholder')"
-              :disabled="createLoading || createdResourceId !== null"
-              filterable
-            />
-          </FormField>
-          <FormField path="name" :label="t('common.name')">
-            <UiInput
-              v-model:value="createName"
-              :placeholder="t('designer.createNamePlaceholder')"
-              :disabled="createLoading || createdResourceId !== null"
-            />
-          </FormField>
-          <FormField path="labelZh" :label="t('common.labelZh')">
-            <UiInput
-              v-model:value="createLabelZh"
-              :placeholder="t('designer.createLabelPlaceholder')"
-              :disabled="createLoading || createdResourceId !== null"
-            />
-          </FormField>
-        </FormContainer>
-        <UiAlert v-if="createError" type="error" class="feedback">{{ createError }}</UiAlert>
-        <template #action>
-          <UiButton :disabled="createLoading" @click="closeCreate">{{
-            t('common.cancel')
-          }}</UiButton>
-          <UiButton
-            type="primary"
-            :loading="createLoading"
-            :disabled="!canEdit || createValidating"
-            @click="submitCreate"
-            >{{ t('common.create') }}</UiButton
-          >
-        </template>
-      </UiModal>
+            <span class="iri inspect-iri">{{ selected.iri }}</span>
+            <p class="resource-context">
+              {{
+                frozenRevision !== null
+                  ? t('designerUi.frozenResource', { revision: inspectedRevision })
+                  : pinnedRevision
+                    ? t('designerUi.livePinnedResource', { revision: pinnedRevision })
+                    : t('designerUi.liveResource')
+              }}
+            </p>
 
-      <UiDrawer
-        :show="showRules"
-        :width="440"
+            <dl class="inspect-kv">
+              <dt>{{ t('common.name') }}</dt>
+              <dd class="mono">{{ selected.name }}</dd>
+              <template v-if="selected.kind === 'entity'">
+                <dt>{{ t('designer.nodePosition') }}</dt>
+                <dd class="mono">
+                  {{ t('designer.positionValue', { x: selected.x, y: selected.y }) }}
+                </dd>
+                <dt>{{ t('designer.domainMembership') }}</dt>
+                <dd>
+                  {{
+                    selected.domainLabels.length
+                      ? selected.domainLabels.join(' · ')
+                      : t('common.noneValue')
+                  }}
+                </dd>
+              </template>
+              <template v-else-if="selected.kind === 'relation'">
+                <dt>{{ t('designer.relationDomain') }}</dt>
+                <dd>{{ selected.domainLabel || t('common.noneValue') }}</dd>
+                <dt>{{ t('designer.relationRange') }}</dt>
+                <dd>{{ selected.rangeLabel || t('common.noneValue') }}</dd>
+              </template>
+              <template v-else>
+                <dt>{{ t('designer.domainMembers') }}</dt>
+                <dd class="mono">{{ selected.memberCount }}</dd>
+              </template>
+            </dl>
+
+            <!-- 数据属性清单：装配时最需要知道这个类型有哪些属性（映射阶段依赖它） -->
+            <div v-if="selected.kind === 'entity'" class="inspect-props">
+              <div class="inspect-props-head">
+                <span>{{ t('entityType.dataProps') }}</span>
+                <span v-if="!typeDetailLoading && !typeDetailError" class="mono">{{
+                  inspectedProperties.length
+                }}</span>
+              </div>
+              <p v-if="typeDetailLoading" class="inspect-empty">{{ t('common.loading') }}</p>
+              <UiAlert v-else-if="typeDetailError" type="error">{{ typeDetailError }}</UiAlert>
+              <template v-else-if="inspectedProperties.length">
+                <ul class="prop-list">
+                  <li v-for="prop in inspectedProperties" :key="prop.name">
+                    <span class="mono prop-name">{{ prop.name }}</span>
+                    <span class="prop-type">{{ t(`entityProps.datatypes.${prop.datatype}`) }}</span>
+                  </li>
+                </ul>
+              </template>
+              <p v-else class="inspect-empty">{{ t('common.empty') }}</p>
+            </div>
+
+            <p v-if="selected.kind === 'domain'" class="inspect-empty">
+              {{ t('designer.domainMembersHint') }}
+            </p>
+            <UiButton
+              v-else
+              size="small"
+              block
+              :disabled="!canEdit"
+              @click="removeFromCanvas(selected.id)"
+            >
+              {{ t('designer.removeFromCanvas') }}
+            </UiButton>
+          </div>
+          <div v-else class="inspect-empty">{{ t('designer.selectNode') }}</div>
+          <section class="inspection-validation">
+            <header>{{ t('designer.validationTitle') }}</header>
+            <div class="validation-readouts">
+              <div
+                v-for="entry in validationReadouts"
+                :key="entry.state"
+                :style="{ '--state': VALIDATION_STATE_VAR[entry.state] }"
+              >
+                <code>{{ entry.state }}</code
+                ><strong>{{ entry.count ?? '—' }}</strong>
+                <span>{{ t(`report.states.${entry.state}`) }}</span>
+              </div>
+            </div>
+            <p v-if="!validationReport">{{ t('studio.validationPending') }}</p>
+            <UiButton
+              size="small"
+              :aria-expanded="showValidation"
+              @click="showValidation = !showValidation"
+              >{{ t('report.results') }}</UiButton
+            >
+          </section>
+        </aside>
+      </div>
+      <footer v-if="detail" class="canvas-status">
+        <span>{{
+          t('designerUi.scope', {
+            nodes: nodes.length,
+            edges: edges.length,
+            missing: unconfiguredRelationIds.length,
+          })
+        }}</span>
+        <span>{{ t('designerUi.gestures') }}</span>
+      </footer>
+      <UiModal
+        :show="showDiscard"
+        preset="dialog"
+        :title="t('designerUi.unsavedTitle')"
+        :content="t('designerUi.unsavedPrompt')"
+        :positive-text="t('designerUi.discard')"
+        :negative-text="t('designerUi.keepEditing')"
         :mask-closable="false"
         :close-on-esc="false"
-        @update:show="(value: boolean) => !value && closeRules()"
-      >
-        <UiDrawerContent :title="t('designer.configureRules')" closable>
-          <p>{{ t('designer.rulesHint') }}</p>
-          <UiAlert v-if="ruleError" type="error">{{ ruleError }}</UiAlert>
-          <UiButton v-if="ruleError" @click="openRules">{{ t('graph.refresh') }}</UiButton>
-          <FormContainer
-            ref="rulesForm"
-            :model="rulesModel"
-            :rules="rulesValidation"
-            :submitting="working"
-            @submit="saveRules"
-          >
-            <FormField path="selectedRules" :label="t('designer.configureRules')">
-              <UiSelect
-                v-model:value="selectedRules"
-                :options="ruleOptions"
-                multiple
-                filterable
-                :loading="ruleLoading"
-                :disabled="ruleLoading || !!ruleError || !canEdit"
-                :aria-label="t('designer.configureRules')"
-              />
-            </FormField>
-          </FormContainer>
-          <template #footer>
-            <UiButton :disabled="working" @click="closeRules">{{ t('common.cancel') }}</UiButton>
-            <UiButton
-              type="primary"
-              :loading="working"
-              :disabled="ruleLoading || !!ruleError || !canEdit || rulesValidating"
-              @click="saveRules"
-              >{{ t('common.save') }}</UiButton
-            >
-          </template>
+        @positive-click="answerDiscard(true)"
+        @negative-click="answerDiscard(false)"
+        @close="answerDiscard(false)"
+      />
+      <UiDrawer v-model:show="showModeling" width="min(860px, 100vw)" placement="right">
+        <UiDrawerContent :title="t('modeling.open')" closable>
+          <AiModeling
+            v-if="
+              showModeling &&
+              detail &&
+              ontologyId !== null &&
+              roleCanWrite &&
+              frozenRevision === null &&
+              detail.status !== 'ARCHIVED'
+            "
+            :ontology-id="ontologyId"
+            :draft-id="detail.working_draft_id"
+            :base-edit-revision="detail.edit_revision"
+            @applied="modelingApplied"
+          />
         </UiDrawerContent>
       </UiDrawer>
-
-      <!-- 中：画布 -->
-      <div
-        ref="canvasEl"
-        class="canvas"
-        :class="{ panning: !!panning }"
-        tabindex="0"
-        :aria-label="t('designerUi.canvas')"
-        @pointerdown="onBackgroundDown"
-        @pointermove="onNodeMove"
-        @pointerup="onNodeUp"
-        @pointercancel="onPointerCancel"
-        @lostpointercapture="onPointerCancel"
-        @keydown="onCanvasKey"
-        @wheel="onWheel"
-      >
-        <UiSpin :show="loading || historyLoading" class="canvas-spin">
-          <div ref="worldEl" class="world" :style="worldStyle">
-            <svg class="edges" :width="WORLD_W" :height="WORLD_H">
-              <defs>
-                <marker
-                  id="edge-arrow"
-                  viewBox="0 0 10 10"
-                  refX="9"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path
-                    d="M2 1L8 5L2 9"
-                    fill="none"
-                    stroke="var(--graph-relation)"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                  />
-                </marker>
-              </defs>
-
-              <!-- 业务域分区：画在连线与节点之下，让「域」在画布上可见 -->
-              <g v-for="band in domainBands" :key="`band-${band.id}`" class="band">
-                <rect
-                  :x="band.x"
-                  :y="band.y"
-                  :width="band.w"
-                  :height="band.h"
-                  rx="14"
-                  class="band-rect"
-                  :class="{ 'band-rect--empty': band.count === 0 }"
-                />
-                <text :x="band.x + 14" :y="band.y + 17" class="band-label">
-                  {{ band.label }} · {{ band.count }}
-                </text>
-              </g>
-
-              <g
-                v-for="edge in edges"
-                :key="edge.key"
-                class="edge"
-                :class="{ selected: selectedKey === edge.key }"
-              >
-                <path
-                  class="edge-hit"
-                  :d="edge.d"
-                  fill="none"
-                  stroke="transparent"
-                  stroke-width="18"
-                  pointer-events="stroke"
-                  tabindex="0"
-                  role="button"
-                  :data-selection="edge.key"
-                  :aria-label="t('designer.selectRelation', { name: edge.label })"
-                  @click.stop="selectRelation(edge.id)"
-                  @keydown.enter.stop="selectRelation(edge.id)"
-                  @keydown.space.prevent.stop="selectRelation(edge.id)"
-                />
-                <path
-                  :d="edge.d"
-                  fill="none"
-                  :stroke="
-                    selectedKey === edge.key
-                      ? 'var(--action-primary)'
-                      : edge.status === 'PUBLISHED'
-                        ? 'var(--graph-relation)'
-                        : 'var(--border-emphasis)'
-                  "
-                  :stroke-width="selectedKey === edge.key ? 2.6 : 1.6"
-                  marker-end="url(#edge-arrow)"
-                />
-                <g
-                  class="edge-label-button"
-                  role="button"
-                  :aria-label="t('designer.selectRelation', { name: edge.label })"
-                  @click.stop="selectRelation(edge.id)"
-                >
-                  <title>{{ edge.label }}</title>
-                  <rect
-                    :x="edge.lx - edge.labelWidth / 2"
-                    :y="edge.ly - 13"
-                    :width="edge.labelWidth"
-                    height="26"
-                    rx="5"
-                  />
-                  <text :x="edge.lx" :y="edge.ly + 4" text-anchor="middle" class="edge-label">
-                    {{ edge.displayLabel }}
-                  </text>
-                </g>
-              </g>
-            </svg>
-
-            <div
-              v-for="node in nodes"
-              :key="node.key"
-              class="node"
-              role="button"
-              tabindex="0"
-              :aria-label="node.label"
-              :aria-pressed="selectedKey === node.key"
-              :data-selection="node.key"
-              :title="node.label + '\n' + node.iri"
-              :class="{ on: selectedKey === node.key, dragging: dragging?.key === node.key }"
-              :style="{
-                left: `${node.x}px`,
-                top: `${node.y}px`,
-                width: `${NODE_W}px`,
-                height: `${NODE_H}px`,
-              }"
-              @pointerdown="onNodeDown(node.key, $event)"
-              @keydown.enter.stop="selectNode(node.key)"
-              @keydown.space.prevent.stop="selectNode(node.key)"
-            >
-              <span class="node-head">
-                <svg class="node-icon" viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="m10 2 7 4v8l-7 4-7-4V6Zm0 8 7-4M10 10 3 6m7 4v8" />
-                </svg>
-                <span class="node-label">{{ node.label }}</span>
-              </span>
-              <span class="node-meta">{{ node.name }}</span>
-              <span class="node-status" :style="{ color: STATUS_VAR[node.status] }">{{
-                t(`resourceStatus.${node.status}`)
-              }}</span>
-            </div>
-
-            <div
-              v-if="!loading && !historyLoading && !historyError && !loadError && !nodes.length"
-              class="world-empty"
-            >
-              <div class="world-empty-title">{{ t('designer.emptyCanvas') }}</div>
-              <div class="world-empty-hint">{{ t('designer.emptyCanvasHint') }}</div>
-            </div>
-          </div>
-        </UiSpin>
-
-        <div v-if="unconfiguredLabels.length" class="canvas-warn">
-          {{ t('designer.unconfiguredHint', { names: unconfiguredLabels.join('、') }) }}
-        </div>
-
-        <div class="canvas-tools">
-          <UiButton
-            variant="ghost"
-            size="small"
-            attr-type="button"
-            :aria-label="t('designer.zoomOut')"
-            @click="stepZoom(-0.1)"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-          </UiButton>
-          <span class="mono zoom-val">{{
-            t('designer.zoomLevel', { percent: Math.round(zoom * 100) })
-          }}</span>
-          <UiButton
-            variant="ghost"
-            size="small"
-            attr-type="button"
-            :aria-label="t('designer.zoomIn')"
-            @click="stepZoom(0.1)"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M3 8h10M8 3v10" fill="none" stroke="currentColor" stroke-width="1.5" />
-            </svg>
-          </UiButton>
-          <span class="divider" />
-          <UiButton variant="ghost" size="small" attr-type="button" @click="fitView">{{
-            t('designer.fitView')
-          }}</UiButton>
-          <UiButton
-            variant="ghost"
-            size="small"
-            attr-type="button"
-            :disabled="!previousCamera"
-            @click="restoreView"
-          >
-            {{ t('designerUi.restoreView') }}
-          </UiButton>
-          <UiButton
-            :ref="setLegendButton"
-            variant="ghost"
-            size="small"
-            attr-type="button"
-            :aria-expanded="legendOpen"
-            @click="legendOpen = !legendOpen"
-          >
-            {{ t('designerUi.legend') }}
-          </UiButton>
-        </div>
-
-        <div v-if="legendOpen" class="legend">
-          <div><span class="lg-line solid" />{{ t('designer.legendRelation') }}</div>
-          <div>{{ t('designerUi.legendStatus') }}</div>
-          <div><span class="lg-line warn" />{{ t('designer.legendUnconfigured') }}</div>
-        </div>
-      </div>
-
-      <!-- 右：属性检查器 -->
-      <aside
-        v-if="inspectorOpen && selected"
-        id="designer-inspector"
-        class="panel inspector"
-        :aria-label="t('designer.inspector')"
-      >
-        <div class="panel-head">
-          <span>{{ t('designer.inspector') }}</span
-          ><UiButton
-            variant="ghost"
-            size="small"
-            class="panel-close"
-            attr-type="button"
-            @click="closeInspector"
-          >
-            {{ t('common.close') }}
-          </UiButton>
-        </div>
-        <div v-if="selected" class="inspect-body">
-          <div class="inspect-title">
-            <i
-              class="dot"
-              :style="{
-                background:
-                  selected.kind === 'entity'
-                    ? 'var(--graph-entity)'
-                    : selected.kind === 'relation'
-                      ? 'var(--graph-relation)'
-                      : 'var(--foreground-secondary)',
-                width: '8px',
-                height: '8px',
-              }"
-            />
-            <b>{{ selected.label }}</b>
-            <span class="status-tag" :style="{ '--dot': STATUS_VAR[selected.status] }">
-              <i class="status-dot" />
-              {{ t(`resourceStatus.${selected.status}`) }}
-            </span>
-          </div>
-          <span class="iri inspect-iri">{{ selected.iri }}</span>
-          <p class="resource-context">
-            {{
-              frozenRevision !== null
-                ? t('designerUi.frozenResource', { revision: inspectedRevision })
-                : pinnedRevision
-                  ? t('designerUi.livePinnedResource', { revision: pinnedRevision })
-                  : t('designerUi.liveResource')
-            }}
-          </p>
-
-          <dl class="inspect-kv">
-            <dt>{{ t('common.name') }}</dt>
-            <dd class="mono">{{ selected.name }}</dd>
-            <template v-if="selected.kind === 'entity'">
-              <dt>{{ t('designer.nodePosition') }}</dt>
-              <dd class="mono">
-                {{ t('designer.positionValue', { x: selected.x, y: selected.y }) }}
-              </dd>
-              <dt>{{ t('designer.domainMembership') }}</dt>
-              <dd>
-                {{
-                  selected.domainLabels.length
-                    ? selected.domainLabels.join(' · ')
-                    : t('common.noneValue')
-                }}
-              </dd>
-            </template>
-            <template v-else-if="selected.kind === 'relation'">
-              <dt>{{ t('designer.relationDomain') }}</dt>
-              <dd>{{ selected.domainLabel || t('common.noneValue') }}</dd>
-              <dt>{{ t('designer.relationRange') }}</dt>
-              <dd>{{ selected.rangeLabel || t('common.noneValue') }}</dd>
-            </template>
-            <template v-else>
-              <dt>{{ t('designer.domainMembers') }}</dt>
-              <dd class="mono">{{ selected.memberCount }}</dd>
-            </template>
-          </dl>
-
-          <!-- 数据属性清单：装配时最需要知道这个类型有哪些属性（映射阶段依赖它） -->
-          <div v-if="selected.kind === 'entity'" class="inspect-props">
-            <div class="inspect-props-head">
-              <span>{{ t('entityType.dataProps') }}</span>
-              <span v-if="!typeDetailLoading && !typeDetailError" class="mono">{{
-                inspectedProperties.length
-              }}</span>
-            </div>
-            <p v-if="typeDetailLoading" class="inspect-empty">{{ t('common.loading') }}</p>
-            <UiAlert v-else-if="typeDetailError" type="error">{{ typeDetailError }}</UiAlert>
-            <template v-else-if="inspectedProperties.length">
-              <ul class="prop-list">
-                <li v-for="prop in inspectedProperties" :key="prop.name">
-                  <span class="mono prop-name">{{ prop.name }}</span>
-                  <span class="prop-type">{{ t(`entityProps.datatypes.${prop.datatype}`) }}</span>
-                </li>
-              </ul>
-            </template>
-            <p v-else class="inspect-empty">{{ t('common.empty') }}</p>
-          </div>
-
-          <p v-if="selected.kind === 'domain'" class="inspect-empty">
-            {{ t('designer.domainMembersHint') }}
-          </p>
-          <UiButton
-            v-else
-            size="small"
-            block
-            :disabled="!canEdit"
-            @click="removeFromCanvas(selected.id)"
-          >
-            {{ t('designer.removeFromCanvas') }}
-          </UiButton>
-        </div>
-        <div v-else class="inspect-empty">{{ t('designer.selectNode') }}</div>
-        <section class="inspection-validation">
-          <header>{{ t('designer.validationTitle') }}</header>
-          <div class="validation-readouts">
-            <div
-              v-for="entry in validationReadouts"
-              :key="entry.state"
-              :style="{ '--state': VALIDATION_STATE_VAR[entry.state] }"
-            >
-              <code>{{ entry.state }}</code
-              ><strong>{{ entry.count ?? '—' }}</strong>
-              <span>{{ t(`report.states.${entry.state}`) }}</span>
-            </div>
-          </div>
-          <p v-if="!validationReport">{{ t('studio.validationPending') }}</p>
-          <UiButton
-            size="small"
-            :aria-expanded="showValidation"
-            @click="showValidation = !showValidation"
-            >{{ t('report.results') }}</UiButton
-          >
-        </section>
-      </aside>
-    </div>
-    <footer v-if="detail" class="canvas-status">
-      <span>{{
-        t('designerUi.scope', {
-          nodes: nodes.length,
-          edges: edges.length,
-          missing: unconfiguredRelationIds.length,
-        })
-      }}</span>
-      <span>{{ t('designerUi.gestures') }}</span>
-    </footer>
-    <UiModal
-      :show="showDiscard"
-      preset="dialog"
-      :title="t('designerUi.unsavedTitle')"
-      :content="t('designerUi.unsavedPrompt')"
-      :positive-text="t('designerUi.discard')"
-      :negative-text="t('designerUi.keepEditing')"
-      :mask-closable="false"
-      :close-on-esc="false"
-      @positive-click="answerDiscard(true)"
-      @negative-click="answerDiscard(false)"
-      @close="answerDiscard(false)"
-    />
-    <UiDrawer v-model:show="showModeling" width="min(860px, 100vw)" placement="right">
-      <UiDrawerContent :title="t('modeling.open')" closable>
-        <AiModeling
-          v-if="
-            showModeling &&
-            detail &&
-            ontologyId !== null &&
-            roleCanWrite &&
-            frozenRevision === null &&
-            detail.status !== 'ARCHIVED'
-          "
-          :ontology-id="ontologyId"
-          :draft-id="detail.working_draft_id"
-          :base-edit-revision="detail.edit_revision"
-          @applied="modelingApplied"
-        />
-      </UiDrawerContent>
-    </UiDrawer>
-    <!-- AI 补全建议（V-DS-05）：逐条人工确认后才写入草稿资源 -->
-    <UiDrawer v-model:show="showAi" :width="460" placement="right">
-      <UiDrawerContent :title="t('designer.aiAssist')" closable>
-        <AiSuggestions
-          v-if="showAi && ontologyId !== null && roleCanWrite && frozenRevision === null"
-          kind="ONTOLOGY_COMPLETION"
-          :title="t('designer.aiAssist')"
-          :target-id="ontologyId"
-          @applied="() => void loadCatalog()"
-        />
-      </UiDrawerContent>
-    </UiDrawer>
-  </section>
+      <!-- AI 补全建议（V-DS-05）：逐条人工确认后才写入草稿资源 -->
+      <UiDrawer v-model:show="showAi" :width="460" placement="right">
+        <UiDrawerContent :title="t('designer.aiAssist')" closable>
+          <AiSuggestions
+            v-if="showAi && ontologyId !== null && roleCanWrite && frozenRevision === null"
+            kind="ONTOLOGY_COMPLETION"
+            :title="t('designer.aiAssist')"
+            :target-id="ontologyId"
+            @applied="() => void loadCatalog()"
+          />
+        </UiDrawerContent>
+      </UiDrawer>
+    </section>
+  </FocusScope>
 </template>
 
 <style scoped>
 .studio-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   flex: none;
   margin: 0;
-  padding: 12px 16px;
+  padding: 12px 24px;
   background: var(--surface-panel);
   border-bottom: 1px solid var(--border-default);
 }
-.studio-identity :deep(h1) {
-  font-size: var(--font-h1);
+.studio-object {
+  flex: 1;
+  min-width: 160px;
+}
+.studio-object h1 {
+  margin: 0;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.object-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 4px;
+  color: var(--foreground-secondary);
+  font-size: var(--font-caption);
+}
+.studio-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .identity-context {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  padding: 12px;
+  border-bottom: 1px solid var(--border-muted);
 }
 .inspection-validation {
   margin-top: auto;
@@ -2652,10 +2728,17 @@ onBeforeUnmount(() => {
 .designer {
   display: flex;
   flex-direction: column;
-  /* fullBleed 的 auto 高度父层不能解析 height:100%；保持已有视口与相机坐标系。 */
-  height: calc(100dvh - var(--header-height));
-  min-height: 520px;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  background: var(--surface-panel);
   overflow: hidden;
+}
+.designer.focus-mode {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-navigation) + 1);
 }
 
 .toolbar {
@@ -2691,13 +2774,33 @@ onBeforeUnmount(() => {
   font-weight: 500;
 }
 .revision-select {
-  width: 190px;
+  width: 100%;
 }
 .readonly-note {
   color: var(--status-na);
 }
 .view-toolbar {
-  padding-block: 6px;
+  position: absolute;
+  z-index: 2;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+.view-toolbar > :deep(button),
+.canvas-mode {
+  pointer-events: auto;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-muted);
+  box-shadow: var(--shadow-low);
+}
+.canvas-mode {
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+  color: var(--action-primary);
 }
 .canvas-status {
   justify-content: space-between;
@@ -2706,7 +2809,7 @@ onBeforeUnmount(() => {
 }
 
 .onto-select {
-  width: 240px;
+  width: 100%;
 }
 
 .spacer {
@@ -2730,8 +2833,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  min-width: 0;
+  gap: 0;
+  padding: 0;
   background: var(--surface-background);
 }
 
@@ -2741,13 +2845,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   flex: none;
   background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-panel);
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
 }
 
 .pool {
-  width: 226px;
+  width: 220px;
   border-right: 1px solid var(--border-muted);
 }
 
@@ -2768,6 +2872,13 @@ onBeforeUnmount(() => {
 }
 .panel-head > span:first-child {
   flex: 1;
+}
+.pool .panel-head {
+  flex-wrap: wrap;
+}
+.pool .panel-head :deep(button:not(.panel-close)) {
+  order: 3;
+  flex: 0 0 100%;
 }
 .panel-close {
   border: 0;
@@ -2907,7 +3018,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
   cursor: grab;
-  background-color: var(--surface-canvas, var(--surface-background));
+  background-color: var(--canvas);
   background-image: radial-gradient(var(--border-default) 1px, transparent 1px);
   background-size: 24px 24px;
   overscroll-behavior: contain;
@@ -3107,12 +3218,6 @@ onBeforeUnmount(() => {
 .canvas-tools :deep(.ui-button):hover {
   color: var(--foreground-primary);
   background: var(--surface-hover);
-}
-.canvas-tools :deep(.ui-button):first-child::before {
-  content: '−';
-}
-.canvas-tools :deep(.ui-button):nth-child(3)::before {
-  content: '+';
 }
 
 .zoom-val {
@@ -3343,6 +3448,8 @@ onBeforeUnmount(() => {
   align-items: baseline;
   justify-content: space-between;
   font-size: var(--font-caption);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-muted);
 }
 
 .prop-name {

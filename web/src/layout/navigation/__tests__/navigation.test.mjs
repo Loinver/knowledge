@@ -77,6 +77,10 @@ test('target menu order, third level and hidden tools have one stable owner', ()
   const leaves = menuLeaves()
   assert.equal(new Set(leaves.map((n) => n.key)).size, leaves.length)
   for (const leaf of leaves) assert.ok(router.hasRoute(leaf.key), leaf.key)
+  for (const module of menuConfig) {
+    if (module.defaultRoute)
+      assert.ok(menuLeaves([module]).some((leaf) => leaf.key === module.defaultRoute))
+  }
   for (const [name, owner] of Object.entries({
     'entity-detail': 'entity-types',
     'relation-detail': 'relation-types',

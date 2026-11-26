@@ -26,6 +26,7 @@ const route = useRoute()
         @click="ui.toggleSider()"
         ><AppIcon name="menu"
       /></UiButton>
+      <RouterLink class="product-name" :to="{ name: 'dashboard' }">{{ t('app.title') }}</RouterLink>
       <nav class="breadcrumbs" :aria-label="t('ds.breadcrumb')">
         <ol>
           <li v-for="(crumb, index) in breadcrumb" :key="crumb.key">
@@ -89,6 +90,16 @@ const route = useRoute()
   gap: var(--space-2);
   min-width: 0;
 }
+.product-name {
+  flex: none;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--foreground-primary);
+  text-decoration: none;
+  padding-right: 16px;
+  margin-right: 6px;
+  border-right: 1px solid var(--border-muted);
+}
 .left {
   flex: 1;
   overflow: hidden;
@@ -145,6 +156,7 @@ const route = useRoute()
   .left {
     gap: 2px;
   }
+  .product-name,
   .btn-text {
     display: none;
   }

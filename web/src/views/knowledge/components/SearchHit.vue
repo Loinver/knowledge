@@ -24,22 +24,24 @@ const score = (value: number) =>
       ><span class="kb-wrap">{{ location }}</span
       ><span>{{ t('kb.generation', { n: hit.generation }) }}</span>
     </div>
-    <div class="kb-hit-identity">
-      <code>{{ t('kb.generation', { n: hit.generation }) }} · {{ hit.chunk_id }}</code
-      ><UiTag v-if="hit.graph_links?.length" size="small">{{
-        t('kb.manualLinks', { n: hit.graph_links.length })
-      }}</UiTag>
-    </div>
     <p class="kb-hit-text kb-wrap">{{ hit.text }}</p>
-    <div class="kb-meta">
-      <span>{{ t('kb.rankScore', { score: score(hit.score) }) }}</span>
-      <span v-if="hit.keyword_score != null">{{
-        t('kb.keywordScore', { score: score(hit.keyword_score) })
-      }}</span>
-      <span v-if="hit.similarity != null">{{
-        t('kb.cosineScore', { score: score(hit.similarity) })
-      }}</span>
-    </div>
+    <footer class="kb-hit-footer">
+      <div class="kb-meta">
+        <span>{{ t('kb.rankScore', { score: score(hit.score) }) }}</span>
+        <span v-if="hit.keyword_score != null">{{
+          t('kb.keywordScore', { score: score(hit.keyword_score) })
+        }}</span>
+        <span v-if="hit.similarity != null">{{
+          t('kb.cosineScore', { score: score(hit.similarity) })
+        }}</span>
+      </div>
+      <div class="kb-hit-identity">
+        <code>{{ hit.chunk_id }}</code>
+        <UiTag v-if="hit.graph_links?.length" size="small">{{
+          t('kb.manualLinks', { n: hit.graph_links.length })
+        }}</UiTag>
+      </div>
+    </footer>
   </article>
 </template>
 
@@ -58,9 +60,17 @@ const score = (value: number) =>
 .kb-hit-text {
   margin: 0;
   line-height: 1.8;
-  padding: 12px;
-  background: var(--bg-inset);
-  border: 1px solid var(--border);
+  padding: 12px 0;
+  color: var(--foreground-secondary);
+}
+.kb-hit-footer {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-muted);
+}
+.kb-hit-identity code {
+  overflow-wrap: anywhere;
 }
 .kb-hit-identity {
   display: flex;

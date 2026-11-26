@@ -115,7 +115,13 @@ with sqlite3.connect(sys.argv[1]) as conn:
     await editor.getByTestId('field-source').click()
     await pickOption(page, 'name · TEXT')
     await editor.getByTestId('entity-row-key').and(page.locator('[aria-label$=" id"]')).check()
-    await editor.getByTestId('entity-match-key').and(page.locator('[aria-label$=" code"]')).check()
+    const matchKey = editor
+      .getByTestId('entity-match-key')
+      .and(page.locator('[aria-label$=" code"]'))
+    // Core business keys must be usable without opening optional incremental settings.
+    await expect(matchKey).toBeVisible()
+    await matchKey.check()
+    await expect(editor.getByTestId('fusion-priority')).toBeVisible()
     await editor.getByTestId('fusion-priority').fill(String(index + 1))
     await editor.getByTestId('fusion-null-policy').click()
     await pickOption(page, '忽略空值')

@@ -17,7 +17,7 @@ const web = fileURLToPath(new URL('../../../../..', import.meta.url))
 const requirePackage = createRequire(path.join(web, 'package.json'))
 registerTS(() => requirePackage('typescript'))
 const exposed =
-  'page,data,error,loading,reload,downloading,downloadError,download,formatTime,openSummary,report,selectedId,showSummary,reportLoading,reportError,runStatus'
+  'page,data,error,loading,reload,downloading,downloadError,download,formatTime,openSummary,report,selectedId,showSummary,reportLoading,reportError,runStatus,statusFilter,filteredRuns,openQuarantine,showQuarantine'
 const renderer = createRenderer({
   createElement: () => ({}),
   createText: () => ({}),
@@ -161,6 +161,68 @@ test('list errors are visible and refresh can recover', async (t) => {
   await settle()
   assert.equal(vm.error, '')
   assert.deepEqual(vm.data, [])
+})
+
+test('status filters keep unfinished runs distinct and operate on the current API page', async (t) => {
+  const calls = []
+  const { vm } = await mount(t, {
+    list: async (page) => {
+      calls.push(page)
+      return page === 1
+        ? [
+            { id: 1, status: 'SUCCESS', finished_at: '2026-11-26T01:00:00Z' },
+            { id: 2, status: 'FAILED', finished_at: '2026-11-26T01:00:00Z' },
+            { id: 3, status: 'SUCCESS', finished_at: null },
+          ]
+        : [{ id: 4, status: 'PARTIAL', finished_at: '2026-11-26T02:00:00Z' }]
+    },
+  })
+  await settle()
+  vm.statusFilter = 'SUCCESS'
+  assert.deepEqual(
+    vm.filteredRuns.map((run) => run.id),
+    [1],
+  )
+  vm.statusFilter = 'UNFINISHED'
+  assert.deepEqual(
+    vm.filteredRuns.map((run) => run.id),
+    [3],
+  )
+  vm.statusFilter = 'FAILED'
+  assert.deepEqual(
+    vm.filteredRuns.map((run) => run.id),
+    [2],
+  )
+  assert.deepEqual(calls, [1])
+  vm.page = 2
+  await settle()
+  assert.deepEqual(vm.filteredRuns, [])
+  vm.statusFilter = 'ALL'
+  assert.deepEqual(
+    vm.filteredRuns.map((run) => run.id),
+    [4],
+  )
+})
+
+test('exception shortcut opens the real report and its quarantine panel for the clicked run', async (t) => {
+  const run = { id: 7, status: 'PARTIAL', finished_at: '2026-11-26T01:00:00Z' }
+  const calls = []
+  const { vm } = await mount(t, {
+    list: async () => [run],
+    exportRun: async (id) => {
+      calls.push(id)
+      return new Blob([
+        JSON.stringify({ run_id: id, status: 'PARTIAL', finished_at: run.finished_at }),
+      ])
+    },
+  })
+  vm.openQuarantine(run)
+  await settle()
+  assert.deepEqual(calls, [7])
+  assert.equal(vm.selectedId, 7)
+  assert.equal(vm.showSummary, true)
+  assert.equal(vm.showQuarantine, true)
+  assert.equal(vm.report.run_id, 7)
 })
 
 test('SQLite UTC times render in local timezone while explicit offsets are preserved', async (t) => {

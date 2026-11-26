@@ -23,7 +23,9 @@ test('admin searches retained asset versions and safely retries failed reads', a
   })
   await page.goto('/system/audit-logs')
   const panel = page.locator('.asset-audit')
-  await expect(panel.getByText('业务资产审计', { exact: true })).toBeVisible()
+  await expect(
+    panel.getByRole('heading', { name: '业务资产审计', exact: true, level: 2 }),
+  ).toBeVisible()
   await expect(panel.getByRole('cell', { name: '编辑', exact: true })).toBeVisible()
   await expect(panel).not.toContainText('不应进入审计的正文')
   await panel.getByPlaceholder('操作者 ID、对象 ID 或关联 ID').fill(created.correlation)

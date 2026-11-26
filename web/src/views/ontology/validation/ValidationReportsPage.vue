@@ -434,9 +434,9 @@ const stateTagType = (state: string) => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
 }
 .target-field {
   display: flex;
@@ -466,7 +466,7 @@ const stateTagType = (state: string) => {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
-  padding: 16px;
+  padding: 10px 16px;
   text-align: left;
   color: var(--text-secondary);
   background: transparent;
@@ -484,7 +484,7 @@ const stateTagType = (state: string) => {
 }
 .report-readouts strong {
   grid-row: span 2;
-  font: 600 24px var(--font-mono, monospace);
+  font: 600 20px var(--font-mono, monospace);
   color: var(--state);
 }
 .state-code {
@@ -563,6 +563,9 @@ h2 {
   background: var(--bg-inset);
 }
 .report-inspector {
+  position: sticky;
+  top: 0;
+  align-self: start;
   display: flex;
   flex-direction: column;
   gap: 12px;

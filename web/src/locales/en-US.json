@@ -703,7 +703,7 @@
     "resultSet": "Result Set #{id}",
     "quarantineCount": "{count} quarantine records",
     "draftResources": "{count} unpublished resources",
-    "unpublishedHint": "Draft resources are unpublished and cannot be assembled or extracted",
+    "unpublishedHint": "Drafts can be assembled in a working ontology. Publish referenced resources before publishing the ontology.",
     "quarantineHint": "Quarantine records indicate problem rows during extraction; inspect fields and transform chains",
     "noCurrentGraph": "No current result set selected",
     "retry": "Retry",
@@ -1648,6 +1648,11 @@
       "next": "Next",
       "rowRange": "Rows {start}–{end}",
       "nullValue": "Empty"
+    },
+    "redesign": {
+      "pageFilter": "Filter records on this page",
+      "allStatuses": "All statuses",
+      "fetchSamples": "Preview up to 5 live sample rows from the selected source table."
     }
   },
   "ai": {
@@ -2401,13 +2406,16 @@
     "cancelSearch": "Cancel search",
     "searchCancelled": "Search cancelled. Adjust the input and search again.",
     "excerptContext": "Showing the excerpt and surrounding source. Open the knowledge base for full evidence.",
-    "exploreGraph": "Explore in graph canvas"
+    "exploreGraph": "Explore in graph canvas",
+    "presentation": "Collection presentation",
+    "collectionView": "Collections",
+    "tableView": "Table view"
   },
   "navigation": {
     "validationReport": "Validation reports",
     "knowledgeTrace": "Knowledge tracing",
     "documentIdentity": "Document {id}",
-    "workspace": "Enterprise Observatory",
+    "workspace": "Knowledge workspace",
     "workspaceHint": "Semantic assets · Versions · Evidence",
     "searchHint": "Search pages and tools",
     "shortcut": "⌘ / Ctrl K",
@@ -2455,12 +2463,35 @@
     "validationLedger": "Validation ledger / Executed checks",
     "validationPending": "Asset-level validation has not run; this does not mean it passed.",
     "validationScope": "Validate assets or instances while preserving PASS / VIOLATION / NA / NOT_RUN semantics.",
-    "validationScopeLabel": "Validation scope"
+    "validationScopeLabel": "Validation scope",
+    "nav": {
+      "dashboard": "Home",
+      "assets": "Assets",
+      "modeling": "Modeling",
+      "integration": "Data",
+      "graph": "Graph",
+      "governance": "Standards",
+      "knowledge": "Library",
+      "system": "Admin"
+    },
+    "moduleNavigation": "Module navigation"
   },
   "assetLedger": {
     "resultCount": "{count} items"
   },
   "governanceLedger": {
     "resultCount": "{count} records"
+  },
+  "graphStudio": {
+    "focus": "Focus mode",
+    "exitFocus": "Exit focus mode",
+    "loadedInstances": "Loaded instances"
+  },
+  "assetStudio": {
+    "validationDetails": "See actual validation results in details",
+    "draftScope": "Drafts across entity types, relation types, domains and ontologies.",
+    "publishPrerequisite": "Drafts can be assembled in a working ontology. Publish referenced resources before publishing the ontology.",
+    "publishedVersion": "This asset is published. The list shows the latest release; consuming resources pin their own referenced revision.",
+    "currentWork": "Current workspace"
   }
 }

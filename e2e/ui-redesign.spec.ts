@@ -186,6 +186,10 @@ function rowFor(page: Page, resource: Resource) {
   return page.getByRole('row').filter({ hasText: resource.name })
 }
 
+function inspector(page: Page) {
+  return page.locator('.asset-inspector')
+}
+
 function drawer(page: Page) {
   return page.getByRole('dialog').and(page.locator('.ui-sheet')).last()
 }
@@ -305,7 +309,7 @@ for (const viewport of DESKTOP_VIEWPORTS) {
       }, testInfo) => {
         const { published } = entityCatalog
         await openFilteredList(page, published)
-        await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+        await expect(page.locator('html')).not.toHaveAttribute('data-theme')
         const row = rowFor(page, published)
         await expect(row.getByText('已发布', { exact: true })).toBeVisible()
         await expect(row.getByRole('button', { name: '查看', exact: true })).toBeVisible()
@@ -313,9 +317,9 @@ for (const viewport of DESKTOP_VIEWPORTS) {
         await capture(page, testInfo, evidence, 'O02-normal', 'real-published-list')
 
         await row.getByRole('button', { name: published.label_i18n['zh-CN'], exact: true }).click()
-        await expect(drawer(page)).toBeVisible()
-        await expect(drawer(page).getByText(published.iri, { exact: true })).toBeVisible()
-        await expect(drawer(page).getByText(/已发布.*修订.*冻结版本/)).toBeVisible()
+        await expect(inspector(page)).toBeVisible()
+        await expect(inspector(page).getByText(published.iri, { exact: true })).toBeVisible()
+        await expect(inspector(page).getByText(/最新发布版本.*引用版本.*固定/)).toBeVisible()
         await expect
           .poll(() => new URL(page.url()).searchParams.get('preview'))
           .toBe(String(published.id))
@@ -323,7 +327,7 @@ for (const viewport of DESKTOP_VIEWPORTS) {
         await capture(page, testInfo, evidence, 'O02-preview', 'published-preview')
 
         const loaded = waitForApi(page, { path: '/entity-types/' + published.id })
-        await drawer(page).getByRole('button', { name: '查看', exact: true }).click()
+        await inspector(page).getByRole('button', { name: '查看', exact: true }).click()
         expect((await responseData<Resource>(await loaded)).id).toBe(published.id)
         await expect(
           page.getByRole('heading', { level: 1, name: '实体类型详情', exact: true }),
@@ -337,9 +341,9 @@ for (const viewport of DESKTOP_VIEWPORTS) {
         await expect(
           page.getByRole('searchbox', { name: '搜索', exact: true, includeHidden: true }),
         ).toHaveValue(published.name)
-        await expect(drawer(page).getByText(published.iri, { exact: true })).toBeVisible()
+        await expect(inspector(page).getByText(published.iri, { exact: true })).toBeVisible()
         await page.reload()
-        await expect(drawer(page).getByText(published.iri, { exact: true })).toBeVisible()
+        await expect(inspector(page).getByText(published.iri, { exact: true })).toBeVisible()
         await expect.poll(() => new URL(page.url()).search).toBe(before)
       })
 
@@ -433,8 +437,8 @@ for (const viewport of DESKTOP_VIEWPORTS) {
           preview: String(published.id),
         })
         await page.goto(LIST + '?' + query.toString())
-        await expect(drawer(page).getByText(published.iri, { exact: true })).toBeVisible()
-        await drawer(page).getByRole('button', { name: '查看', exact: true }).click()
+        await expect(inspector(page).getByText(published.iri, { exact: true })).toBeVisible()
+        await inspector(page).getByRole('button', { name: '查看', exact: true }).click()
         await expect(
           page.getByRole('heading', { level: 1, name: '实体类型详情', exact: true }),
         ).toBeVisible()
@@ -444,7 +448,7 @@ for (const viewport of DESKTOP_VIEWPORTS) {
           .poll(() => Object.fromEntries(new URL(page.url()).searchParams))
           .toEqual(Object.fromEntries(query))
         await page.reload()
-        await expect(drawer(page).getByText(published.iri, { exact: true })).toBeVisible()
+        await expect(inspector(page).getByText(published.iri, { exact: true })).toBeVisible()
         await expect
           .poll(() => Object.fromEntries(new URL(page.url()).searchParams))
           .toEqual(Object.fromEntries(query))

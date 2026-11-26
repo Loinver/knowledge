@@ -340,8 +340,16 @@ onBeforeUnmount(() => {
 })
 
 const columns = computed(() => [
-  { title: t('clauses.standard'), key: 'standard', width: 160 },
-  { title: t('clauses.clauseNumber'), key: 'clause_number', width: 110 },
+  {
+    title: t('clauses.standard'),
+    key: 'standard',
+    minWidth: 220,
+    render: (row: ClauseBrief) =>
+      h('div', { class: 'governance-object' }, [
+        h('strong', row.standard),
+        h('code', row.clause_number),
+      ]),
+  },
   {
     title: t('clauses.title'),
     key: 'title',
@@ -403,8 +411,9 @@ const columns = computed(() => [
     <UiAlert v-if="notice && !showEditor" type="success" role="status">{{ notice }}</UiAlert>
     <section class="governance-ledger">
       <header class="governance-caption">
-        <h2>{{ t('page.governanceClauses') }}</h2>
-        <span>{{ t('governanceLedger.resultCount', { count: total }) }}</span>
+        <h2>{{ t('governanceUi.clauseIdentity') }}</h2>
+        <span v-if="loading">{{ t('common.loading') }}</span>
+        <span v-else-if="!error">{{ t('governanceLedger.resultCount', { count: total }) }}</span>
       </header>
       <SearchPanel
         v-model:query="query"
@@ -430,7 +439,6 @@ const columns = computed(() => [
         :row-key="(row: ClauseBrief) => row.id"
         :scroll-x="1000"
         size="small"
-        :max-height="600"
         :empty-text="t(search ? 'ui.emptyFiltered' : 'clauses.empty')"
         @retry="load"
       >

@@ -13,7 +13,7 @@ defineProps<{ title: string; subtitle?: string }>()
 
 <template>
   <header class="auth-heading">
-    <span class="auth-eyebrow">{{ t('operationsUi.authPurpose') }}</span>
+    <span class="auth-eyebrow">{{ t('operationsUi.authScope') }}</span>
     <h1>{{ title }}</h1>
     <p v-if="subtitle">{{ subtitle }}</p>
   </header>
@@ -22,18 +22,17 @@ defineProps<{ title: string; subtitle?: string }>()
 <style scoped>
 .auth-heading {
   margin-bottom: 28px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
 }
 .auth-eyebrow {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
   letter-spacing: 0.06em;
 }
 .auth-heading h1 {
   margin: 8px 0 0;
   color: var(--text-primary, var(--text));
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.4;
 }

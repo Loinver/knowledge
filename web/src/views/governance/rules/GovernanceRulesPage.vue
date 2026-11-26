@@ -249,14 +249,33 @@ const stateType = (state: string) =>
         : 'default'
 
 const columns = computed(() => [
-  { title: t('rules.identifier'), key: 'identifier', width: 170 },
-  { title: t('common.label'), key: 'name_i18n', render: label },
+  {
+    title: t('common.label'),
+    key: 'name_i18n',
+    minWidth: 260,
+    render: (row: Rule) =>
+      h('div', { class: 'governance-object' }, [
+        h('strong', label(row)),
+        h('code', row.identifier),
+      ]),
+  },
   {
     title: t('rules.source'),
     key: 'source_kind',
-    render: (row: Rule) => t(`rules.sources.${row.source_kind}`),
+    minWidth: 220,
+    render: (row: Rule) =>
+      h('div', { class: 'governance-object' }, [
+        h('span', t(`rules.sources.${row.source_kind}`)),
+        h('small', row.source_reference),
+      ]),
   },
-  { title: t('rules.reference'), key: 'source_reference', ellipsis: { tooltip: true } },
+  { title: t('rules.language'), key: 'language', width: 110 },
+  {
+    title: t('rules.execution'),
+    key: 'execution',
+    width: 110,
+    render: (row: Rule) => t(`rules.executions.${row.execution}`),
+  },
   { title: t('common.revision'), key: 'revision', width: 90 },
   {
     title: t('common.actions'),
@@ -510,8 +529,9 @@ async function remove() {
     <UiAlert v-if="notice && !showEditor" type="success" role="status">{{ notice }}</UiAlert>
     <section class="governance-ledger">
       <header class="governance-caption">
-        <h2>{{ t('page.governanceRules') }}</h2>
-        <span>{{ t('governanceLedger.resultCount', { count: total }) }}</span>
+        <h2>{{ t('governanceUi.ruleDefinition') }}</h2>
+        <span v-if="loading">{{ t('common.loading') }}</span>
+        <span v-else-if="!error">{{ t('governanceLedger.resultCount', { count: total }) }}</span>
       </header>
       <SearchPanel
         v-model:query="query"
@@ -548,7 +568,6 @@ async function remove() {
         :pagination="true"
         :row-key="(row: Rule) => row.id"
         size="small"
-        :max-height="600"
         :scroll-x="800"
         :empty-text="t(search || sourceKind ? 'ui.emptyFiltered' : 'rules.empty')"
         @retry="load"

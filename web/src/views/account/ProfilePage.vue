@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink } from 'vue-router'
 
 import { authApi } from '@/api/auth'
 import { getSessionGeneration } from '@/api/tokens'
@@ -141,9 +141,15 @@ async function submit() {
     <div class="account-workspace">
       <aside class="identity-panel">
         <header class="group-heading">
-          <span>{{ t('operationsUi.identity') }}</span>
+          <span>{{ t('app.title') }}</span>
           <h2>{{ auth.user?.display_name || auth.user?.username || t('common.noneValue') }}</h2>
         </header>
+        <nav class="account-nav" :aria-label="t('operationsUi.identity')">
+          <RouterLink to="/account/profile" aria-current="page">{{
+            t('account.profile')
+          }}</RouterLink>
+          <RouterLink to="/account/security">{{ t('account.security') }}</RouterLink>
+        </nav>
         <dl class="identity-list">
           <div>
             <dt>{{ t('auth.username') }}</dt>

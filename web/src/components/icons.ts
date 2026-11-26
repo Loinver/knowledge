@@ -3,6 +3,8 @@ export const iconPaths = {
   close: 'M6 6l12 12M6 18 18 6',
   dashboard: 'M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6V11h-6v9Zm0-16v4h6V4h-6Z',
   ontology: 'M12 3 3 8l9 5 9-5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5',
+  modeling: 'M4 3h7v7H4zM13 14h7v7h-7zM8 10v7h5M11 6h6v8',
+  book: 'M12 5C9 3 5 3 2 4v15c3-1 7-1 10 1m0-15c3-2 7-2 10-1v15c-3-1-7-1-10 1V5',
   datasource:
     'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
   extraction: 'M4 5h16M4 12h10M4 19h7M17 15l3 3-3 3',

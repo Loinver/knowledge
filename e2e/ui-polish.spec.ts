@@ -354,10 +354,29 @@ test('designer Escape cancels pointer drag from toolbar focus and exposes comple
   const world = page.locator('.designer .world')
   const originalView = await world.getAttribute('style')
   await page.locator('.view-toolbar button').first().focus()
-  const area = (await canvas.boundingBox())!
-  await page.mouse.move(area.x + 20, area.y + 20)
+  const background = await canvas.evaluate((element) => {
+    const area = element.getBoundingClientRect()
+    for (const y of [0.2, 0.4, 0.7]) {
+      for (const x of [0.15, 0.5, 0.85]) {
+        const point = { x: area.x + area.width * x, y: area.y + area.height * y }
+        const hit = document.elementFromPoint(point.x, point.y)
+        if (
+          hit &&
+          element.contains(hit) &&
+          !hit.closest('button, [role="button"], .view-toolbar, .canvas-tools, .legend')
+        )
+          return point
+      }
+    }
+    return null
+  })
+  expect(
+    background,
+    'pan starts on visible canvas background outside floating tools',
+  ).not.toBeNull()
+  await page.mouse.move(background!.x, background!.y)
   await page.mouse.down()
-  await page.mouse.move(area.x + 60, area.y + 50)
+  await page.mouse.move(background!.x + 40, background!.y + 30)
   await expect(world).not.toHaveAttribute('style', originalView!)
   await page.keyboard.press('Escape')
   await page.mouse.up()

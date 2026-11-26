@@ -102,6 +102,7 @@ test('knowledge table uses actual remote totals and resets server pagination aft
     )
   }
   await page.goto('/knowledge-bases?q=' + prefix)
+  await page.getByRole('button', { name: '表格视图', exact: true }).click()
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(21)
   const response = page.waitForResponse((res) => {
     const url = new URL(res.url())

@@ -238,7 +238,7 @@ const cases: ListCase[] = [
     path: '/asset-audit-logs',
     title: '操作与资产审计',
     empty: '暂无符合筛选条件的审计记录',
-    witness: () => /装配模板 · \d+/,
+    witness: () => '装配模板',
     retry: '刷新',
   },
   {
@@ -274,8 +274,10 @@ async function findWitness(
     await page.getByRole('searchbox').fill('UiSource')
     await page.getByRole('searchbox').press('Enter')
     await settleApi(page, evidence)
-  } else if (item.id === 'dictionaries') {
-    await page.getByRole('searchbox').fill(names.dictionary)
+  } else if (item.id === 'dictionaries' || item.id === 'templates') {
+    await page
+      .getByRole('searchbox')
+      .fill(item.id === 'templates' ? names.template : names.dictionary)
     await page.getByRole('searchbox').press('Enter')
     await settleApi(page, evidence)
   }
@@ -399,9 +401,7 @@ test.describe('true VIEWER retains reads and cannot edit', () => {
     }, info) => {
       await page.goto(routeFor(item, routeCatalog))
       await settleApi(page, evidence)
-      await expect(
-        page.getByText(item.witness(routeCatalog, stateNames), { exact: true }).first(),
-      ).toBeVisible()
+      await expect(await findWitness(page, item, routeCatalog, stateNames, evidence)).toBeVisible()
       await expect(
         page.getByRole('button', { name: item.create!, exact: true }).first(),
       ).toBeDisabled()

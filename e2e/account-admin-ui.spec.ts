@@ -42,7 +42,11 @@ test('account profile, admin user lifecycle, reset link and password change', as
   await page.goto('/account/profile')
   await formItem(page, '展示名称').locator('input').fill(displayName)
   await page.getByRole('button', { name: '保存' }).click()
-  await expect(page.getByText('资料已保存')).toBeVisible()
+  await expect(
+    page
+      .getByRole('region', { name: '通知', exact: true })
+      .getByText('资料已保存', { exact: true }),
+  ).toBeVisible()
   await page.reload()
   await expect(formItem(page, '展示名称').locator('input')).toHaveValue(displayName)
 
@@ -58,7 +62,11 @@ test('account profile, admin user lifecycle, reset link and password change', as
   await modalFormItem(page, '角色').getByRole('combobox').click()
   await pickOption(page, '编辑者')
   await overlay(page).getByRole('button', { name: '创建' }).click()
-  await expect(page.getByText('用户已创建', { exact: true })).toBeVisible()
+  await expect(
+    page
+      .getByRole('region', { name: '通知', exact: true })
+      .getByText('用户已创建', { exact: true }),
+  ).toBeVisible()
   await expect(page.locator('.edit-modal')).not.toBeVisible()
 
   await page.getByPlaceholder('按用户名或邮箱搜索').fill(username)
@@ -70,7 +78,11 @@ test('account profile, admin user lifecycle, reset link and password change', as
   await modalFormItem(page, '角色').getByRole('combobox').click()
   await pickOption(page, '只读')
   await overlay(page).getByRole('button', { name: '保存' }).click()
-  await expect(page.getByText('用户已更新', { exact: true })).toBeVisible()
+  await expect(
+    page
+      .getByRole('region', { name: '通知', exact: true })
+      .getByText('用户已更新', { exact: true }),
+  ).toBeVisible()
   await expect(row.getByText('只读')).toBeVisible()
 
   await row.getByRole('button', { name: '重置链接' }).click()
@@ -97,7 +109,11 @@ test('account profile, admin user lifecycle, reset link and password change', as
   await formItem(page, '新密码').locator('input').fill(changedPassword)
   await formItem(page, '确认密码').locator('input').fill(changedPassword)
   await page.getByRole('button', { name: '修改密码' }).click()
-  await expect(page.getByText('密码已更新，其他设备上的登录已失效')).toBeVisible()
+  await expect(
+    page
+      .getByRole('region', { name: '通知', exact: true })
+      .getByText('密码已更新，其他设备上的登录已失效', { exact: true }),
+  ).toBeVisible()
   await logout(page)
 
   await page.getByPlaceholder('用户名或邮箱', { exact: true }).fill(username)

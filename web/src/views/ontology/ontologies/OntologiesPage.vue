@@ -449,11 +449,7 @@ function resetSearch() {
 
 <template>
   <section class="page">
-    <PageHeader
-      :title="t('page.ontologies')"
-      :eyebrow="t('studio.ontologyLedger')"
-      :description="t('ontology.description')"
-    >
+    <PageHeader :title="t('page.ontologies')" :description="t('ontology.description')">
       <template #actions>
         <UiButton type="primary" :disabled="!canWrite" @click="openCreate">{{
           t('ontology.create')
@@ -671,16 +667,17 @@ function resetSearch() {
   gap: 0;
   align-items: stretch;
   margin-bottom: 16px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--border-muted);
+  border-radius: 0;
   background: var(--bg-panel);
   overflow: hidden;
 }
 .ledger-readouts button {
   display: flex;
-  gap: 24px;
+  gap: 10px;
   align-items: center;
-  padding: 14px 18px;
+  padding: 10px 16px;
   border: 0;
   border-right: 1px solid var(--border);
   background: transparent;
@@ -690,7 +687,7 @@ function resetSearch() {
 }
 .ledger-readouts strong {
   color: var(--state-color);
-  font: 600 22px var(--font-mono, monospace);
+  font: 600 13px var(--font-mono, monospace);
 }
 .ledger-readouts button[aria-pressed='true'] {
   background: var(--bg-inset);
@@ -698,7 +695,7 @@ function resetSearch() {
 }
 .ledger-readouts p {
   margin: 0;
-  padding: 14px 18px;
+  padding: 10px 18px;
   align-self: center;
   color: var(--text-secondary);
   font-size: 12px;

@@ -815,18 +815,18 @@ function onCanvasKey(event: KeyboardEvent) {
   position: relative;
   flex: 1;
   min-width: 0;
-  min-height: 200px;
+  min-height: 0;
   overflow: hidden;
   background: var(--canvas, var(--surface-muted));
-  border: 1px solid var(--border-default);
-  border-radius: var(--r-lg);
+  border: 0;
+  border-radius: 0;
 }
 .canvas-scroll {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 200px;
+  min-height: 0;
   overflow: hidden;
   touch-action: none;
   cursor: grab;
@@ -846,9 +846,8 @@ function onCanvasKey(event: KeyboardEvent) {
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  top: 10px;
-  left: 10px;
-  right: 10px;
+  bottom: 16px;
+  left: 16px;
   width: fit-content;
   max-width: calc(100% - 20px);
   padding: 4px;
@@ -902,12 +901,13 @@ button svg {
 .canvas-help {
   position: absolute;
   pointer-events: none;
-  left: 12px;
-  right: 12px;
-  bottom: 8px;
-  margin: 0;
-  color: var(--foreground-secondary);
-  font-size: var(--font-caption);
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .legend-panel,
 .minimap-panel {
@@ -1145,10 +1145,6 @@ button svg {
   font-size: 10px;
 }
 @media (max-width: 48rem) {
-  .canvas-help {
-    max-width: 65%;
-    font-size: var(--font-caption);
-  }
   .minimap-panel {
     right: 6px;
     bottom: 48px;

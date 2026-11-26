@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { FocusScope } from 'reka-ui'
 import { computed, h, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -13,7 +14,6 @@ import {
   type SemanticViewConfig as SemanticConfig,
   viewTemplateApi,
 } from '@/api/graph'
-import PageHeader from '@/components/PageHeader.vue'
 import {
   FormContainer,
   FormField,
@@ -137,6 +137,26 @@ const selectedEdge = computed(() =>
 )
 const showEvidence = ref(false)
 const inspectorOpen = ref(true)
+const resourcesOpen = ref(true)
+const focusMode = ref(false)
+let focusOrigin: HTMLElement | null = null
+watch(focusMode, async (active) => {
+  if (active) {
+    focusOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  } else {
+    await nextTick()
+    if (focusOrigin?.isConnected) focusOrigin.focus({ preventScroll: true })
+  }
+})
+const resourceQuery = ref('')
+function toggleResources() {
+  resourcesOpen.value = !resourcesOpen.value
+  focusMode.value = false
+}
+function toggleInspector() {
+  inspectorOpen.value = !inspectorOpen.value
+  focusMode.value = false
+}
 const traceButton = ref<InstanceType<typeof UiButton> | null>(null)
 const showSettings = ref(false)
 const showFacts = ref(false)
@@ -987,6 +1007,27 @@ const visibleGraph = computed(() => {
     edges: graph.edges.filter((edge) => relationshipFilter.value.includes(edge.predicate)),
   }
 })
+const loadedInstances = computed(() => {
+  const query = resourceQuery.value.trim().toLocaleLowerCase()
+  return (visibleGraph.value?.nodes ?? []).filter(
+    (node) => !query || `${entityName(node)} ${node.iri}`.toLocaleLowerCase().includes(query),
+  )
+})
+async function selectLoadedInstance(iri: string) {
+  selectNode(iri)
+  await nextTick()
+  canvas.value?.focus(iri)
+}
+function exitWorkspace(event: KeyboardEvent) {
+  // GraphCanvas handles gesture cancellation before this bubbles to the workspace.
+  if (event.defaultPrevented) return
+  if (focusMode.value) {
+    focusMode.value = false
+    event.preventDefault()
+  } else {
+    dismissInspector()
+  }
+}
 function clearFilters() {
   excludedTypes.value = []
   relationshipFilter.value = []
@@ -998,17 +1039,35 @@ function onExport(kind: string | number) {
 </script>
 
 <template>
-  <section class="graph-page">
-    <div class="graph-heading">
-      <PageHeader
-        :title="t('page.graphBrowse')"
-        :eyebrow="t('studio.graphStudio')"
-        :identity="data ? t('graph.resultSet', { id: data.graph_revision_id }) : undefined"
-      >
-        <template #context
-          ><span class="workspace-context">{{ t('ui.readOnlyLabel') }}</span></template
+  <FocusScope
+    :trapped="focusMode"
+    :loop="focusMode"
+    :present="focusMode"
+    as-child
+    @mount-auto-focus="$event.preventDefault()"
+    @unmount-auto-focus="$event.preventDefault()"
+  >
+    <section class="graph-page" :class="{ 'focus-mode': focusMode }" @keydown.esc="exitWorkspace">
+      <header class="graph-heading">
+        <UiButton
+          size="small"
+          quaternary
+          :aria-expanded="resourcesOpen && !focusMode"
+          aria-controls="graph-resources"
+          @click="toggleResources"
+          >{{ t('graphStudio.loadedInstances') }}</UiButton
         >
-        <template #actions>
+        <div class="graph-title">
+          <h1>{{ t('page.graphBrowse') }}</h1>
+          <div class="workspace-context">
+            <span>{{ t('ui.readOnlyLabel') }}</span>
+            <span v-if="data">{{ t('graph.resultSet', { id: data.graph_revision_id }) }}</span>
+            <span v-if="data?.ontology_revision"
+              >{{ t('designerUi.frozenContent') }} {{ `r${data.ontology_revision}` }}</span
+            >
+          </div>
+        </div>
+        <div class="graph-actions">
           <RouterLink v-if="knowledgeReturn" :to="knowledgeReturn">{{
             t('kb.backToSearch')
           }}</RouterLink>
@@ -1016,626 +1075,753 @@ function onExport(kind: string | number) {
           <RouterLink :to="{ name: 'graph-entities', query: { graph: data?.graph_revision_id } }">{{
             t('page.graphEntities')
           }}</RouterLink>
-        </template>
-      </PageHeader>
-    </div>
-    <div v-if="data" class="observation-binding">
-      <span
-        >{{ t('graph.chainRun') }} <code>{{ `#${data.run_id}` }}</code></span
-      >
-      <span v-if="data.ontology_id"
-        >{{ t('page.ontologies') }} <code>{{ `#${data.ontology_id}` }}</code></span
-      >
-      <span v-if="data.ontology_revision"
-        >{{ t('designerUi.frozenContent') }} <code>{{ `r${data.ontology_revision}` }}</code></span
-      >
-      <span v-else>{{ t('graph.chainUnpinned') }}</span>
-      <span class="spacer" />
-      <RouterLink :to="{ name: 'graph-reports', query: { graph: data.graph_revision_id } }">{{
-        t('page.graphReports')
-      }}</RouterLink>
-    </div>
-    <div class="graph-toolbar">
-      <UiSelect
-        class="graph-search"
-        :value="selectedIri || center || null"
-        :options="searchOptions"
-        :loading="search.loading.value"
-        filterable
-        remote
-        clearable
-        :placeholder="t('graph.searchHint')"
-        :aria-label="t('graph.searchHint')"
-        @search="searchText = $event"
-        @update:value="explore"
-      />
-      <UiSelect
-        class="layout-select"
-        :value="layoutId ?? (center ? 'ring' : 'type_grid')"
-        :options="layoutOptions"
-        :aria-label="t('graph.layoutLabel')"
-        @update:value="selectLayout"
-      />
-      <UiButton
-        :type="excludedTypes.length || relationshipFilter.length ? 'primary' : 'default'"
-        @click="showSettings = true"
-        >{{ t('graphUi.filters') }}</UiButton
-      >
-      <UiButton :disabled="!data" @click="showPath = true">{{ t('graph.pathQuery') }}</UiButton>
-      <UiButton :disabled="!data" @click="showFacts = true">{{ t('graphUi.facts') }}</UiButton>
-      <UiButton :disabled="!center" @click="explore(null)">{{ t('graph.overview') }}</UiButton>
-      <UiButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</UiButton>
-      <UiButton :aria-expanded="inspectorOpen" @click="inspectorOpen = !inspectorOpen">{{
-        t('graphUi.inspector')
-      }}</UiButton>
-    </div>
-    <div v-if="error || branchError || search.error.value || exportError" class="graph-message">
-      <UiAlert type="warning"
-        >{{ error || branchError || search.error.value || exportError
-        }}<span v-if="data"> · {{ t('graphUi.retained') }}</span>
-        <span class="alert-action"
-          ><UiButton
-            size="small"
-            @click="error ? reload() : branchError ? expandSelected() : search.reload()"
-            >{{ t('ui.retry') }}</UiButton
-          ></span
-        >
-      </UiAlert>
-    </div>
-    <div v-if="data?.truncated" class="graph-message">
-      <UiAlert type="warning">{{ t('graphUi.limited') }}</UiAlert>
-    </div>
-    <div v-if="qualityOverlay" class="graph-message">
-      <UiAlert type="info">{{
-        t('graphUi.qualityScope', { count: data?.quarantine_count ?? '—' })
-      }}</UiAlert>
-    </div>
-    <label
-      v-if="layoutId === 'timeline' && replayBounds && replayRange"
-      class="replay graph-message"
-    >
-      <span>{{ t('graph.replay') }}</span
-      ><UiSlider
-        v-model:value="replayRange"
-        range
-        :min="replayBounds[0]"
-        :max="replayBounds[1]"
-        :step="1"
-        :format-tooltip="(value: number) => new Date(value).toISOString()"
-        :aria-label="t('graph.replay')"
-      />
-    </label>
-    <div class="graph-workspace" :aria-busy="loading || expanding" @keydown.esc="dismissInspector">
-      <main class="canvas-area">
-        <p v-if="loading || expanding" class="loading-indicator" role="status">
-          {{ t('common.loading') }}
-        </p>
-        <GraphCanvas
-          v-if="data && visibleGraph"
-          ref="canvas"
-          :graph="visibleGraph"
-          :neighborhood="!!center"
-          :layout-id="layoutId"
-          :semantic-context="semanticContext"
-          :relation-labels="relationLabels"
-          :flagged-iris="qualityOverlay ? flaggedIris : undefined"
-          :highlight-iris="highlightIris"
-          :selected-iri="selectedIri"
-          :selected-edge-key="selectedEdge ? edgeKey(selectedEdge) : null"
-          @select="selectNode"
-          @select-edge="selectEdge"
-          @selected-edge-updated="updateSelectedEdge"
-        />
-        <div v-if="!loading && !visibleGraph?.nodes.length" class="canvas-empty">
-          <UiEmpty :description="error ? t('graphUi.loadFailed') : t('graph.noVisibleNodes')"
-            ><template #extra
-              ><UiButton @click="error ? reload() : clearFilters()">{{
-                error ? t('ui.retry') : t('ui.clearFilters')
-              }}</UiButton></template
-            ></UiEmpty
+          <RouterLink
+            v-if="data"
+            :to="{ name: 'graph-reports', query: { graph: data.graph_revision_id } }"
+            >{{ t('page.graphReports') }}</RouterLink
           >
-        </div>
-      </main>
-      <aside
-        v-if="inspectorOpen && (selectedNode || selectedEdge)"
-        class="graph-inspector"
-        :class="{ 'inspector-idle': !selectedNode && !selectedEdge }"
-        :aria-label="t('graphUi.inspector')"
-      >
-        <div class="inspector-heading">
-          <strong>{{ showEvidence ? t('page.graphEvidence') : t('graphUi.inspector') }}</strong
-          ><UiButton size="small" quaternary @click="dismissInspector">{{
-            showEvidence ? t('graphUi.backObject') : t('common.close')
+          <UiButton
+            size="small"
+            :aria-expanded="inspectorOpen && !focusMode"
+            :disabled="!selectedNode && !selectedEdge"
+            @click="toggleInspector"
+            >{{ t('graphUi.inspector') }}</UiButton
+          >
+          <UiButton size="small" :aria-pressed="focusMode" @click="focusMode = !focusMode">{{
+            t(focusMode ? 'graphStudio.exitFocus' : 'graphStudio.focus')
           }}</UiButton>
         </div>
-        <div class="inspector-body">
-          <UiEmpty v-if="!selectedNode && !selectedEdge" :description="t('studio.selectObject')" />
-          <div v-if="data && (selectedNode || selectedEdge)" class="inspector-binding">
-            <span>{{ t('graph.resultSet', { id: data.graph_revision_id }) }}</span>
-            <code v-if="selectedEdge">{{ edgeKey(selectedEdge) }}</code>
-            <span>{{ t('ui.readOnlyLabel') }}</span>
+      </header>
+      <div v-if="error || branchError || search.error.value || exportError" class="graph-message">
+        <UiAlert type="warning"
+          >{{ error || branchError || search.error.value || exportError
+          }}<span v-if="data"> · {{ t('graphUi.retained') }}</span>
+          <span class="alert-action"
+            ><UiButton
+              size="small"
+              @click="error ? reload() : branchError ? expandSelected() : search.reload()"
+              >{{ t('ui.retry') }}</UiButton
+            ></span
+          >
+        </UiAlert>
+      </div>
+      <div v-if="data?.truncated" class="graph-message">
+        <UiAlert type="warning">{{ t('graphUi.limited') }}</UiAlert>
+      </div>
+      <div v-if="qualityOverlay" class="graph-message">
+        <UiAlert type="info">{{
+          t('graphUi.qualityScope', { count: data?.quarantine_count ?? '—' })
+        }}</UiAlert>
+      </div>
+      <label
+        v-if="layoutId === 'timeline' && replayBounds && replayRange"
+        class="replay graph-message"
+      >
+        <span>{{ t('graph.replay') }}</span
+        ><UiSlider
+          v-model:value="replayRange"
+          range
+          :min="replayBounds[0]"
+          :max="replayBounds[1]"
+          :step="1"
+          :format-tooltip="(value: number) => new Date(value).toISOString()"
+          :aria-label="t('graph.replay')"
+        />
+      </label>
+      <div class="graph-workspace" :aria-busy="loading || expanding">
+        <aside
+          v-if="resourcesOpen && !focusMode"
+          id="graph-resources"
+          class="graph-resources"
+          :aria-label="t('graphStudio.loadedInstances')"
+        >
+          <div class="resource-heading">
+            <strong>{{ t('graphStudio.loadedInstances') }}</strong
+            ><span>{{ visibleGraph?.nodes.length ?? 0 }}</span>
+            <UiButton size="tiny" quaternary @click="resourcesOpen = false">{{
+              t('common.close')
+            }}</UiButton>
           </div>
-          <template v-if="!showEvidence && (selectedNode || selectedEdge)">
-            <template v-if="selectedNode">
-              <UiTag size="small">{{ shortName(selectedNode.type_iri) }}</UiTag>
-              <h2>{{ entityName(selectedNode) }}</h2>
-              <p class="object-iri">{{ selectedNode.iri }}</p>
-              <UiSpace
-                ><UiButton
-                  type="primary"
-                  :loading="expanding"
-                  :disabled="loading || !!error || data!.nodes.length >= 500"
-                  @click="expandSelected"
-                  >{{ t('graphUi.expand') }}</UiButton
-                ><UiButton
-                  :disabled="!branches.has(selectedNode.iri) || loading"
-                  @click="collapseSelected"
-                  >{{ t('graphUi.collapse') }}</UiButton
-                ></UiSpace
-              >
-              <dl class="attribute-list">
-                <template v-for="(value, key) in selectedNode.attrs" :key="key"
-                  ><dt>{{ key }}</dt>
-                  <dd>{{ typeof value === 'object' ? JSON.stringify(value) : value }}</dd></template
-                >
-              </dl>
-            </template>
-            <template v-if="selectedEdge">
-              <UiTag size="small" :type="selectedEdge.kind === 'DERIVED' ? 'warning' : 'default'">{{
-                selectedAggregatedEdge
-                  ? t('graphUi.aggregatedRelation')
-                  : t(selectedEdge.kind === 'DERIVED' ? 'graph.derived' : 'graph.directRelation')
-              }}</UiTag>
-              <h2>{{ relationName(selectedEdge.predicate) }}</h2>
-              <dl class="attribute-list">
-                <dt>{{ t('graph.subject') }}</dt>
-                <dd>{{ selectedEdge.subject }}</dd>
-                <dt>{{ t('graph.predicate') }}</dt>
-                <dd>{{ selectedEdge.predicate }}</dd>
-                <dt>{{ t('graph.object') }}</dt>
-                <dd>{{ selectedEdge.object_ }}</dd>
-                <template v-for="(value, key) in selectedEdge.props" :key="key"
-                  ><dt>{{ key }}</dt>
-                  <dd>{{ value }}</dd></template
-                >
-              </dl>
-              <UiAlert v-if="selectedEdge.kind === 'DERIVED'" type="info">{{
-                t('graphUi.derivedEvidence')
-              }}</UiAlert>
-            </template>
-            <UiButton
-              ref="traceButton"
-              block
-              :disabled="
-                selectedAggregatedEdge || selectedEdge?.kind === 'DERIVED' || loading || !!error
+          <UiInput
+            v-model:value="resourceQuery"
+            clearable
+            :placeholder="t('graph.searchHint')"
+            :aria-label="t('graphStudio.loadedInstances')"
+            class="resource-search"
+          />
+          <div class="resource-list">
+            <p v-if="!data && loading" role="status">{{ t('common.loading') }}</p>
+            <UiEmpty
+              v-else-if="!loadedInstances.length"
+              :description="
+                t(
+                  error
+                    ? 'graphUi.loadFailed'
+                    : resourceQuery
+                      ? 'ui.emptyFiltered'
+                      : 'graph.noVisibleNodes',
+                )
               "
-              @click="showEvidence = true"
-              >{{ t('graph.trace') }}</UiButton
+            />
+            <button
+              v-for="node in loadedInstances"
+              :key="node.iri"
+              type="button"
+              class="resource-row"
+              :class="{ active: selectedIri === node.iri }"
+              :aria-pressed="selectedIri === node.iri"
+              :title="node.iri"
+              @click="selectLoadedInstance(node.iri)"
             >
-          </template>
-          <template v-else-if="showEvidence">
-            <p class="evidence-context">
-              {{
-                selectedEdge
-                  ? relationName(selectedEdge.predicate)
-                  : selectedNode
-                    ? entityName(selectedNode)
-                    : ''
-              }}
-              ·
-              {{ t('graph.resultSet', { id: data!.graph_revision_id }) }}
-            </p>
-            <p v-if="evidence.loading.value" role="status">{{ t('common.loading') }}</p>
-            <UiAlert v-else-if="evidence.error.value" type="warning"
-              >{{ evidence.error.value
-              }}<span class="alert-action"
-                ><UiButton @click="evidence.reload">{{ t('ui.retry') }}</UiButton></span
-              ></UiAlert
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="m8 1 6 3.5v7L8 15l-6-3.5v-7L8 1Zm0 7L2 4.5M8 8l6-3.5M8 8v7"
+                  fill="none"
+                  stroke="currentColor"
+                />
+              </svg>
+              <span
+                >{{ entityName(node) }}<small>{{ node.row_key }}</small></span
+              >
+            </button>
+          </div>
+          <div v-if="data" class="observation-binding">
+            <span
+              >{{ t('graph.chainRun') }} <code>{{ `#${data.run_id}` }}</code></span
             >
-            <template v-else-if="evidence.data.value"
-              ><p>{{ t('graph.totalEvidence', { n: evidence.data.value.total_count }) }}</p>
-              <EvidenceInspector :items="evidence.data.value.evidences" /><UiEmpty
-                v-if="!evidence.data.value.total_count"
-                :description="t('graphUi.noEvidence')"
-            /></template>
-          </template>
-          <KnowledgeGraphReferences
-            v-if="
-              data && (selectedNode || (selectedEdge?.kind === 'DIRECT' && !selectedAggregatedEdge))
-            "
-            :graph-id="data.graph_revision_id"
-            :entity-iri="selectedNode?.iri ?? selectedEdge!.subject"
-            :fact-id="selectedEdge?.kind === 'DIRECT' ? selectedEdge.id : undefined"
-          />
-        </div>
-      </aside>
-    </div>
-    <footer class="graph-footer">
-      <span v-if="data">{{
-        t('graphUi.counts', {
-          total: data.entity_total,
-          loaded: data.nodes.length,
-          visible: canvas?.displayCounts.nodes ?? 0,
-          edges: canvas?.displayCounts.edges ?? 0,
-        })
-      }}</span>
-      <span v-if="data?.truncated" class="truncation-readout">{{ t('graphUi.limited') }}</span>
-      <span>{{ t('designerUi.gestures') }}</span>
-    </footer>
-    <UiDrawer v-model:show="showSettings" :width="420"
-      ><UiDrawerContent :title="t('graphUi.filters')" closable
-        ><div class="panel-form">
-          <label
-            ><span>{{ t('graph.revisionInput') }}</span
-            ><UiInputNumber
-              :value="graphId ?? null"
-              :min="1"
-              :precision="0"
+            <span v-if="data.ontology_id"
+              >{{ t('page.ontologies') }} <code>{{ `#${data.ontology_id}` }}</code></span
+            >
+            <span v-if="!data.ontology_revision">{{ t('graph.chainUnpinned') }}</span>
+          </div>
+        </aside>
+        <main class="canvas-area">
+          <div class="graph-toolbar" role="toolbar" :aria-label="t('graphUi.canvasTools')">
+            <UiSelect
+              class="graph-search"
+              :value="selectedIri || center || null"
+              :options="searchOptions"
+              :loading="search.loading.value"
+              filterable
+              remote
               clearable
-              :placeholder="t('graph.currentResult')"
-              :aria-label="t('graph.revisionInput')"
-              @update:value="selectGraph"
-          /></label>
-          <label
-            ><span>{{ t('graph.depth') }}</span
-            ><UiSelect
-              v-model:value="depth"
-              :options="[
-                { label: t('graph.oneDegree'), value: 1 },
-                { label: t('graph.twoDegrees'), value: 2 },
-              ]"
-              :aria-label="t('graph.depth')"
-          /></label>
-          <label
-            ><span>{{ t('graph.hiddenTypes') }}</span
-            ><UiSelect
-              v-model:value="excludedTypes"
-              :options="typeOptions"
-              multiple
-              clearable
-              :aria-label="t('graph.hiddenTypes')"
-              :placeholder="t('graph.hiddenTypes')"
-          /></label>
-          <p class="scope-hint">{{ t('graphUi.typeScope') }}</p>
-          <label
-            ><span>{{ t('graphUi.relationships') }}</span
-            ><UiSelect
-              v-model:value="relationshipFilter"
-              :options="relationshipOptions"
-              multiple
-              clearable
-              :aria-label="t('graphUi.relationships')"
-              :placeholder="t('graphUi.allRelations')"
-          /></label>
-          <UiCheckbox v-model:checked="includeDerived">{{ t('graph.showDerived') }}</UiCheckbox
-          ><UiCheckbox v-model:checked="qualityOverlay">{{ t('graph.qualityOverlay') }}</UiCheckbox
-          ><UiButton @click="clearFilters">{{ t('ui.clearFilters') }}</UiButton>
-          <h3>{{ t('graphUi.analysis') }}</h3>
-          <p class="scope-hint">{{ t('graphUi.analysisScope') }}</p>
-          <UiSpace
-            ><UiButton @click="openAnalysis('diff')">{{ t('graph.diffQuery') }}</UiButton
-            ><UiButton @click="openAnalysis('matrix')">{{ t('graph.matrix') }}</UiButton
-            ><UiButton @click="openAnalysis('centrality')">{{ t('graph.centrality') }}</UiButton
-            ><UiPopselect :options="exportOptions" trigger="click" @update:value="onExport"
-              ><UiButton :disabled="!data">{{ t('graph.export.title') }}</UiButton></UiPopselect
-            ></UiSpace
-          >
-          <h3>{{ t('graph.templates') }}</h3>
-          <UiAlert v-if="templateError || templateData.error.value" type="warning">{{
-            templateError || templateData.error.value
-          }}</UiAlert>
-          <UiSelect
-            :value="selectedTemplateId"
-            :options="templateOptions"
-            :loading="applyingTemplate || templateData.loading.value"
-            :placeholder="t('graph.templates')"
-            :aria-label="t('graph.templates')"
-            @update:value="applyTemplate"
-          />
-          <SemanticViewConfig
-            :layout-id="layoutId ?? (center ? 'ring' : 'type_grid')"
-            :config="semanticConfig"
-            :catalog="semanticFields.data.value"
-            :loading="semanticFields.loading.value"
-            :error="semanticFields.error.value"
-            @change="configureSemantics"
-            @retry="semanticFields.reload"
-          />
-          <FormContainer
-            v-if="data && canWrite"
-            :model="templateModel"
-            :rules="templateRules"
-            :disabled="
-              savingTemplate || semanticFields.loading.value || semanticFields.data.value?.stale
-            "
-            class="template-form"
-            @submit="saveTemplate"
-          >
-            <FormField path="name" :label="t('graph.templateName')">
-              <UiInput v-model:value="templateName" :placeholder="t('graph.templateName')" />
-            </FormField>
+              :placeholder="t('graph.searchHint')"
+              :aria-label="t('graph.searchHint')"
+              @search="searchText = $event"
+              @update:value="explore"
+            />
+            <UiSelect
+              class="layout-select"
+              :value="layoutId ?? (center ? 'ring' : 'type_grid')"
+              :options="layoutOptions"
+              :aria-label="t('graph.layoutLabel')"
+              @update:value="selectLayout"
+            />
             <UiButton
-              attr-type="submit"
-              :loading="savingTemplate"
-              :disabled="semanticFields.loading.value || semanticFields.data.value?.stale"
-              >{{ t('graph.templateSave') }}</UiButton
+              :type="excludedTypes.length || relationshipFilter.length ? 'primary' : 'default'"
+              @click="showSettings = true"
+              >{{ t('graphUi.filters') }}</UiButton
             >
-          </FormContainer>
-          <UiPopconfirm
-            v-if="canWrite && selectedTemplateId !== null"
-            @positive-click="removeTemplate"
-            ><template #trigger
-              ><UiButton tertiary type="error" :loading="removingTemplate">{{
-                t('graph.templateDelete')
-              }}</UiButton></template
-            >{{ t('graph.templateDeleteConfirm', { name: selectedTemplateName }) }}</UiPopconfirm
-          >
-          <UiAlert v-if="recommendations?.recommendations.length" type="info"
-            ><p>{{ t('graph.recommended') }}</p>
+            <UiButton :disabled="!data" @click="showPath = true">{{
+              t('graph.pathQuery')
+            }}</UiButton>
+            <UiButton :disabled="!data" @click="showFacts = true">{{
+              t('graphUi.facts')
+            }}</UiButton>
+            <UiButton :disabled="!center" @click="explore(null)">{{
+              t('graph.overview')
+            }}</UiButton>
+            <UiButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</UiButton>
+          </div>
+          <p v-if="loading || expanding" class="loading-indicator" role="status">
+            {{ t('common.loading') }}
+          </p>
+          <GraphCanvas
+            v-if="data && visibleGraph"
+            ref="canvas"
+            :graph="visibleGraph"
+            :neighborhood="!!center"
+            :layout-id="layoutId"
+            :semantic-context="semanticContext"
+            :relation-labels="relationLabels"
+            :flagged-iris="qualityOverlay ? flaggedIris : undefined"
+            :highlight-iris="highlightIris"
+            :selected-iri="selectedIri"
+            :selected-edge-key="selectedEdge ? edgeKey(selectedEdge) : null"
+            @select="selectNode"
+            @select-edge="selectEdge"
+            @selected-edge-updated="updateSelectedEdge"
+          />
+          <div v-if="!loading && !visibleGraph?.nodes.length" class="canvas-empty">
+            <UiEmpty :description="error ? t('graphUi.loadFailed') : t('graph.noVisibleNodes')"
+              ><template #extra
+                ><UiButton @click="error ? reload() : clearFilters()">{{
+                  error ? t('ui.retry') : t('ui.clearFilters')
+                }}</UiButton></template
+              ></UiEmpty
+            >
+          </div>
+        </main>
+        <aside
+          v-if="inspectorOpen && !focusMode && (selectedNode || selectedEdge)"
+          class="graph-inspector"
+          :class="{ 'inspector-idle': !selectedNode && !selectedEdge }"
+          :aria-label="t('graphUi.inspector')"
+        >
+          <div class="inspector-heading">
+            <strong>{{ showEvidence ? t('page.graphEvidence') : t('graphUi.inspector') }}</strong
+            ><UiButton size="small" quaternary @click="dismissInspector">{{
+              showEvidence ? t('graphUi.backObject') : t('common.close')
+            }}</UiButton>
+          </div>
+          <div class="inspector-body">
+            <UiEmpty
+              v-if="!selectedNode && !selectedEdge"
+              :description="t('studio.selectObject')"
+            />
+            <div v-if="data && (selectedNode || selectedEdge)" class="inspector-binding">
+              <span>{{ t('graph.resultSet', { id: data.graph_revision_id }) }}</span>
+              <code v-if="selectedEdge">{{ edgeKey(selectedEdge) }}</code>
+              <span>{{ t('ui.readOnlyLabel') }}</span>
+            </div>
+            <template v-if="!showEvidence && (selectedNode || selectedEdge)">
+              <template v-if="selectedNode">
+                <UiTag size="small">{{ shortName(selectedNode.type_iri) }}</UiTag>
+                <h2>{{ entityName(selectedNode) }}</h2>
+                <p class="object-iri">{{ selectedNode.iri }}</p>
+                <UiSpace
+                  ><UiButton
+                    type="primary"
+                    :loading="expanding"
+                    :disabled="loading || !!error || data!.nodes.length >= 500"
+                    @click="expandSelected"
+                    >{{ t('graphUi.expand') }}</UiButton
+                  ><UiButton
+                    :disabled="!branches.has(selectedNode.iri) || loading"
+                    @click="collapseSelected"
+                    >{{ t('graphUi.collapse') }}</UiButton
+                  ></UiSpace
+                >
+                <dl class="attribute-list">
+                  <template v-for="(value, key) in selectedNode.attrs" :key="key"
+                    ><dt>{{ key }}</dt>
+                    <dd>
+                      {{ typeof value === 'object' ? JSON.stringify(value) : value }}
+                    </dd></template
+                  >
+                </dl>
+              </template>
+              <template v-if="selectedEdge">
+                <UiTag
+                  size="small"
+                  :type="selectedEdge.kind === 'DERIVED' ? 'warning' : 'default'"
+                  >{{
+                    selectedAggregatedEdge
+                      ? t('graphUi.aggregatedRelation')
+                      : t(
+                          selectedEdge.kind === 'DERIVED'
+                            ? 'graph.derived'
+                            : 'graph.directRelation',
+                        )
+                  }}</UiTag
+                >
+                <h2>{{ relationName(selectedEdge.predicate) }}</h2>
+                <dl class="attribute-list">
+                  <dt>{{ t('graph.subject') }}</dt>
+                  <dd>{{ selectedEdge.subject }}</dd>
+                  <dt>{{ t('graph.predicate') }}</dt>
+                  <dd>{{ selectedEdge.predicate }}</dd>
+                  <dt>{{ t('graph.object') }}</dt>
+                  <dd>{{ selectedEdge.object_ }}</dd>
+                  <template v-for="(value, key) in selectedEdge.props" :key="key"
+                    ><dt>{{ key }}</dt>
+                    <dd>{{ value }}</dd></template
+                  >
+                </dl>
+                <UiAlert v-if="selectedEdge.kind === 'DERIVED'" type="info">{{
+                  t('graphUi.derivedEvidence')
+                }}</UiAlert>
+              </template>
+              <UiButton
+                ref="traceButton"
+                block
+                :disabled="
+                  selectedAggregatedEdge || selectedEdge?.kind === 'DERIVED' || loading || !!error
+                "
+                @click="showEvidence = true"
+                >{{ t('graph.trace') }}</UiButton
+              >
+            </template>
+            <template v-else-if="showEvidence">
+              <p class="evidence-context">
+                {{
+                  selectedEdge
+                    ? relationName(selectedEdge.predicate)
+                    : selectedNode
+                      ? entityName(selectedNode)
+                      : ''
+                }}
+                ·
+                {{ t('graph.resultSet', { id: data!.graph_revision_id }) }}
+              </p>
+              <p v-if="evidence.loading.value" role="status">{{ t('common.loading') }}</p>
+              <UiAlert v-else-if="evidence.error.value" type="warning"
+                >{{ evidence.error.value
+                }}<span class="alert-action"
+                  ><UiButton @click="evidence.reload">{{ t('ui.retry') }}</UiButton></span
+                ></UiAlert
+              >
+              <template v-else-if="evidence.data.value"
+                ><p>{{ t('graph.totalEvidence', { n: evidence.data.value.total_count }) }}</p>
+                <EvidenceInspector :items="evidence.data.value.evidences" /><UiEmpty
+                  v-if="!evidence.data.value.total_count"
+                  :description="t('graphUi.noEvidence')"
+              /></template>
+            </template>
+            <KnowledgeGraphReferences
+              v-if="
+                data &&
+                (selectedNode || (selectedEdge?.kind === 'DIRECT' && !selectedAggregatedEdge))
+              "
+              :graph-id="data.graph_revision_id"
+              :entity-iri="selectedNode?.iri ?? selectedEdge!.subject"
+              :fact-id="selectedEdge?.kind === 'DIRECT' ? selectedEdge.id : undefined"
+            />
+          </div>
+        </aside>
+      </div>
+      <footer class="graph-footer">
+        <span v-if="data">{{
+          t('graphUi.counts', {
+            total: data.entity_total,
+            loaded: data.nodes.length,
+            visible: canvas?.displayCounts.nodes ?? 0,
+            edges: canvas?.displayCounts.edges ?? 0,
+          })
+        }}</span>
+        <span v-if="data?.truncated" class="truncation-readout">{{ t('graphUi.limited') }}</span>
+        <span>{{ t('designerUi.gestures') }}</span>
+      </footer>
+      <UiDrawer v-model:show="showSettings" :width="420"
+        ><UiDrawerContent :title="t('graphUi.filters')" closable
+          ><div class="panel-form">
+            <label
+              ><span>{{ t('graph.revisionInput') }}</span
+              ><UiInputNumber
+                :value="graphId ?? null"
+                :min="1"
+                :precision="0"
+                clearable
+                :placeholder="t('graph.currentResult')"
+                :aria-label="t('graph.revisionInput')"
+                @update:value="selectGraph"
+            /></label>
+            <label
+              ><span>{{ t('graph.depth') }}</span
+              ><UiSelect
+                v-model:value="depth"
+                :options="[
+                  { label: t('graph.oneDegree'), value: 1 },
+                  { label: t('graph.twoDegrees'), value: 2 },
+                ]"
+                :aria-label="t('graph.depth')"
+            /></label>
+            <label
+              ><span>{{ t('graph.hiddenTypes') }}</span
+              ><UiSelect
+                v-model:value="excludedTypes"
+                :options="typeOptions"
+                multiple
+                clearable
+                :aria-label="t('graph.hiddenTypes')"
+                :placeholder="t('graph.hiddenTypes')"
+            /></label>
+            <p class="scope-hint">{{ t('graphUi.typeScope') }}</p>
+            <label
+              ><span>{{ t('graphUi.relationships') }}</span
+              ><UiSelect
+                v-model:value="relationshipFilter"
+                :options="relationshipOptions"
+                multiple
+                clearable
+                :aria-label="t('graphUi.relationships')"
+                :placeholder="t('graphUi.allRelations')"
+            /></label>
+            <UiCheckbox v-model:checked="includeDerived">{{ t('graph.showDerived') }}</UiCheckbox
+            ><UiCheckbox v-model:checked="qualityOverlay">{{
+              t('graph.qualityOverlay')
+            }}</UiCheckbox
+            ><UiButton @click="clearFilters">{{ t('ui.clearFilters') }}</UiButton>
+            <h3>{{ t('graphUi.analysis') }}</h3>
+            <p class="scope-hint">{{ t('graphUi.analysisScope') }}</p>
             <UiSpace
-              ><UiButton
-                v-for="item in recommendations.recommendations.filter(
-                  (rec) => rec.reason_key !== 'graph.reason.generic',
-                )"
-                :key="item.layout_id"
-                size="small"
-                @click="selectLayout(item.layout_id)"
-                >{{ t(`graph.layout.${item.layout_id}`) }}</UiButton
+              ><UiButton @click="openAnalysis('diff')">{{ t('graph.diffQuery') }}</UiButton
+              ><UiButton @click="openAnalysis('matrix')">{{ t('graph.matrix') }}</UiButton
+              ><UiButton @click="openAnalysis('centrality')">{{ t('graph.centrality') }}</UiButton
+              ><UiPopselect :options="exportOptions" trigger="click" @update:value="onExport"
+                ><UiButton :disabled="!data">{{ t('graph.export.title') }}</UiButton></UiPopselect
               ></UiSpace
             >
-            <p>
-              {{
-                reasonText(
-                  recommendations.recommendations.find(
-                    (rec) => rec.reason_key !== 'graph.reason.generic',
-                  )?.reason_key ?? 'graph.reason.generic',
-                  recommendations.signals,
-                )
-              }}
-            </p></UiAlert
-          >
-        </div></UiDrawerContent
-      ></UiDrawer
-    >
-    <UiDrawer v-model:show="showFacts" width="min(960px, 100vw)"
-      ><UiDrawerContent :title="t('graphUi.facts')" closable
-        ><p>{{ t('graphUi.analysisScope') }}</p>
-        <UiTabs v-if="visibleGraph" type="line"
-          ><UiTabPane name="direct" :tab="t('graph.directRelation')"
-            ><GraphFactTable
-              :items="visibleGraph.edges.filter((edge) => edge.kind === 'DIRECT')"
-              :relation-labels="relationLabels"
-              :graph-revision-id="visibleGraph.graph_revision_id" /></UiTabPane
-          ><UiTabPane name="derived" :tab="t('graph.derived')"
-            ><p>{{ t('graph.derivedHint') }}</p>
-            <GraphFactTable
-              :items="visibleGraph.edges.filter((edge) => edge.kind === 'DERIVED')"
-              :relation-labels="relationLabels"
-              :graph-revision-id="visibleGraph.graph_revision_id"
-              derived /></UiTabPane></UiTabs></UiDrawerContent
-    ></UiDrawer>
-    <UiDrawer v-model:show="showPath" :width="420">
-      <UiDrawerContent :title="t('graph.pathQuery')" closable>
-        <FormContainer
-          id="graph-path-form"
-          :model="pathModel"
-          :rules="pathRules"
-          class="panel-form"
-          @submit="findPath"
-        >
-          <FormField path="from" :label="t('graph.pathFrom')">
-            <UiInput v-model:value="pathFrom" />
-          </FormField>
-          <FormField path="to" :label="t('graph.pathTo')">
-            <UiInput v-model:value="pathTo" />
-          </FormField>
-          <FormField path="hops" :label="t('graph.pathHops')">
-            <UiInputNumber v-model:value="pathHops" :min="1" :max="6" />
-          </FormField>
-          <UiAlert v-if="pathError" type="warning">{{ pathError }}</UiAlert>
-          <template v-if="pathResult">
-            <UiAlert :type="pathResult.found ? 'success' : 'warning'">
-              {{
-                pathResult.found
-                  ? t('graph.pathFound', { hops: pathResult.hops })
-                  : t('graph.pathNotFound')
-              }}
-            </UiAlert>
-            <ol v-if="pathResult.found" class="path-list">
-              <li v-for="node in pathResult.nodes" :key="node">{{ node }}</li>
-            </ol>
-          </template>
-        </FormContainer>
-        <template #footer>
-          <UiButton
-            type="primary"
-            attr-type="submit"
-            form="graph-path-form"
-            :loading="pathLoading"
-            :disabled="!data || loading"
-          >
-            {{ t('graph.pathFind') }}
-          </UiButton>
-        </template>
-      </UiDrawerContent>
-    </UiDrawer>
-    <UiDrawer v-model:show="showDiff" :width="520">
-      <UiDrawerContent :title="t('graph.diffQuery')" closable>
-        <FormContainer
-          id="graph-diff-form"
-          :model="diffModel"
-          :rules="diffRules"
-          class="panel-form"
-          @submit="runDiff"
-        >
-          <FormField path="base" :label="t('graph.diffBase')">
-            <UiInputNumber v-model:value="diffBase" :min="1" :precision="0" />
-          </FormField>
-          <FormField path="target" :label="t('graph.diffTarget')">
-            <UiInputNumber v-model:value="diffTarget" :min="1" :precision="0" />
-          </FormField>
-          <UiAlert v-if="diffError" type="warning">{{ diffError }}</UiAlert>
-          <template v-if="diffResult">
-            <p>
-              {{
-                t('graph.diffSummary', {
-                  added: diffResult.triple_added_count,
-                  removed: diffResult.triple_removed_count,
-                  entityAdded: diffResult.entity_added_count,
-                  entityRemoved: diffResult.entity_removed_count,
-                  entityModified: diffResult.entity_modified_count,
-                })
-              }}
-            </p>
-            <UiAlert v-if="diffResult.truncated" type="warning">{{ t('graph.truncated') }}</UiAlert>
-            <ul class="diff-list">
-              <li v-for="iri in diffResult.entities_added" :key="'a' + iri" class="added">
-                {{ t('graph.diffAdded', { iri }) }}
-              </li>
-              <li v-for="iri in diffResult.entities_removed" :key="'r' + iri" class="removed">
-                {{ t('graph.diffRemoved', { iri }) }}
-              </li>
-              <li v-for="item in diffResult.entities_modified" :key="'m' + item.iri">
-                {{ t('graph.diffModified', { iri: item.iri }) }}
-                <pre>{{ JSON.stringify(item.before, null, 2) }}</pre>
-                <pre>{{ JSON.stringify(item.after, null, 2) }}</pre>
-              </li>
-              <li
-                v-for="(item, index) in diffResult.triples_added"
-                :key="'fa' + index"
-                class="added"
-              >
-                {{
-                  t('graph.diffFact', {
-                    change: '+',
-                    kind: t(`graph.${item.kind === 'DERIVED' ? 'derived' : 'direct'}`),
-                    subject: item.subject,
-                    predicate: item.predicate,
-                    object: item.object,
-                    count: item.count,
-                  })
-                }}
-                <pre v-if="item.props">{{ JSON.stringify(item.props, null, 2) }}</pre>
-              </li>
-              <li
-                v-for="(item, index) in diffResult.triples_removed"
-                :key="'fr' + index"
-                class="removed"
-              >
-                {{
-                  t('graph.diffFact', {
-                    change: '−',
-                    kind: t(`graph.${item.kind === 'DERIVED' ? 'derived' : 'direct'}`),
-                    subject: item.subject,
-                    predicate: item.predicate,
-                    object: item.object,
-                    count: item.count,
-                  })
-                }}
-                <pre v-if="item.props">{{ JSON.stringify(item.props, null, 2) }}</pre>
-              </li>
-            </ul>
-          </template>
-        </FormContainer>
-        <template #footer>
-          <UiButton type="primary" attr-type="submit" form="graph-diff-form" :loading="diffLoading">
-            {{ t('graph.diffRun') }}
-          </UiButton>
-        </template>
-      </UiDrawerContent>
-    </UiDrawer>
-    <UiDrawer v-model:show="showHistory" width="min(520px, 100vw)">
-      <UiDrawerContent :title="t('graph.history')" closable>
-        <UiAlert v-if="revisions.error.value || switchError" type="error">{{
-          revisions.error.value || switchError
-        }}</UiAlert>
-        <UiButton :loading="revisions.loading.value" @click="revisions.reload">{{
-          t('graph.refresh')
-        }}</UiButton>
-        <ul class="diff-list">
-          <li v-for="item in revisions.data.value ?? []" :key="item.id">
-            <span>{{ t('graph.historyItem', { id: item.id, run: item.run_id }) }}</span>
-            <UiTag v-if="item.is_current" type="success">{{ t('graph.currentRevision') }}</UiTag>
-            <UiButton size="small" @click="selectGraph(item.id)">{{ t('common.view') }}</UiButton>
-            <UiPopconfirm
-              v-if="canWrite && item.publishable && !item.is_current"
-              @positive-click="switchCurrent(item.id)"
+            <h3>{{ t('graph.templates') }}</h3>
+            <UiAlert v-if="templateError || templateData.error.value" type="warning">{{
+              templateError || templateData.error.value
+            }}</UiAlert>
+            <UiSelect
+              :value="selectedTemplateId"
+              :options="templateOptions"
+              :loading="applyingTemplate || templateData.loading.value"
+              :placeholder="t('graph.templates')"
+              :aria-label="t('graph.templates')"
+              @update:value="applyTemplate"
+            />
+            <SemanticViewConfig
+              :layout-id="layoutId ?? (center ? 'ring' : 'type_grid')"
+              :config="semanticConfig"
+              :catalog="semanticFields.data.value"
+              :loading="semanticFields.loading.value"
+              :error="semanticFields.error.value"
+              @change="configureSemantics"
+              @retry="semanticFields.reload"
+            />
+            <FormContainer
+              v-if="data && canWrite"
+              :model="templateModel"
+              :rules="templateRules"
+              :disabled="
+                savingTemplate || semanticFields.loading.value || semanticFields.data.value?.stale
+              "
+              class="template-form"
+              @submit="saveTemplate"
             >
-              <template #trigger
-                ><UiButton size="small" :disabled="switching">{{
-                  t('graph.setCurrent')
-                }}</UiButton></template
+              <FormField path="name" :label="t('graph.templateName')">
+                <UiInput v-model:value="templateName" :placeholder="t('graph.templateName')" />
+              </FormField>
+              <UiButton
+                attr-type="submit"
+                :loading="savingTemplate"
+                :disabled="semanticFields.loading.value || semanticFields.data.value?.stale"
+                >{{ t('graph.templateSave') }}</UiButton
               >
-              {{ t('graph.setCurrentHint') }}
-            </UiPopconfirm>
-          </li>
-        </ul>
-      </UiDrawerContent>
-    </UiDrawer>
-    <UiDrawer v-model:show="showMatrix" :width="560">
-      <UiDrawerContent :title="t('graph.matrix')" closable>
-        <UiAlert v-if="!typeMatrix" type="info">{{ t('graph.matrixEmpty') }}</UiAlert>
-        <SearchTable
-          v-else
-          mode="none"
-          :searchable="false"
-          :columns="matrixColumns"
-          :rows="typeMatrix.rows"
-          :row-key="matrixRowKey"
-          :max-height="560"
-          :scroll-x="120 + typeMatrix.types.length * 70"
-          size="small"
-        />
-      </UiDrawerContent>
-    </UiDrawer>
-    <UiDrawer v-model:show="showCentrality" :width="520">
-      <UiDrawerContent :title="t('graph.centrality')" closable>
-        <p class="centrality-hint">{{ t('graph.centralityHint') }}</p>
-        <SearchTable
-          mode="none"
-          :searchable="false"
-          :columns="centralityColumns"
-          :rows="centralityRows"
-          :row-key="centralityRowKey"
-          :max-height="560"
-          size="small"
-        />
-      </UiDrawerContent>
-    </UiDrawer>
-  </section>
+            </FormContainer>
+            <UiPopconfirm
+              v-if="canWrite && selectedTemplateId !== null"
+              @positive-click="removeTemplate"
+              ><template #trigger
+                ><UiButton tertiary type="error" :loading="removingTemplate">{{
+                  t('graph.templateDelete')
+                }}</UiButton></template
+              >{{ t('graph.templateDeleteConfirm', { name: selectedTemplateName }) }}</UiPopconfirm
+            >
+            <UiAlert v-if="recommendations?.recommendations.length" type="info"
+              ><p>{{ t('graph.recommended') }}</p>
+              <UiSpace
+                ><UiButton
+                  v-for="item in recommendations.recommendations.filter(
+                    (rec) => rec.reason_key !== 'graph.reason.generic',
+                  )"
+                  :key="item.layout_id"
+                  size="small"
+                  @click="selectLayout(item.layout_id)"
+                  >{{ t(`graph.layout.${item.layout_id}`) }}</UiButton
+                ></UiSpace
+              >
+              <p>
+                {{
+                  reasonText(
+                    recommendations.recommendations.find(
+                      (rec) => rec.reason_key !== 'graph.reason.generic',
+                    )?.reason_key ?? 'graph.reason.generic',
+                    recommendations.signals,
+                  )
+                }}
+              </p></UiAlert
+            >
+          </div></UiDrawerContent
+        ></UiDrawer
+      >
+      <UiDrawer v-model:show="showFacts" width="min(960px, 100vw)"
+        ><UiDrawerContent :title="t('graphUi.facts')" closable
+          ><p>{{ t('graphUi.analysisScope') }}</p>
+          <UiTabs v-if="visibleGraph" type="line"
+            ><UiTabPane name="direct" :tab="t('graph.directRelation')"
+              ><GraphFactTable
+                :items="visibleGraph.edges.filter((edge) => edge.kind === 'DIRECT')"
+                :relation-labels="relationLabels"
+                :graph-revision-id="visibleGraph.graph_revision_id" /></UiTabPane
+            ><UiTabPane name="derived" :tab="t('graph.derived')"
+              ><p>{{ t('graph.derivedHint') }}</p>
+              <GraphFactTable
+                :items="visibleGraph.edges.filter((edge) => edge.kind === 'DERIVED')"
+                :relation-labels="relationLabels"
+                :graph-revision-id="visibleGraph.graph_revision_id"
+                derived /></UiTabPane></UiTabs></UiDrawerContent
+      ></UiDrawer>
+      <UiDrawer v-model:show="showPath" :width="420">
+        <UiDrawerContent :title="t('graph.pathQuery')" closable>
+          <FormContainer
+            id="graph-path-form"
+            :model="pathModel"
+            :rules="pathRules"
+            class="panel-form"
+            @submit="findPath"
+          >
+            <FormField path="from" :label="t('graph.pathFrom')">
+              <UiInput v-model:value="pathFrom" />
+            </FormField>
+            <FormField path="to" :label="t('graph.pathTo')">
+              <UiInput v-model:value="pathTo" />
+            </FormField>
+            <FormField path="hops" :label="t('graph.pathHops')">
+              <UiInputNumber v-model:value="pathHops" :min="1" :max="6" />
+            </FormField>
+            <UiAlert v-if="pathError" type="warning">{{ pathError }}</UiAlert>
+            <template v-if="pathResult">
+              <UiAlert :type="pathResult.found ? 'success' : 'warning'">
+                {{
+                  pathResult.found
+                    ? t('graph.pathFound', { hops: pathResult.hops })
+                    : t('graph.pathNotFound')
+                }}
+              </UiAlert>
+              <ol v-if="pathResult.found" class="path-list">
+                <li v-for="node in pathResult.nodes" :key="node">{{ node }}</li>
+              </ol>
+            </template>
+          </FormContainer>
+          <template #footer>
+            <UiButton
+              type="primary"
+              attr-type="submit"
+              form="graph-path-form"
+              :loading="pathLoading"
+              :disabled="!data || loading"
+            >
+              {{ t('graph.pathFind') }}
+            </UiButton>
+          </template>
+        </UiDrawerContent>
+      </UiDrawer>
+      <UiDrawer v-model:show="showDiff" :width="520">
+        <UiDrawerContent :title="t('graph.diffQuery')" closable>
+          <FormContainer
+            id="graph-diff-form"
+            :model="diffModel"
+            :rules="diffRules"
+            class="panel-form"
+            @submit="runDiff"
+          >
+            <FormField path="base" :label="t('graph.diffBase')">
+              <UiInputNumber v-model:value="diffBase" :min="1" :precision="0" />
+            </FormField>
+            <FormField path="target" :label="t('graph.diffTarget')">
+              <UiInputNumber v-model:value="diffTarget" :min="1" :precision="0" />
+            </FormField>
+            <UiAlert v-if="diffError" type="warning">{{ diffError }}</UiAlert>
+            <template v-if="diffResult">
+              <p>
+                {{
+                  t('graph.diffSummary', {
+                    added: diffResult.triple_added_count,
+                    removed: diffResult.triple_removed_count,
+                    entityAdded: diffResult.entity_added_count,
+                    entityRemoved: diffResult.entity_removed_count,
+                    entityModified: diffResult.entity_modified_count,
+                  })
+                }}
+              </p>
+              <UiAlert v-if="diffResult.truncated" type="warning">{{
+                t('graph.truncated')
+              }}</UiAlert>
+              <ul class="diff-list">
+                <li v-for="iri in diffResult.entities_added" :key="'a' + iri" class="added">
+                  {{ t('graph.diffAdded', { iri }) }}
+                </li>
+                <li v-for="iri in diffResult.entities_removed" :key="'r' + iri" class="removed">
+                  {{ t('graph.diffRemoved', { iri }) }}
+                </li>
+                <li v-for="item in diffResult.entities_modified" :key="'m' + item.iri">
+                  {{ t('graph.diffModified', { iri: item.iri }) }}
+                  <pre>{{ JSON.stringify(item.before, null, 2) }}</pre>
+                  <pre>{{ JSON.stringify(item.after, null, 2) }}</pre>
+                </li>
+                <li
+                  v-for="(item, index) in diffResult.triples_added"
+                  :key="'fa' + index"
+                  class="added"
+                >
+                  {{
+                    t('graph.diffFact', {
+                      change: '+',
+                      kind: t(`graph.${item.kind === 'DERIVED' ? 'derived' : 'direct'}`),
+                      subject: item.subject,
+                      predicate: item.predicate,
+                      object: item.object,
+                      count: item.count,
+                    })
+                  }}
+                  <pre v-if="item.props">{{ JSON.stringify(item.props, null, 2) }}</pre>
+                </li>
+                <li
+                  v-for="(item, index) in diffResult.triples_removed"
+                  :key="'fr' + index"
+                  class="removed"
+                >
+                  {{
+                    t('graph.diffFact', {
+                      change: '−',
+                      kind: t(`graph.${item.kind === 'DERIVED' ? 'derived' : 'direct'}`),
+                      subject: item.subject,
+                      predicate: item.predicate,
+                      object: item.object,
+                      count: item.count,
+                    })
+                  }}
+                  <pre v-if="item.props">{{ JSON.stringify(item.props, null, 2) }}</pre>
+                </li>
+              </ul>
+            </template>
+          </FormContainer>
+          <template #footer>
+            <UiButton
+              type="primary"
+              attr-type="submit"
+              form="graph-diff-form"
+              :loading="diffLoading"
+            >
+              {{ t('graph.diffRun') }}
+            </UiButton>
+          </template>
+        </UiDrawerContent>
+      </UiDrawer>
+      <UiDrawer v-model:show="showHistory" width="min(520px, 100vw)">
+        <UiDrawerContent :title="t('graph.history')" closable>
+          <UiAlert v-if="revisions.error.value || switchError" type="error">{{
+            revisions.error.value || switchError
+          }}</UiAlert>
+          <UiButton :loading="revisions.loading.value" @click="revisions.reload">{{
+            t('graph.refresh')
+          }}</UiButton>
+          <ul class="diff-list">
+            <li v-for="item in revisions.data.value ?? []" :key="item.id">
+              <span>{{ t('graph.historyItem', { id: item.id, run: item.run_id }) }}</span>
+              <UiTag v-if="item.is_current" type="success">{{ t('graph.currentRevision') }}</UiTag>
+              <UiButton size="small" @click="selectGraph(item.id)">{{ t('common.view') }}</UiButton>
+              <UiPopconfirm
+                v-if="canWrite && item.publishable && !item.is_current"
+                @positive-click="switchCurrent(item.id)"
+              >
+                <template #trigger
+                  ><UiButton size="small" :disabled="switching">{{
+                    t('graph.setCurrent')
+                  }}</UiButton></template
+                >
+                {{ t('graph.setCurrentHint') }}
+              </UiPopconfirm>
+            </li>
+          </ul>
+        </UiDrawerContent>
+      </UiDrawer>
+      <UiDrawer v-model:show="showMatrix" :width="560">
+        <UiDrawerContent :title="t('graph.matrix')" closable>
+          <UiAlert v-if="!typeMatrix" type="info">{{ t('graph.matrixEmpty') }}</UiAlert>
+          <SearchTable
+            v-else
+            mode="none"
+            :searchable="false"
+            :columns="matrixColumns"
+            :rows="typeMatrix.rows"
+            :row-key="matrixRowKey"
+            :max-height="560"
+            :scroll-x="120 + typeMatrix.types.length * 70"
+            size="small"
+          />
+        </UiDrawerContent>
+      </UiDrawer>
+      <UiDrawer v-model:show="showCentrality" :width="520">
+        <UiDrawerContent :title="t('graph.centrality')" closable>
+          <p class="centrality-hint">{{ t('graph.centralityHint') }}</p>
+          <SearchTable
+            mode="none"
+            :searchable="false"
+            :columns="centralityColumns"
+            :rows="centralityRows"
+            :row-key="centralityRowKey"
+            :max-height="560"
+            size="small"
+          />
+        </UiDrawerContent>
+      </UiDrawer>
+    </section>
+  </FocusScope>
 </template>
 
 <style scoped>
 .graph-page {
-  height: calc(100dvh - var(--header-height, 56px));
+  height: 100%;
+  flex: 1;
   min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+.graph-page.focus-mode {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-navigation) + 1);
+  background: var(--surface-panel);
+}
 .graph-heading {
-  padding: var(--space-3) var(--space-5) var(--space-2);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: none;
+  gap: 12px;
+  padding: 12px 24px;
   background: var(--surface-panel);
   border-bottom: 1px solid var(--border-default);
 }
-.graph-heading :deep(.page-header) {
-  margin-bottom: 0;
+.graph-title {
+  flex: 1;
+  min-width: 180px;
 }
-.graph-heading :deep(h1) {
-  font-size: var(--font-h2);
+.graph-title h1 {
+  margin: 0;
+  font-size: 18px;
+}
+.graph-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.graph-actions a {
+  font-size: var(--font-small);
 }
 .workspace-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 4px;
   color: var(--foreground-secondary);
   font-size: var(--font-caption);
 }
 .graph-toolbar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-default);
+  padding: 0;
+  pointer-events: none;
+}
+.graph-toolbar > * {
+  pointer-events: auto;
+  box-shadow: var(--shadow-low);
   background: var(--surface-panel);
 }
 .graph-search {
@@ -1652,8 +1838,8 @@ function onExport(kind: string | number) {
   min-height: 0;
   display: flex;
   position: relative;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  gap: 0;
+  padding: 0;
   background: var(--surface-background);
 }
 .canvas-area {
@@ -1709,18 +1895,87 @@ function onExport(kind: string | number) {
   flex-direction: column;
   border-left: 1px solid var(--border-default);
   background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-panel);
+  border-radius: 0;
   overflow: hidden;
 }
 .observation-binding {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 7px 16px;
+  padding: 12px 16px;
   align-items: center;
   background: var(--surface-muted);
-  border-bottom: 1px solid var(--border-default);
+  border-top: 1px solid var(--border-muted);
+  color: var(--foreground-secondary);
+  font-size: var(--font-caption);
+}
+.graph-resources {
+  flex: 0 0 220px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-panel);
+  border-right: 1px solid var(--border-muted);
+}
+.resource-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  font-size: var(--font-small);
+}
+.resource-heading strong {
+  flex: 1;
+}
+.resource-heading > span {
+  color: var(--foreground-secondary);
+  font-size: var(--font-caption);
+}
+.resource-search {
+  margin: 0 12px 12px;
+  width: calc(100% - 24px);
+}
+.resource-list {
+  flex: 1;
+  overflow: auto;
+  padding: 0 12px 16px;
+}
+.resource-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  text-align: left;
+  font: inherit;
+  font-size: var(--font-small);
+  color: var(--foreground-primary);
+  background: transparent;
+  cursor: pointer;
+}
+.resource-row:hover {
+  background: var(--surface-hover);
+}
+.resource-row.active {
+  color: var(--action-primary);
+  background: var(--surface-selected);
+}
+.resource-row svg {
+  flex: none;
+  color: var(--graph-entity);
+}
+.resource-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--foreground-secondary);
   font-size: var(--font-caption);
 }
@@ -1798,6 +2053,14 @@ p {
   margin-top: 0;
 }
 @media (max-width: 64rem) {
+  .graph-resources {
+    position: absolute;
+    z-index: var(--z-sticky);
+    inset: 0 auto 0 0;
+    width: 220px;
+    max-width: 85%;
+    box-shadow: var(--shadow-raised);
+  }
   .graph-inspector {
     position: absolute;
     z-index: var(--z-sticky);
@@ -1875,10 +2138,12 @@ label :deep(.ui-input-wrap) {
     padding: 8px 12px;
   }
   .graph-workspace {
-    padding: 6px;
+    padding: 0;
   }
   .graph-toolbar {
-    padding: var(--space-2) var(--space-3);
+    top: 10px;
+    left: 10px;
+    right: 10px;
     gap: var(--space-2);
     flex-wrap: nowrap;
     overflow-x: auto;

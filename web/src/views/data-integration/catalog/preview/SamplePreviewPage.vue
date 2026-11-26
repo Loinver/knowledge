@@ -396,14 +396,6 @@ usePageIdentity(() => (!metadataLoading.value && snapshot.value ? selectedTable.
       ></PageHeader
     >
 
-    <UiAlert type="warning" :show-icon="true">
-      <div class="security-note">
-        <strong>{{ t('dataAccess.preview.securityTitle') }}</strong>
-        <span>{{ t('dataAccess.preview.securityNote') }}</span>
-      </div>
-    </UiAlert>
-    <UiAlert v-if="route.query.snapshot" type="info">{{ t('ui.livePreviewContext') }}</UiAlert>
-
     <div class="preview-workspace">
       <UiCard size="small" class="selector-card preview-inspector">
         <div class="selection-grid">
@@ -485,6 +477,14 @@ usePageIdentity(() => (!metadataLoading.value && snapshot.value ? selectedTable.
             </UiButton>
           </div>
         </div>
+        <UiAlert type="warning" :show-icon="true">
+          <div class="security-note">
+            <strong>{{ t('dataAccess.preview.securityTitle') }}</strong>
+            <span>{{ t('dataAccess.preview.securityNote') }}</span>
+          </div>
+        </UiAlert>
+        <UiAlert v-if="route.query.snapshot" type="info">{{ t('ui.livePreviewContext') }}</UiAlert>
+
         <div class="metadata-caption">
           <span v-if="snapshot">{{
             t('dataAccess.preview.snapshotInfo', {

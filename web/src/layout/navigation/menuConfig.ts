@@ -5,6 +5,7 @@ export interface MenuNode {
   labelKey: string
   icon?: IconName
   adminOnly?: boolean
+  defaultRoute?: string
   children?: MenuNode[]
 }
 
@@ -17,6 +18,7 @@ export const menuConfig: MenuNode[] = [
     key: 'group:semantic-assets',
     labelKey: 'menu.semanticAssets',
     icon: 'ontology',
+    defaultRoute: 'entity-types',
     children: [
       { key: 'namespaces', labelKey: 'page.namespaces' },
       { key: 'entity-types', labelKey: 'page.entityTypes' },
@@ -35,7 +37,7 @@ export const menuConfig: MenuNode[] = [
   {
     key: 'group:ontology',
     labelKey: 'menu.ontologyAssembly',
-    icon: 'ontology',
+    icon: 'modeling',
     children: [
       { key: 'ontologies', labelKey: 'page.ontologies' },
       { key: 'designer', labelKey: 'page.designer' },
@@ -68,13 +70,14 @@ export const menuConfig: MenuNode[] = [
     key: 'group:governance',
     labelKey: 'menu.standardsGovernance',
     icon: 'governance',
+    defaultRoute: 'governance-rules',
     children: [
       { key: 'governance-clauses', labelKey: 'page.governanceClauses' },
       { key: 'governance-rules', labelKey: 'page.governanceRules' },
       { key: 'ontology-export', labelKey: 'ui.exchange' },
     ],
   },
-  { key: 'knowledge-bases', labelKey: 'kb.title', icon: 'datasource' },
+  { key: 'knowledge-bases', labelKey: 'kb.title', icon: 'book' },
   {
     key: 'group:system',
     labelKey: 'menu.system',

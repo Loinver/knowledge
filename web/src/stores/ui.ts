@@ -16,7 +16,7 @@ function read(key: string): string | null {
  * 两项都持久化到 localStorage，并在 store 创建时立刻应用到 `<html>`，
  * 避免刷新后先渲染浅色再跳暗色的闪烁。
  *
- * 首次使用默认石墨蓝深色；已有 light/dark 偏好保持不变。
+ * 首次使用默认知识工作室浅色；已有 light/dark 偏好保持不变。
  */
 export const useUiStore = defineStore('ui', () => {
   const desktopCollapsed = ref(read(SIDER_KEY) === '1')
@@ -33,7 +33,7 @@ export const useUiStore = defineStore('ui', () => {
   }
   media?.addEventListener('change', updateViewport)
   onScopeDispose(() => media?.removeEventListener('change', updateViewport))
-  const themeMode = ref<ThemeMode>(read(THEME_KEY) === 'light' ? 'light' : 'dark')
+  const themeMode = ref<ThemeMode>(read(THEME_KEY) === 'dark' ? 'dark' : 'light')
 
   const isDark = computed(() => themeMode.value === 'dark')
 

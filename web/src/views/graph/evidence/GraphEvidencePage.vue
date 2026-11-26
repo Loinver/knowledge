@@ -317,11 +317,7 @@ const frozenChain = computed(() => {
 
 <template>
   <section class="graph-page">
-    <PageHeader
-      :title="t('page.graphEvidence')"
-      :eyebrow="t('studio.evidenceLedger')"
-      :description="t('graph.traceHint')"
-    >
+    <PageHeader :title="t('page.graphEvidence')" :eyebrow="t('studio.evidenceLedger')">
       <template #context
         ><span v-if="resolvedGraph" class="evidence-readout"
           >{{ t('graph.resultSet', { id: resolvedGraph }) }} · {{ t('ui.readOnlyLabel') }}</span
@@ -584,7 +580,7 @@ const frozenChain = computed(() => {
 .graph-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 20px;
 }
 .graph-page > * {
   min-width: 0;
@@ -594,7 +590,8 @@ p {
   margin: 0;
 }
 .modes {
-  margin-bottom: 16px;
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
 }
 .reverse-facts,
 .reverse-entities {
@@ -603,9 +600,9 @@ p {
   font-size: var(--font-caption);
 }
 .chain-card {
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
   min-width: 0;
   padding: 16px;
   display: grid;
@@ -614,8 +611,8 @@ p {
 }
 .evidence-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
   align-items: start;
 }
 .evidence-ledger {
@@ -629,14 +626,24 @@ p {
 }
 .ledger-head {
   padding: 10px 16px;
-  border-left: 2px solid var(--accent);
-  background: var(--bg-inset);
+  border-left: 2px solid var(--action-primary);
+  background: var(--surface-muted);
 }
 .workspace-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: start;
+  gap: 12px;
   padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-muted);
+}
+.workspace-panel > :deep(.ui-form-field) {
+  min-width: 0;
+}
+.workspace-panel > :deep(button[type='submit']) {
+  justify-self: end;
 }
 .chain-heading {
   display: flex;
@@ -661,8 +668,11 @@ p {
   font-size: 13px;
   margin: 0;
 }
-@media (max-width: 80rem) {
+@media (max-width: 64rem) {
   .evidence-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-panel {
     grid-template-columns: minmax(0, 1fr);
   }
 }

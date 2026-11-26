@@ -53,8 +53,8 @@ function updateFilters(value: TableFilters) {
     @reset.prevent="reset"
   >
     <div class="flex flex-wrap items-end gap-2">
-      <div class="min-w-40 flex-1">
-        <label :for="id" class="mb-1 block text-sm font-medium">{{
+      <div class="search-query min-w-40 flex-1">
+        <label :for="id" :class="label ? 'mb-1 block text-sm font-medium' : 'sr-only'">{{
           label ?? t('common.search')
         }}</label>
         <input
@@ -63,7 +63,7 @@ function updateFilters(value: TableFilters) {
           class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"
           :value="query"
           :disabled="disabled"
-          :placeholder="placeholder"
+          :placeholder="placeholder ?? label ?? t('common.search')"
           @input="input"
         />
       </div>
@@ -118,3 +118,24 @@ function updateFilters(value: TableFilters) {
     <slot :query="query" :filters="filters ?? {}" :submit="submit" />
   </form>
 </template>
+
+<style scoped>
+.search-panel {
+  min-width: 0;
+  padding: 12px 0;
+}
+.search-query {
+  flex-basis: 240px;
+}
+.search-panel :deep(.ui-field) {
+  margin-bottom: 0;
+}
+input[type='search'] {
+  background: var(--surface-panel);
+}
+@media (min-width: 1280px) {
+  .search-query {
+    max-width: 440px;
+  }
+}
+</style>

@@ -123,7 +123,7 @@ onUnmounted(() => window.removeEventListener('keydown', keyboard))
 <style scoped>
 .search-trigger {
   gap: 8px;
-  border: 1px solid var(--border);
+  border: 0;
 }
 .search-label {
   margin: 0 12px 0 8px;

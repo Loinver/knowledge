@@ -172,7 +172,10 @@ onMounted(load)
       ><UiTabPane name="account" :tab="t('assetAudit.accountTitle')">
         <UiCard size="small" class="ledger-panel"
           ><header class="ledger-heading">
-            <h2>{{ t('operationsUi.auditLedger') }}</h2>
+            <div>
+              <h2>{{ t('operationsUi.auditLedger') }}</h2>
+              <p class="ledger-description">{{ t('assetAudit.accountTitle') }}</p>
+            </div>
             <span v-if="!error && !loading">{{ t('assetAudit.total', { count: total }) }}</span>
           </header>
 
@@ -236,7 +239,8 @@ onMounted(load)
   border-bottom: 1px solid var(--border);
 }
 .audit-tabs {
-  padding: 0 4px;
+  padding: 0;
+  min-width: 0;
 }
 @media (max-width: 900px) {
   .filters {

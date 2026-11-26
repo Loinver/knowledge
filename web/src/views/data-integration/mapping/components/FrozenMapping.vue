@@ -25,8 +25,8 @@ function display(value: unknown): string {
         <UiTable>
           <thead>
             <tr>
-              <th>{{ t('dataAccess.mapping.targetAttribute') }}</th>
               <th>{{ t('dataAccess.mapping.sourceField') }}</th>
+              <th>{{ t('dataAccess.mapping.targetAttribute') }}</th>
               <th>{{ t('dataAccess.mapping.transform') }}</th>
               <th>{{ t('dataAccess.mapping.nullPolicy') }}</th>
               <th>{{ t('dataAccess.mapping.defaultValue') }}</th>
@@ -34,8 +34,8 @@ function display(value: unknown): string {
           </thead>
           <tbody>
             <tr v-for="(field, fieldIndex) in fields(map.field_maps)" :key="fieldIndex">
-              <td>{{ field.target_attr }}</td>
               <td class="mono">{{ field.source_field }}</td>
+              <td>{{ field.target_attr }}</td>
               <td>
                 {{ t(`dataAccess.mapping.transforms.${field.transform}`, String(field.transform)) }}
                 <pre v-if="field.transform_params">{{ display(field.transform_params) }}</pre>

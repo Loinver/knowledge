@@ -437,19 +437,19 @@ onBeforeUnmount(() => {
 
     <UiAlert v-if="notice" type="info" role="status">{{ notice }}</UiAlert>
     <UiAlert v-if="!canWrite" type="info">{{ t('extractionUi.viewer') }}</UiAlert>
-    <dl class="integration-readings" :aria-label="t('page.extractionTasks')">
-      <div v-for="status in ['PENDING', 'RUNNING', 'FAILED', 'SUCCESS']" :key="status">
-        <dt>{{ t(`tasks.statuses.${status}`) }}</dt>
-        <dd>
-          {{
-            loading || taskError || !initialized
-              ? t('common.noneValue')
-              : tasks.filter((task) => task.status === status).length
-          }}
-        </dd>
-      </div>
-    </dl>
     <section class="integration-ledger integration-run-ledger">
+      <dl class="integration-readings" :aria-label="t('page.extractionTasks')">
+        <div v-for="status in ['PENDING', 'RUNNING', 'FAILED', 'SUCCESS']" :key="status">
+          <dt>{{ t(`tasks.statuses.${status}`) }}</dt>
+          <dd>
+            {{
+              loading || taskError || !initialized
+                ? t('common.noneValue')
+                : tasks.filter((task) => task.status === status).length
+            }}
+          </dd>
+        </div>
+      </dl>
       <header class="integration-panel-heading">
         <h2>{{ t('tasks.progress') }}</h2>
         <span>{{ t('runs.page', { page }) }}</span>

@@ -29,8 +29,18 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const { toMessage } = useApiError()
 const page = ref(1)
+const statusFilter = ref('ALL')
 const { data, error, loading, reload } = useAsyncData((signal) =>
   extractionApi.list(page.value, signal),
+)
+const filteredRuns = computed(() =>
+  (data.value ?? []).filter(
+    (run) =>
+      statusFilter.value === 'ALL' ||
+      (statusFilter.value === 'UNFINISHED'
+        ? !run.finished_at
+        : !!run.finished_at && run.status === statusFilter.value),
+  ),
 )
 const columns = computed<DataTableColumns<ExtractionRun>>(() => [
   { key: 'id', title: t('graph.run'), width: 130, format: 'raw' },
@@ -63,6 +73,10 @@ function countValue(key: string): string {
   return typeof counts.value[key] === 'number'
     ? new Intl.NumberFormat(locale.value).format(counts.value[key] as number)
     : t('extractionUi.notRecorded')
+}
+function openQuarantine(run: ExtractionRun): void {
+  void openSummary(run.id, run)
+  showQuarantine.value = true
 }
 async function openSummary(id: number, run?: ExtractionRun): Promise<void> {
   reportController?.abort()
@@ -151,31 +165,50 @@ async function download(id: number) {
         <UiButton :disabled="loading" @click="reload">{{ t('graph.refresh') }}</UiButton>
       </template>
     </PageHeader>
-    <UiAlert type="info">{{ t('runs.exportNote') }}</UiAlert>
     <UiAlert v-if="downloadError" type="error">
       {{ t('runs.downloadFailed', { code: downloadError }) }}
     </UiAlert>
-    <dl class="integration-readings" :aria-label="t('page.extractionRuns')">
-      <div v-for="status in ['SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED']" :key="status">
-        <dt>{{ t(`runs.statuses.${status}`) }}</dt>
-        <dd>
+    <section class="integration-ledger integration-run-ledger">
+      <nav class="integration-status-tabs" :aria-label="t('common.status')">
+        <button
+          v-for="status in ['ALL', 'SUCCESS', 'PARTIAL', 'FAILED', 'CANCELLED', 'UNFINISHED']"
+          :key="status"
+          type="button"
+          :aria-pressed="statusFilter === status"
+          :class="{ active: statusFilter === status }"
+          @click="statusFilter = status"
+        >
           {{
+            status === 'ALL'
+              ? t('dataAccess.redesign.allStatuses')
+              : status === 'UNFINISHED'
+                ? t('runs.unfinished')
+                : t(`runs.statuses.${status}`)
+          }}
+          <span>{{
             loading || error
               ? t('common.noneValue')
               : numberFormat.format(
-                  (data ?? []).filter((run) => run.finished_at && run.status === status).length,
+                  (data ?? []).filter(
+                    (run) =>
+                      status === 'ALL' ||
+                      (status === 'UNFINISHED'
+                        ? !run.finished_at
+                        : !!run.finished_at && run.status === status),
+                  ).length,
                 )
-          }}
-        </dd>
-      </div>
-    </dl>
-    <section class="integration-ledger integration-run-ledger">
+          }}</span>
+        </button>
+      </nav>
       <header class="integration-panel-heading">
         <h2>{{ t('runs.report') }}</h2>
-        <span>{{ t('runs.page', { page: numberFormat.format(page) }) }}</span>
+        <span
+          >{{ t('dataAccess.redesign.pageFilter') }} ·
+          {{ t('runs.page', { page: numberFormat.format(page) }) }}</span
+        >
       </header>
       <SearchTable
-        :rows="data ?? []"
+        :rows="filteredRuns"
         :columns="columns"
         row-key="id"
         mode="none"
@@ -187,6 +220,7 @@ async function download(id: number) {
         :scroll-x="1030"
         @retry="reload"
       >
+        <template #toolbar />
         <template #cell-id="{ row }">
           <UiButton text type="primary" @click="openSummary(row.id, row)">{{
             t('extractionUi.runTitle', { id: row.id })
@@ -218,6 +252,18 @@ async function download(id: number) {
               t('extractionUi.summary')
             }}</UiButton>
             <UiButton
+              v-if="
+                row.finished_at &&
+                (row.status === 'PARTIAL' ||
+                  row.status === 'FAILED' ||
+                  Number(row.counts?.quarantine_count) > 0)
+              "
+              text
+              type="warning"
+              @click="openQuarantine(row)"
+              >{{ t('extractionUi.counts.quarantine_count') }}</UiButton
+            >
+            <UiButton
               quaternary
               :disabled="downloading !== null"
               :loading="downloading === row.id"
@@ -236,6 +282,7 @@ async function download(id: number) {
           {{ t('runs.next') }}
         </UiButton>
       </nav>
+      <p class="integration-caption ledger-note">{{ t('runs.exportNote') }}</p>
     </section>
     <UiDrawer v-model:show="showSummary" :width="'min(640px, 100vw)'">
       <UiDrawerContent :title="t('extractionUi.runTitle', { id: selectedId })" closable>

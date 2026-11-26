@@ -28,6 +28,7 @@ const { t, locale } = useI18n()
 const page = ref(1)
 const pageSize = 20
 const query = ref('')
+const expanded = ref(false)
 const action = ref<AssetAuditAction | null>(null)
 const objectType = ref<AssetType | null>(null)
 const result = ref<AssetAuditLog['result'] | null>(null)
@@ -115,9 +116,12 @@ const columns = computed<DataTableColumns<AssetAuditLog>>(() => [
   {
     title: t('assetAudit.object'),
     key: 'object_type',
-    width: 150,
+    width: 180,
     render: (row) =>
-      `${t(`assetAudit.objects.${row.object_type}`)} · ${row.object_id ?? t('assetAudit.unassigned')}`,
+      h('div', { class: 'system-object' }, [
+        h('strong', t(`assetAudit.objects.${row.object_type}`)),
+        h('code', row.object_id ?? t('assetAudit.unassigned')),
+      ]),
   },
   {
     title: t('assetAudit.before'),
@@ -192,7 +196,6 @@ function reset() {
       <h2>{{ t('assetAudit.title') }}</h2>
       <span v-if="data && !loading">{{ t('assetAudit.total', { count: data.total }) }}</span>
     </header>
-    <p class="audit-hint">{{ t('assetAudit.hint') }}</p>
 
     <SearchTable
       v-model:page="page"
@@ -213,6 +216,7 @@ function reset() {
       <template #search
         ><SearchPanel
           v-model:query="query"
+          v-model:expanded="expanded"
           :loading="loading"
           :placeholder="t('assetAudit.searchHint')"
           @submit="search"
@@ -236,6 +240,13 @@ function reset() {
                   clearable
                 />
               </FormField>
+              <div class="filter-actions">
+                <UiButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</UiButton>
+              </div>
+            </div></template
+          >
+          <template #advanced>
+            <div class="audit-advanced-filters">
               <FormField :label="t('system.result')" :show-feedback="false">
                 <UiSelect
                   v-model:value="result"
@@ -256,17 +267,16 @@ function reset() {
                   clearable
                 />
               </FormField>
-              <div class="filter-actions">
-                <UiButton :loading="loading" @click="reload">{{ t('graph.refresh') }}</UiButton>
-              </div>
-            </div></template
-          ></SearchPanel
-        ></template
-      >
+            </div> </template></SearchPanel
+      ></template>
       <template #empty
         ><UiEmpty :description="error ? t('assetAudit.loadFailed') : t('assetAudit.empty')"
       /></template>
     </SearchTable>
+    <details class="audit-explanation">
+      <summary>{{ t('assetAudit.title') }}</summary>
+      <p>{{ t('assetAudit.hint') }}</p>
+    </details>
   </UiCard>
 </template>
 
@@ -275,6 +285,29 @@ function reset() {
 <style scoped>
 .asset-audit {
   margin-bottom: var(--space-4);
+}
+.audit-advanced-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px;
+}
+.audit-advanced-filters .time-filter {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.audit-explanation {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-muted);
+  font-size: var(--font-small);
+  color: var(--foreground-muted);
+}
+.audit-explanation summary {
+  cursor: pointer;
+}
+.audit-explanation p {
+  line-height: 1.7;
 }
 .audit-hint {
   margin-top: 0;

@@ -1,166 +1,277 @@
-/* Private presentation for source, mapping and extraction workspaces. */
-.integration-page {
+/* A: private presentation for the real data-integration workspaces.
+   Repeat the page scope to outrank the existing SFC scoped presentation. */
+.integration-page.integration-page {
   min-width: 0;
-  color: var(--text-primary);
-  gap: var(--space-4);
+  color: var(--foreground-primary);
+  gap: var(--space-5);
 }
-.integration-page h2 {
+.integration-page.integration-page h2 {
   margin: 0;
-  font-size: var(--font-body);
-  font-weight: 550;
+  font-size: var(--font-h3);
+  font-weight: 600;
+}
+.integration-page.integration-page .ok {
+  color: var(--status-pass);
+}
+.integration-page.integration-page .bad {
+  color: var(--status-violation);
 }
 .integration-readings {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--space-5);
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  background: var(--bg-inset);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-muted);
+  background: var(--surface-muted);
 }
 .integration-readings > div {
-  flex: 1 1 150px;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  border-inline-end: 1px solid var(--border);
 }
 .integration-readings dt {
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
   font-size: var(--font-caption);
 }
 .integration-readings dd {
-  margin: var(--space-2) 0 0;
-  font: var(--font-display) var(--font-mono);
-}
-.integration-page .ok {
-  color: var(--s-pass);
-}
-.integration-page .bad {
-  color: var(--s-violation);
+  margin: 0;
+  font: 600 var(--font-body) var(--font-mono);
 }
 .integration-panel-heading,
-.integration-page .integration-panel-heading {
+.integration-page.integration-page .integration-panel-heading {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-muted);
 }
 .integration-panel-heading span,
 .integration-caption {
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
   font-size: var(--font-caption);
   overflow-wrap: anywhere;
+}
+.integration-page.integration-page .ledger-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
 }
 .integration-grouped-form .form-grid {
   min-width: 0;
   margin: 0;
 }
-.integration-page .catalog-layout {
-  display: grid;
-  grid-template-columns: 210px minmax(0, 1fr) 270px;
-  gap: var(--space-3);
-}
-.integration-page .catalog-tree {
-  position: sticky;
-  top: var(--space-3);
-  max-height: calc(100vh - 210px);
-  overflow: auto;
-}
-.integration-page .catalog-inspector {
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  min-width: 0;
-  position: sticky;
-  top: var(--space-3);
-}
-.integration-page .card,
-.integration-page .state-card {
-  background: var(--bg-panel);
-  border-color: var(--border);
+.integration-page.integration-page .card,
+.integration-page.integration-page .state-card,
+.integration-page.integration-page .ui-card {
+  background: var(--surface-panel);
+  border-color: var(--border-muted);
   border-radius: var(--radius-panel);
   box-shadow: none;
 }
-.integration-page .integration-inspector-facts {
-  padding: var(--space-4);
+.integration-run-ledger {
+  min-width: 0;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  overflow: clip;
 }
-.integration-page .integration-inspector-facts h2 {
-  margin-bottom: var(--space-3);
+.integration-page.integration-page .source-management {
+  display: grid;
+  gap: 0;
 }
-.integration-page .reference-list li {
+.integration-page.integration-page .source-management > .search-panel {
+  border: 0;
+  border-bottom: 1px solid var(--border-muted);
+  border-radius: 0;
+}
+.integration-page.integration-page .source-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.integration-page.integration-page .source-name small {
+  color: var(--foreground-muted);
+  font-family: var(--font-mono);
+}
+.integration-page.integration-page .integration-run-ledger .table-scroll {
+  border: 0;
+  border-radius: 0;
+}
+.integration-page.integration-page .integration-page.integration-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-muted);
+}
+.integration-status-tabs {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  gap: var(--space-4);
+  padding-inline: var(--space-4);
+  border-bottom: 1px solid var(--border-muted);
+}
+.integration-status-tabs button {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--foreground-muted);
+  font: inherit;
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+.integration-status-tabs button span {
+  font: var(--font-caption) var(--font-mono);
+}
+.integration-status-tabs button.active {
+  color: var(--action-primary);
+  border-bottom-color: var(--action-primary);
+}
+.integration-page.integration-page .catalog-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) 300px;
+  gap: var(--space-4);
+  align-items: start;
+}
+.integration-page.integration-page .catalog-tree {
+  position: sticky;
+  top: var(--space-4);
+  overflow: auto;
+  max-height: none;
+  padding: var(--space-3);
+}
+.integration-page.integration-page .catalog-inspector {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.integration-page.integration-page .catalog-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.integration-page.integration-page .catalog-content .table-card {
+  order: -1;
+}
+.integration-page.integration-page .diff-summary {
+  padding: var(--space-3) var(--space-4);
+}
+.integration-page.integration-page .table-title {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.integration-page.integration-page .table-title h2 {
+  overflow-wrap: anywhere;
+}
+.integration-page.integration-page .table-heading {
+  padding: var(--space-3);
   flex-wrap: wrap;
 }
-.integration-page .references-heading {
+.integration-page.integration-page .integration-inspector-facts {
+  padding: var(--space-4);
+}
+.integration-page.integration-page .integration-inspector-facts h2 {
+  margin-bottom: var(--space-3);
+}
+.integration-page.integration-page .reference-list li {
+  flex-wrap: wrap;
+}
+.integration-page.integration-page .references-heading {
   flex-wrap: wrap;
   padding: var(--space-3);
 }
-.integration-page .reference-target {
+.integration-page.integration-page .reference-target {
   margin-left: 0;
+}
+.integration-page.integration-page .catalog-samples {
+  min-width: 0;
+  overflow: clip;
+}
+.integration-page.integration-page .catalog-samples .sample-context {
+  margin: 0;
+  padding: var(--space-3);
+}
+.integration-page.integration-page .catalog-samples > .ui-alert {
+  margin: 0 var(--space-3) var(--space-3);
 }
 .integration-facts {
   display: grid;
-  grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1fr);
+  grid-template-columns: minmax(80px, 0.7fr) minmax(0, 1fr);
   gap: var(--space-2) var(--space-3);
   margin: 0;
   font-size: var(--font-caption);
 }
 .integration-facts dt {
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
 }
 .integration-facts dd {
   margin: 0;
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
 }
-.integration-page .table-scroll {
+.integration-page.integration-page .table-scroll {
   max-width: 100%;
-  background: var(--bg-inset);
+  background: var(--surface-panel);
 }
-.integration-page .table-scroll table {
+.integration-page.integration-page .table-scroll table {
   min-width: 640px;
 }
-.integration-page .table-scroll th {
+.integration-page.integration-page .table-scroll th {
   position: sticky;
   top: 0;
-  background: var(--bg-panel);
+  background: var(--surface-muted);
+  color: var(--foreground-muted);
   font-size: var(--font-caption);
 }
-.integration-page .diff-badge,
-.integration-page .type-badge {
+.integration-page.integration-page .diff-badge,
+.integration-page.integration-page .type-badge {
   border-radius: var(--radius-small);
 }
-.integration-page .preview-workspace {
+.integration-page.integration-page .preview-workspace {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   align-items: start;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
-.integration-page .preview-stage {
+.integration-page.integration-page .preview-stage {
   display: grid;
   min-width: 0;
   gap: var(--space-4);
 }
-.integration-page .preview-inspector .selection-grid {
-  grid-template-columns: 1fr;
+.integration-page.integration-page .preview-inspector .selection-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
 }
-.integration-page .preview-inspector .field {
-  display: grid;
-  gap: var(--space-2);
-}
-.integration-page .preview-inspector .actions {
+.integration-page.integration-page .preview-inspector .actions {
   grid-column: auto;
   justify-content: flex-start;
 }
-.integration-page .preview-inspector .metadata-caption {
+.integration-page.integration-page .preview-inspector .metadata-caption {
   display: grid;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-muted);
   padding-top: var(--space-3);
+  gap: var(--space-2);
 }
-.integration-page .preview-inspector {
+.integration-page.integration-page .preview-inspector > div {
+  display: grid;
+  gap: var(--space-4);
+}
+.integration-page.integration-page .preview-inspector {
   position: sticky;
-  top: var(--space-3);
+  top: var(--space-4);
 }
 .integration-empty-stage {
   display: grid;
@@ -169,211 +280,350 @@
   min-height: calc(var(--control-height) * 4);
   gap: var(--space-3);
   padding: var(--space-5);
-  border: 1px dashed var(--border);
-  background: var(--bg-inset);
+  border: 1px dashed var(--border-muted);
+  background: var(--surface-muted);
 }
 .integration-empty-stage p {
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
 }
-.integration-page .mapping-workspace {
+.integration-page.integration-page .wizard-shell {
+  border: 0;
+  background: var(--surface-background);
+  border-radius: 0;
+}
+.integration-page.integration-page .wizard-heading {
+  position: sticky;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-4);
+  border-bottom: 0;
+  background: var(--surface-background);
+}
+.integration-page.integration-page .wizard-title {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+}
+.integration-page.integration-page .wizard-title h3 {
+  margin-right: auto;
+  font-size: var(--font-h3);
+}
+.integration-page.integration-page .wizard-steps {
+  order: -1;
+  gap: var(--space-3);
+  align-items: stretch;
+  border: 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+.integration-page.integration-page .wizard-step {
+  flex: 1 0 130px;
+  justify-content: flex-start;
+  padding: var(--space-3) 0;
+  gap: var(--space-2);
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  color: var(--foreground-muted);
+  background: transparent;
+}
+.integration-page.integration-page .wizard-step.active {
+  color: var(--action-primary);
+  background: transparent;
+  box-shadow: inset 0 -2px var(--action-primary);
+}
+.integration-page.integration-page .step-number {
+  border-radius: 50%;
+}
+.integration-page.integration-page .wizard-step.visited .step-number {
+  color: var(--action-primary);
+}
+.integration-page.integration-page .mapping-context-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
+}
+.integration-page.integration-page .mapping-context-bar > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 270px;
+  min-width: 0;
+  gap: var(--space-1);
+}
+.integration-page.integration-page .mapping-context-bar span {
+  color: var(--foreground-muted);
+  font-size: var(--font-caption);
+}
+.integration-page.integration-page .mapping-context-bar strong {
+  font-size: var(--font-small);
+  overflow-wrap: anywhere;
+}
+.integration-page.integration-page .mapping-context-bar svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  fill: none;
+  stroke: var(--action-primary);
+  stroke-width: 1.5;
+}
+.integration-page.integration-page .mapping-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
   align-items: start;
+  gap: var(--space-4);
   min-width: 0;
 }
-.integration-page .mapping-stage {
+.integration-page.integration-page .mapping-stage {
   min-width: 0;
 }
-.integration-page .mapping-inspector {
+.integration-page.integration-page .mapping-inspector {
   display: grid;
   gap: var(--space-4);
   padding: var(--space-4);
-  border-inline-start: 1px solid var(--border);
-  background: var(--bg-inset);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
   position: sticky;
-  top: 140px;
+  top: var(--space-4);
   min-width: 0;
 }
-.integration-page .mapping-inspector .object-context {
+.integration-page.integration-page .mapping-checks {
   display: grid;
   gap: var(--space-3);
-  font-size: var(--font-caption);
 }
-.integration-page .mapping-checks {
-  display: grid;
-  gap: var(--space-3);
-  border-top: 1px solid var(--border);
-  padding-top: var(--space-4);
+.integration-page.integration-page .step-content {
+  min-height: 0;
+  padding: 0;
+  gap: var(--space-4);
 }
-.integration-page .step-content {
+.integration-page.integration-page .mapping-stage .ui-card {
   padding: var(--space-4);
 }
-.integration-page .wizard-heading {
+.integration-page.integration-page .mapping-stage .ui-card-title {
+  font-size: var(--font-h3);
+}
+.integration-page.integration-page .editor-card {
   gap: var(--space-3);
-  padding: var(--space-4);
-  background: var(--bg-panel);
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--border-muted);
+  border-radius: 0;
+  background: transparent;
 }
-.integration-page .wizard-steps {
-  gap: 0;
-  align-items: stretch;
-  border: 1px solid var(--border);
+.integration-page.integration-page .editor-heading {
+  padding-top: var(--space-3);
 }
-.integration-page .wizard-step {
-  flex: 1 0 110px;
+.integration-page.integration-page .map-selectors {
+  gap: var(--space-4);
   padding: var(--space-3);
-  gap: var(--space-2);
-  border-inline-end: 1px solid var(--border);
-  color: var(--text-secondary);
-  background: var(--bg-inset);
-}
-.integration-page .wizard-step.active {
-  color: var(--accent);
-  background: var(--bg-panel);
-  box-shadow: inset 0 -2px var(--accent);
-}
-.integration-page .step-number {
   border-radius: var(--radius-small);
+  background: var(--surface-muted);
 }
-.integration-page .wizard-step.visited .step-number {
-  color: var(--text-secondary);
+.integration-page.integration-page .editor-heading strong {
+  font-size: var(--font-small);
 }
-.integration-page .wizard-footer {
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-inset);
-  border-top: 1px solid var(--border);
-}
-.integration-page .editor-card,
-.integration-page .endpoint-card {
-  border-radius: var(--radius-panel);
-  background: var(--bg-inset);
-}
-.integration-page .editor-heading {
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border);
-}
-.integration-page .mapping-picker {
-  max-width: 100%;
-}
-.integration-run-ledger {
-  min-width: 0;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-}
-.integration-page .integration-run-ledger .table-scroll {
+.integration-page.integration-page .field-table {
   border: 0;
   border-radius: 0;
 }
-.integration-page .integration-pager {
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border);
+.integration-page.integration-page .field-table td {
+  padding: var(--space-3) var(--space-2);
+}
+.integration-page.integration-page .field-table .ui-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.integration-page.integration-page .field-table .ui-field,
+.integration-page.integration-page .field-table .ui-field-control {
+  gap: 0;
+}
+.integration-page.integration-page .field-table .ui-select,
+.integration-page.integration-page .field-table .ui-input-wrap {
+  min-width: 130px;
+}
+.integration-page.integration-page .mapping-advanced {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-muted);
+}
+.integration-page.integration-page .endpoint-card {
+  border-color: var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-muted);
+}
+.integration-page.integration-page .map-overview {
+  padding: var(--space-3);
+  border-color: var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-muted);
+}
+.integration-page.integration-page .flow-node {
+  background: var(--surface-panel);
+}
+.integration-page.integration-page .wizard-footer {
+  margin-top: var(--space-4);
+  padding: var(--space-3) 0;
+  background: transparent;
+  border-top: 1px solid var(--border-muted);
+}
+.integration-page.integration-page .mapping-picker {
+  max-width: 100%;
+}
+.integration-page.integration-page .stats-grid {
+  gap: 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+.integration-page.integration-page .stat-card {
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-muted);
 }
 .integration-form-group {
   min-width: 0;
   margin: var(--space-3) 0;
   padding: var(--space-4);
-  border: 1px solid var(--border);
-  background: var(--bg-inset);
+  border: 1px solid var(--border-muted);
+  background: var(--surface-muted);
 }
 .integration-form-group legend {
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
   padding: 0 var(--space-2);
   font-size: var(--font-caption);
 }
-.integration-page .ai-workspace {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr);
-  gap: 0;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-.integration-page .source-panel,
-.integration-page .review-panel {
+.integration-page.integration-page .ai-workspace {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  gap: var(--space-5);
   border: 0;
-  border-radius: 0;
-  padding: var(--space-4);
-  background: var(--bg-panel);
+  background: var(--surface-background);
+  align-items: stretch;
 }
-.integration-page .review-panel {
-  border-inline-start: 1px solid var(--border);
-  background: color-mix(in srgb, var(--violet) 5%, var(--bg-panel));
+.integration-page.integration-page .source-panel,
+.integration-page.integration-page .review-panel {
+  min-width: 0;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  padding: var(--space-5);
+  background: var(--surface-panel);
 }
-.integration-page .review-panel > .integration-panel-heading {
+.integration-page.integration-page .review-panel {
+  border-top: 2px solid var(--action-primary);
+}
+.integration-page.integration-page .review-panel > .integration-panel-heading,
+.integration-page.integration-page .source-panel > .integration-panel-heading {
   display: grid;
   padding: 0 0 var(--space-3);
   margin-bottom: var(--space-4);
 }
-.integration-page .source-panel > .integration-panel-heading {
-  display: grid;
-  padding: 0 0 var(--space-3);
-  margin-bottom: var(--space-4);
+.integration-page.integration-page .suggestions {
+  gap: var(--space-3);
 }
-.integration-page .suggestion {
-  border-inline-start: 2px solid var(--violet);
+.integration-page.integration-page .suggestion {
+  border: 1px solid var(--border-muted);
+  border-inline-start: 2px solid var(--action-primary);
+  border-radius: var(--radius-small);
+  margin: 0;
+}
+.integration-page.integration-page .suggestions h3 {
+  font-size: var(--font-h3);
+}
+.integration-page.integration-page .suggestion-title {
+  justify-content: space-between;
+}
+.integration-page.integration-page .suggestion ul {
+  padding: var(--space-3) var(--space-5);
+  background: var(--surface-muted);
   border-radius: var(--radius-small);
 }
-.integration-page button:focus-visible {
+.integration-page.integration-page .fusion-policy {
+  padding: var(--space-3);
+  background: var(--surface-muted);
+  border-color: var(--border-muted);
+}
+.integration-page.integration-page .count-grid {
+  gap: 0;
+  border-bottom: 1px solid var(--border-muted);
+}
+.integration-page.integration-page .count-grid .count {
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-muted);
+}
+.integration-page.integration-page .quarantine-section {
+  border-top: 1px solid var(--border-muted);
+  padding-top: var(--space-3);
+}
+.integration-page.integration-page button:focus-visible,
+.integration-page.integration-page summary:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
-/* Match tokens.css desktop/tablet/phone breakpoints; CSS var() cannot query media. */
 @media (max-width: 80rem) {
-  .integration-page .catalog-layout {
-    grid-template-columns: 190px minmax(0, 1fr);
-  }
-  .integration-page .catalog-inspector {
+  .integration-page.integration-page .catalog-tree {
     position: static;
+  }
+  .integration-page.integration-page .catalog-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+  .integration-page.integration-page .catalog-inspector {
     grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .integration-page .mapping-workspace {
-    grid-template-columns: minmax(0, 1fr) 230px;
+  .integration-page.integration-page .catalog-samples {
+    grid-column: 1 / -1;
   }
 }
 @media (max-width: 64rem) {
-  .integration-page .mapping-workspace,
-  .integration-page .preview-workspace,
-  .integration-page .ai-workspace {
+  .integration-page.integration-page .mapping-workspace,
+  .integration-page.integration-page .preview-workspace,
+  .integration-page.integration-page .ai-workspace {
     grid-template-columns: minmax(0, 1fr);
   }
-  .integration-page .mapping-inspector,
-  .integration-page .preview-inspector {
+  .integration-page.integration-page .mapping-inspector,
+  .integration-page.integration-page .preview-inspector {
     position: static;
-    top: auto;
-    border-inline-start: 0;
-    border-top: 1px solid var(--border);
   }
-  .integration-page .preview-inspector .selection-grid {
+  .integration-page.integration-page .preview-inspector .selection-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .integration-page .review-panel {
-    border-inline-start: 0;
-    border-top: 1px solid var(--border);
   }
 }
 @media (max-width: 48rem) {
-  .integration-page.sources-page,
-  .integration-page.data-catalog {
+  .integration-page.integration-page.sources-page,
+  .integration-page.integration-page.data-catalog {
     padding: 0;
   }
-  .integration-page .catalog-layout,
-  .integration-page .catalog-inspector,
-  .integration-page .preview-inspector .selection-grid {
+  .integration-page.integration-page .catalog-layout,
+  .integration-page.integration-page .catalog-inspector,
+  .integration-page.integration-page .preview-inspector .selection-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .integration-page .catalog-tree {
+  .integration-page.integration-page .catalog-tree {
     position: static;
     max-height: 240px;
   }
-  .integration-page .map-selectors,
-  .integration-page .endpoint-grid,
-  .integration-page .form-grid {
+  .integration-page.integration-page .map-selectors,
+  .integration-page.integration-page .endpoint-grid,
+  .integration-page.integration-page .form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .integration-page .wizard-heading {
-    position: static;
-  }
-  .integration-page .table-heading {
-    flex-wrap: wrap;
+  .integration-page.integration-page .mapping-context-bar {
+    gap: var(--space-3);
     padding: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .integration-page.integration-page .wizard-footer {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+  .integration-page.integration-page .footer-progress {
+    flex-wrap: wrap;
+  }
+  .integration-page.integration-page .integration-page.integration-pager {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }

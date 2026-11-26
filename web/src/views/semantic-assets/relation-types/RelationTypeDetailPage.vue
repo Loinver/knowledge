@@ -206,15 +206,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="asset-page">
+  <div class="asset-page asset-detail-page">
     <PageHeader
       :title="t('page.relationDetail')"
       :eyebrow="t('page.relationTypes')"
       :identity="data?.name"
-      :description="t('relationDetail.hint')"
     >
-      <template #context
-        ><AssetIdentity
+      <template #context>
+        <strong v-if="data" class="detail-object-label">{{
+          data.label_i18n?.[locale] || t('enumDictionaries.untranslated')
+        }}</strong>
+        <AssetIdentity
           v-if="data"
           :name="data.name"
           :iri="data.iri"

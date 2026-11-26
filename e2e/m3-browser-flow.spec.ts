@@ -418,7 +418,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   const sider = page.locator('.app-sider')
   const menuLabels = await sider
     .locator('.sider-scroll > ul > .nav-branch > button')
-    .allTextContents()
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')))
   expect(menuLabels).toEqual([
     '工作台',
     '标准语义资产',
@@ -430,21 +430,25 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
   ])
   await expect(sider.getByText('系统管理', { exact: true })).toHaveCount(0)
 
-  await sider.getByText('数据接入与抽取', { exact: true }).click()
-  await sider.getByText('数据源', { exact: true }).click()
+  await sider.getByRole('button', { name: '数据接入与抽取', exact: true }).click()
   await expect(page).toHaveURL(/\/datasources$/)
   await expect(
     page.locator('.app-header .breadcrumbs li > a, .app-header .breadcrumbs li > .crumb-current'),
   ).toHaveText(['数据接入与抽取', '数据源'])
-  await sider.getByText('图谱与证据', { exact: true }).click()
-  await sider.getByText('证据追溯', { exact: true }).click()
+  await sider.getByRole('button', { name: '图谱与证据', exact: true }).click()
+  await page
+    .locator('.module-navigation')
+    .getByRole('link', { name: '证据追溯', exact: true })
+    .click()
   await expect(page).toHaveURL(/\/graph\/evidence$/)
   await expect(
     page.locator('.app-header .breadcrumbs li > a, .app-header .breadcrumbs li > .crumb-current'),
   ).toHaveText(['图谱与证据', '证据追溯'])
   await page.goBack()
+  await expect(page).toHaveURL(/\/graph$/)
+  await page.goBack()
   await expect(page).toHaveURL(/\/datasources$/)
-  const selectedMenu = sider.getByRole('button').and(page.locator('[aria-current="page"]'))
+  const selectedMenu = page.locator('.module-navigation [aria-current="page"]')
   await expect(selectedMenu).toHaveCount(1)
   await expect(selectedMenu).toHaveText('数据源')
   await page.locator('.brand').click()
@@ -855,7 +859,7 @@ test('M3 browser flow, failure protection and responsive route smoke', async ({
         expect(visibleText, route.path).not.toMatch(
           /\b(?:errors|dataAccess|ontology|graph|system|account|runs|tasks)\.[A-Za-z0-9_.]+\b/,
         )
-        if (route.pageHeader) await expect(page.locator('.page-header')).toBeVisible()
+        if (route.pageHeader) await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
         if (route.path === '/') {
           await expect(page.locator('.pipe-step')).toHaveCount(6)
           const backdrop = page.locator('.mobile-backdrop')

@@ -84,6 +84,8 @@ export function useNavigation() {
   }
   const searchPages = (query: string) => searchIndex(auth.isAdmin, t, query)
   return {
+    tree,
+    trail,
     menuOptions,
     activeKey,
     expandedKeys,

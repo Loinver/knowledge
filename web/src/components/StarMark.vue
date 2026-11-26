@@ -1,9 +1,7 @@
 <script setup lang="ts">
 /**
- * 品牌标识「星图」：中心节点 + 四个语义节点 + 连线。
- *
- * 四个外圈节点分别取图谱语义色（实体 / 直接关系 / 派生边 / 证据），
- * 与 `tokens.css` 的 `--g-*` 同源——品牌即产品语言本身。
+ * 知识工作室标识：四块可组合的知识单元，以连接线表达语义关系。
+ * 继承宿主前景色，保证深绿导航、浅色和暗色认证页面均可辨认。
  */
 withDefaults(defineProps<{ size?: number }>(), { size: 28 })
 </script>
@@ -18,16 +16,8 @@ withDefaults(defineProps<{ size?: number }>(), { size: 28 })
     role="img"
     aria-hidden="true"
   >
-    <circle cx="16" cy="16" r="3" fill="var(--g-entity)" />
-    <circle cx="6" cy="7" r="2" fill="var(--g-relation)" />
-    <circle cx="27" cy="9" r="2" fill="var(--g-derived)" />
-    <circle cx="7" cy="26" r="2" fill="var(--g-evidence)" />
-    <circle cx="26" cy="25" r="2" fill="var(--g-current)" />
-    <path
-      d="M16 16L6 7M16 16L27 9M16 16L7 26M16 16L26 25"
-      stroke="var(--border-strong)"
-      stroke-width="1"
-    />
+    <path d="M5 5h9v9H5zM18 18h9v9h-9zM5 19h6v8H5zM20 5h7v6h-7z" fill="currentColor" />
+    <path d="m13 10 9 12M9 14v5M18 23h-7" stroke="currentColor" stroke-width="2" />
   </svg>
 </template>
 

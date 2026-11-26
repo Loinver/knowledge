@@ -5,6 +5,7 @@ import { RouterView, useRoute } from 'vue-router'
 
 import AppHeader from '@/layout/components/AppHeader.vue'
 import AppSider from '@/layout/components/AppSider.vue'
+import ModuleNavigation from '@/layout/components/ModuleNavigation.vue'
 import { providePageIdentity } from '@/layout/navigation/usePageIdentity'
 import { useUiStore } from '@/stores/ui'
 
@@ -27,6 +28,7 @@ const fullBleed = computed(() => route.meta.fullBleed === true)
     />
     <div class="admin-main">
       <AppHeader />
+      <ModuleNavigation />
       <main id="main-content" tabindex="-1" :class="['content', { 'content--bleed': fullBleed }]">
         <RouterView />
       </main>
@@ -56,6 +58,7 @@ const fullBleed = computed(() => route.meta.fullBleed === true)
   padding: var(--page-gutter);
   overflow: auto;
   overscroll-behavior: contain;
+  background: var(--surface-panel);
 }
 .content--bleed {
   padding: 0;

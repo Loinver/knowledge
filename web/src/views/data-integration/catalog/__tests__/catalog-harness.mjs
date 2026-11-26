@@ -145,11 +145,11 @@ async function context(start, role, locale = 'en-US') {
   return { router, pinia, i18n }
 }
 
-export async function mount(entry, api, expose, start = '/catalog', role = 'EDITOR') {
+export async function mount(entry, api, expose, start = '/catalog', role = 'EDITOR', props = {}) {
   const built = await compile(entry, api, expose)
   const ctx = await context(start, role)
   const app = renderer
-    .createApp({ ...built.mod.default, render: () => null })
+    .createApp({ ...built.mod.default, render: () => null }, props)
     .use(ctx.router)
     .use(ctx.pinia)
     .use(ctx.i18n)
@@ -158,6 +158,10 @@ export async function mount(entry, api, expose, start = '/catalog', role = 'EDIT
   return {
     vm,
     ...ctx,
+    updateProps: async (next) => {
+      Object.assign(app._instance.props, next)
+      await settle()
+    },
     stop: () => {
       app.unmount()
       built.cleanup()

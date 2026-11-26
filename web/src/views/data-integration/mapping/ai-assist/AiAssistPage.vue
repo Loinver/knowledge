@@ -147,7 +147,7 @@ const ontologyOptions = computed(() =>
                 v-model:value="text"
                 type="textarea"
                 :disabled="!canWrite"
-                :autosize="{ minRows: 12, maxRows: 24 }"
+                :autosize="{ minRows: 10, maxRows: 24 }"
                 :placeholder="t('ai.documentPlaceholder')"
                 :input-props="{ 'aria-label': t('ai.documentText') }"
               />
@@ -172,7 +172,6 @@ const ontologyOptions = computed(() =>
               </div>
             </FormField>
           </FormContainer>
-          <p class="hint">{{ t('extractionUi.sourceKept') }}</p>
         </section>
         <section class="review-panel">
           <header class="integration-panel-heading">
@@ -183,7 +182,7 @@ const ontologyOptions = computed(() =>
             v-if="ontologyId"
             :key="ontologyId"
             kind="DOCUMENT_FACTS"
-            :title="t('ai.documentSuggestions')"
+            :title="t('extractionUi.documentReview')"
             :target-id="ontologyId"
             :text="text"
             :validate-context="validateSource"

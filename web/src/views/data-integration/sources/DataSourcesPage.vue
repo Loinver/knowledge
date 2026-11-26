@@ -402,129 +402,137 @@ const editVisible = useDraftGuard(
       </template>
     </PageHeader>
 
-    <dl class="integration-readings" :aria-label="t('dataAccess.sources.listTitle')">
-      <div>
-        <dt>{{ t('dataAccess.sources.stats.total') }}</dt>
-        <dd>{{ loading || error ? t('common.noneValue') : numbers.format(items.length) }}</dd>
-      </div>
-      <div>
-        <dt>{{ t('dataAccess.sources.stats.connected') }}</dt>
-        <dd class="ok">
-          {{ loading || error ? t('common.noneValue') : numbers.format(connectedCount) }}
-        </dd>
-      </div>
-      <div>
-        <dt>{{ t('dataAccess.sources.stats.failed') }}</dt>
-        <dd class="bad">
-          {{
-            loading || error ? t('common.noneValue') : numbers.format(items.length - connectedCount)
-          }}
-        </dd>
-      </div>
-    </dl>
-
-    <UiAlert type="info" :show-icon="false">{{ t('dataAccess.sources.security') }}</UiAlert>
-    <UiAlert v-if="!canWrite" type="info">{{ t('ui.readonly') }}</UiAlert>
-    <SearchPanel
-      v-model:query="query"
-      :loading="loading"
-      :label="t('dataAccess.sources.search')"
-      :placeholder="t('dataAccess.sources.search')"
-      @submit="search"
-      @clear="resetSearch"
-      @reset="resetSearch"
-    >
-      <template #filters>
-        <UiSelect
-          v-model:value="kindFilter"
-          clearable
-          :options="kindOptions"
-          :placeholder="t('dataAccess.sources.filters.kind')"
-          :aria-label="t('dataAccess.sources.filters.kind')"
-        />
-        <UiSelect
-          v-model:value="statusFilter"
-          clearable
-          :options="statusOptions"
-          :placeholder="t('dataAccess.sources.filters.status')"
-          :aria-label="t('dataAccess.sources.filters.status')"
-        />
-      </template>
-    </SearchPanel>
-    <SearchTable
-      v-model:page="page"
-      :rows="visible"
-      :columns="columns"
-      row-key="id"
-      mode="local"
-      :page-size="20"
-      :searchable="false"
-      :loading="loading"
-      :error="error"
-      :label="t('dataAccess.sources.listTitle')"
-      :empty-text="
-        appliedQuery || kindFilter || statusFilter
-          ? t('dataAccess.sources.states.noMatch')
-          : t('dataAccess.sources.states.empty')
-      "
-      @retry="load"
-    >
-      <template #cell-name="{ row }">
-        <div class="source-name">
-          <RouterLink :to="{ name: 'data-catalog', query: { datasourceId: row.id } }">
-            <strong>{{ row.name }}</strong>
-          </RouterLink>
-          <small>{{ row.id }}</small>
+    <section class="source-management integration-run-ledger">
+      <dl class="integration-readings" :aria-label="t('dataAccess.sources.listTitle')">
+        <div>
+          <dt>{{ t('dataAccess.sources.stats.total') }}</dt>
+          <dd>{{ loading || error ? t('common.noneValue') : numbers.format(items.length) }}</dd>
         </div>
-      </template>
-      <template #cell-kind="{ row }"
-        ><UiTag size="small">{{ displayKind(row.kind) }}</UiTag></template
+        <div>
+          <dt>{{ t('dataAccess.sources.stats.connected') }}</dt>
+          <dd class="ok">
+            {{ loading || error ? t('common.noneValue') : numbers.format(connectedCount) }}
+          </dd>
+        </div>
+        <div>
+          <dt>{{ t('dataAccess.sources.stats.failed') }}</dt>
+          <dd class="bad">
+            {{
+              loading || error
+                ? t('common.noneValue')
+                : numbers.format(items.length - connectedCount)
+            }}
+          </dd>
+        </div>
+      </dl>
+
+      <UiAlert v-if="!canWrite" type="info">{{ t('ui.readonly') }}</UiAlert>
+      <SearchPanel
+        v-model:query="query"
+        :loading="loading"
+        :label="t('dataAccess.sources.search')"
+        :placeholder="t('dataAccess.sources.search')"
+        @submit="search"
+        @clear="resetSearch"
+        @reset="resetSearch"
       >
-      <template #cell-connection="{ row }"
-        ><span>{{ connectionLabel(row) }}</span></template
+        <template #filters>
+          <UiSelect
+            v-model:value="kindFilter"
+            clearable
+            :options="kindOptions"
+            :placeholder="t('dataAccess.sources.filters.kind')"
+            :aria-label="t('dataAccess.sources.filters.kind')"
+          />
+          <UiSelect
+            v-model:value="statusFilter"
+            clearable
+            :options="statusOptions"
+            :placeholder="t('dataAccess.sources.filters.status')"
+            :aria-label="t('dataAccess.sources.filters.status')"
+          />
+        </template>
+      </SearchPanel>
+      <SearchTable
+        v-model:page="page"
+        :rows="visible"
+        :columns="columns"
+        row-key="id"
+        mode="local"
+        :page-size="20"
+        :searchable="false"
+        :loading="loading"
+        :error="error"
+        :label="t('dataAccess.sources.listTitle')"
+        :empty-text="
+          appliedQuery || kindFilter || statusFilter
+            ? t('dataAccess.sources.states.noMatch')
+            : t('dataAccess.sources.states.empty')
+        "
+        @retry="load"
       >
-      <template #cell-status="{ row }">
-        <UiTag size="small" :type="row.status === 'CONNECTED' ? 'success' : 'warning'">
-          {{
-            row.status === 'CONNECTED'
-              ? t('dataAccess.sources.status.connected')
-              : t('dataAccess.sources.status.disconnected')
-          }}
-        </UiTag>
-      </template>
-      <template #cell-actions="{ row }">
-        <RowActions :row="row">
-          <RouterLink :to="{ name: 'data-catalog', query: { datasourceId: row.id } }">
-            <UiButton size="small" type="primary" secondary>{{ t('page.dataCatalog') }}</UiButton>
-          </RouterLink>
-          <UiPopconfirm v-if="canWrite" @positive-click="removeSource(row)">
-            <template #trigger>
-              <UiButton
-                quaternary
-                type="error"
-                size="small"
-                :loading="deletingId === row.id"
-                :disabled="rowBusy || rowLocked(row.id)"
-              >
-                {{ t('dataAccess.sources.actions.delete') }}
-              </UiButton>
-            </template>
-            {{ t('dataAccess.sources.deleteConfirm', { name: row.name }) }}
-          </UiPopconfirm>
-          <UiButton
-            size="small"
-            :loading="testingId === row.id"
-            :disabled="!canWrite || rowBusy || rowLocked(row.id)"
-            @click="testStored(row)"
-          >
-            {{ t('dataAccess.sources.actions.testStored') }}
-          </UiButton>
-          <UiButton size="small" :disabled="!canWrite || rowLocked(row.id)" @click="openEdit(row)">
-            {{ t('dataAccess.sources.actions.edit') }}
-          </UiButton>
-        </RowActions>
-      </template>
-    </SearchTable>
+        <template #cell-name="{ row }">
+          <div class="source-name">
+            <RouterLink :to="{ name: 'data-catalog', query: { datasourceId: row.id } }">
+              <strong>{{ row.name }}</strong>
+            </RouterLink>
+            <small>{{ row.id }}</small>
+          </div>
+        </template>
+        <template #cell-kind="{ row }"
+          ><UiTag size="small">{{ displayKind(row.kind) }}</UiTag></template
+        >
+        <template #cell-connection="{ row }"
+          ><span>{{ connectionLabel(row) }}</span></template
+        >
+        <template #cell-status="{ row }">
+          <UiTag size="small" :type="row.status === 'CONNECTED' ? 'success' : 'warning'">
+            {{
+              row.status === 'CONNECTED'
+                ? t('dataAccess.sources.status.connected')
+                : t('dataAccess.sources.status.disconnected')
+            }}
+          </UiTag>
+        </template>
+        <template #cell-actions="{ row }">
+          <RowActions :row="row">
+            <RouterLink :to="{ name: 'data-catalog', query: { datasourceId: row.id } }">
+              <UiButton size="small" type="primary" secondary>{{ t('page.dataCatalog') }}</UiButton>
+            </RouterLink>
+            <UiPopconfirm v-if="canWrite" @positive-click="removeSource(row)">
+              <template #trigger>
+                <UiButton
+                  quaternary
+                  type="error"
+                  size="small"
+                  :loading="deletingId === row.id"
+                  :disabled="rowBusy || rowLocked(row.id)"
+                >
+                  {{ t('dataAccess.sources.actions.delete') }}
+                </UiButton>
+              </template>
+              {{ t('dataAccess.sources.deleteConfirm', { name: row.name }) }}
+            </UiPopconfirm>
+            <UiButton
+              size="small"
+              :loading="testingId === row.id"
+              :disabled="!canWrite || rowBusy || rowLocked(row.id)"
+              @click="testStored(row)"
+            >
+              {{ t('dataAccess.sources.actions.testStored') }}
+            </UiButton>
+            <UiButton
+              size="small"
+              :disabled="!canWrite || rowLocked(row.id)"
+              @click="openEdit(row)"
+            >
+              {{ t('dataAccess.sources.actions.edit') }}
+            </UiButton>
+          </RowActions>
+        </template>
+      </SearchTable>
+      <p class="integration-caption ledger-note">{{ t('dataAccess.sources.security') }}</p>
+    </section>
 
     <UiModal
       v-model:show="editVisible"

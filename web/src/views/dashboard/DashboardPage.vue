@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import { dashboardApi } from '@/api/dashboard'
+import AppIcon from '@/components/AppIcon.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { UiAlert, UiButton, UiSpin } from '@/components/ui'
 import { useAsyncData } from '@/composables/useAsyncData'
@@ -13,7 +14,7 @@ const number = (value: number) => new Intl.NumberFormat(locale.value).format(val
 const { data: stats, loading, error, reload } = useAsyncData(dashboardApi.stats)
 
 /**
- * 与完整性核验的九个环节一致。数量仅表示已有资产或运行记录，不能代表环节已通过。
+ * 六个任务阶段。数量仅表示已有资产或运行记录，不能代表环节已通过。
  * 暂无聚合统计的环节展示操作入口，不用零值推断其完成情况。
  */
 const pipeline = computed(() => [
@@ -132,9 +133,9 @@ const hasIssues = computed(
           <header class="panel-heading">
             <div>
               <span class="eyebrow">{{ t('operationsUi.console') }}</span>
-              <h2>{{ t('dashboard.currentGraph') }}</h2>
+              <h2>{{ t('assetStudio.currentWork') }}</h2>
             </div>
-            <span class="scope-note">{{ t('operationsUi.scope') }}</span>
+            <span class="scope-note">{{ t('dashboard.currentGraph') }}</span>
           </header>
           <div class="observation-readout">
             <div v-if="stats.current_graph_id !== null" class="result-value mono">
@@ -159,16 +160,22 @@ const hasIssues = computed(
           <div class="continue-work">
             <div>
               <strong>{{ t('appUi.continueWork') }}</strong>
-              <p>{{ stats.current_graph_id ? t('appUi.continueGraph') : t('appUi.startHint') }}</p>
+              <p>
+                {{
+                  stats.current_graph_id !== null ? t('appUi.continueGraph') : t('appUi.startHint')
+                }}
+              </p>
             </div>
             <RouterLink
               :to="
-                stats.current_graph_id
+                stats.current_graph_id !== null
                   ? { name: 'graph-browse', query: { graph: stats.current_graph_id } }
                   : { name: 'designer' }
               "
               ><UiButton type="primary">{{
-                stats.current_graph_id ? t('dashboard.goGraphBrowse') : t('dashboard.goDesigner')
+                stats.current_graph_id !== null
+                  ? t('dashboard.goGraphBrowse')
+                  : t('dashboard.goDesigner')
               }}</UiButton></RouterLink
             >
           </div>
@@ -182,18 +189,39 @@ const hasIssues = computed(
           </header>
           <div v-if="!hasIssues" class="empty-ok">{{ t('appUi.noPending') }}</div>
           <div v-else class="issue-list">
-            <UiAlert
+            <article v-if="stats.unpublished_count" class="attention-item">
+              <div class="attention-icon"><AppIcon name="ontology" /></div>
+              <div class="attention-copy">
+                <h3>
+                  {{ t('dashboard.draftResources', { count: number(stats.unpublished_count) }) }}
+                </h3>
+                <p>{{ t('assetStudio.draftScope') }}</p>
+                <p>{{ t('assetStudio.publishPrerequisite') }}</p>
+                <nav class="draft-links" :aria-label="t('dashboard.assets')">
+                  <RouterLink
+                    v-for="item in assets.slice(0, 4)"
+                    :key="item.key"
+                    :to="{ name: item.link, query: { status: 'DRAFT' } }"
+                    >{{ item.label }}</RouterLink
+                  >
+                </nav>
+              </div>
+              <span class="attention-count">{{ number(stats.unpublished_count) }}</span>
+            </article>
+            <RouterLink
               v-if="stats.quarantine_count"
-              type="warning"
-              :title="t('dashboard.quarantineCount', { count: stats.quarantine_count })"
-              >{{ t('dashboard.quarantineHint') }}</UiAlert
+              :to="{ name: 'extraction-runs' }"
+              class="attention-item"
             >
-            <UiAlert
-              v-if="stats.unpublished_count"
-              type="info"
-              :title="t('dashboard.draftResources', { count: stats.unpublished_count })"
-              >{{ t('dashboard.unpublishedHint') }}</UiAlert
-            >
+              <div class="attention-icon"><AppIcon name="governance" /></div>
+              <div class="attention-copy">
+                <h3>
+                  {{ t('dashboard.quarantineCount', { count: number(stats.quarantine_count) }) }}
+                </h3>
+                <p>{{ t('dashboard.quarantineHint') }}</p>
+              </div>
+              <span class="attention-count">{{ number(stats.quarantine_count) }}</span>
+            </RouterLink>
           </div>
           <div class="attention-actions">
             <RouterLink :to="{ name: 'extraction-runs' }">{{
@@ -242,6 +270,7 @@ const hasIssues = computed(
               :key="item.key"
               :to="{ name: item.link }"
               class="asset"
+              :class="{ 'asset-secondary': ['datasources', 'mappings', 'runs'].includes(item.key) }"
             >
               <div class="asset-value mono">{{ number(item.value) }}</div>
               <div class="card-label">{{ item.label }}</div>
@@ -260,15 +289,11 @@ const hasIssues = computed(
 }
 .console-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  gap: 28px;
 }
 .panel {
   min-width: 0;
-  background: var(--bg-panel, var(--bg-surface));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-panel);
-  overflow: hidden;
 }
 .panel-heading {
   display: flex;
@@ -276,114 +301,188 @@ const hasIssues = computed(
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 0 0 16px;
 }
 .panel-heading h2 {
-  font-size: var(--font-h2);
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
-  margin: 4px 0 0;
 }
 .eyebrow,
 .scope-note {
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
   font-size: 12px;
 }
+.observation-panel {
+  background: var(--surface-inset);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+.observation-panel .panel-heading {
+  padding: 22px 24px 0;
+}
+.observation-panel h2 {
+  margin-top: 8px;
+  font-size: 22px;
+}
 .observation-readout {
-  padding: 24px 20px 0;
-  background: var(--bg-inset);
+  padding: 16px 24px 0;
 }
 .result-value {
-  font-size: 24px;
+  color: var(--action-primary);
+  font-size: 18px;
   font-weight: 600;
-  color: var(--accent);
   overflow-wrap: anywhere;
 }
 .result-empty {
   display: flex;
-  flex-direction: column;
   gap: 8px;
-  color: var(--text-secondary);
+  flex-wrap: wrap;
+  align-items: baseline;
+  color: var(--foreground-muted);
+  font-size: 13px;
 }
 .result-none {
-  font-size: 24px;
-  color: var(--text-primary, var(--text));
+  font-size: 18px;
+  color: var(--foreground-primary);
 }
 .readout-hint {
-  max-width: 60ch;
-  margin: 12px 0 20px;
-  color: var(--text-secondary);
+  margin: 8px 0 16px;
+  color: var(--foreground-muted);
   font-size: 12px;
   line-height: 1.7;
+}
+.work-assets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding-bottom: 18px;
+}
+.work-assets a {
+  display: grid;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.work-assets span {
+  color: var(--foreground-muted);
+  font-size: 12px;
+}
+.work-assets strong {
+  font-size: 26px;
+  font-weight: 600;
 }
 .result-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-muted);
 }
 .readout {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 16px 0;
-  color: var(--text-secondary);
+  padding: 12px 0;
+  color: var(--foreground-muted);
   font-size: 12px;
 }
-.readout + .readout {
-  border-left: 1px solid var(--border);
-  padding-left: 16px;
-}
 .metric {
-  color: var(--text-primary, var(--text));
-  font-size: 24px;
-  font-weight: 500;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--foreground-primary);
 }
 .warn .metric {
-  color: var(--s-notrun);
+  color: var(--status-not-run);
 }
 .continue-work {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 20px;
-  border-top: 1px solid var(--border);
+  gap: 12px;
+  padding: 12px 24px 22px;
 }
 .continue-work strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 .continue-work p {
-  margin: 6px 0 0;
+  margin: 5px 0 0;
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
 }
 .attention-panel {
   align-self: start;
 }
+.attention-panel .eyebrow {
+  display: none;
+}
 .issue-list {
   display: grid;
+}
+.attention-item {
+  display: flex;
   gap: 12px;
-  padding: 20px;
+  align-items: flex-start;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-muted);
+  color: inherit;
+  text-decoration: none;
+}
+.attention-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--status-not-run) 10%, var(--surface-panel));
+  color: var(--status-not-run);
+  font-size: 20px;
+}
+.attention-copy {
+  flex: 1;
+  min-width: 0;
+}
+.attention-copy h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.attention-copy p {
+  margin: 0 0 5px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--foreground-muted);
+}
+.attention-count {
+  color: var(--foreground-secondary);
+  font-size: 20px;
+}
+.draft-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+.draft-links a {
+  color: var(--action-primary);
+  font-size: 12px;
 }
 .empty-ok {
-  padding: 24px 20px;
-  color: var(--text-secondary);
+  padding: 24px 0;
+  color: var(--foreground-muted);
   font-size: 13px;
 }
 .attention-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border);
+  padding: 16px 0;
 }
 .attention-actions a {
-  color: var(--accent);
+  color: var(--action-primary);
   font-size: 12px;
 }
-.pipeline-panel {
+.pipeline-panel,
+.asset-panel {
   grid-column: 1 / -1;
 }
 .pipeline {
@@ -392,96 +491,106 @@ const hasIssues = computed(
   list-style: none;
   padding: 0;
   margin: 0;
+  border-block: 1px solid var(--border-muted);
 }
 .pipe-cell {
   min-width: 0;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-muted);
 }
 .pipe-cell:last-child {
   border-right: 0;
 }
 .pipe-step {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 136px;
-  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 6px;
+  padding: 20px 16px;
   text-decoration: none;
-  color: var(--text-primary, var(--text));
-  transition: background 120ms;
-}
-.pipe-step:hover,
-.asset:hover {
-  background: var(--bg-inset);
-}
-.pipe-step:focus-visible,
-.asset:focus-visible,
-.attention-actions a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  color: var(--foreground-primary);
 }
 .pipe-head {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
 }
 .pipe-no {
-  color: var(--accent);
   font-size: 11px;
+  color: var(--foreground-muted);
 }
 .pipe-name {
-  font-size: 12px;
-}
-.pipe-count {
-  font-size: 24px;
-  line-height: 1.2;
-}
-.pipe-action {
-  color: var(--accent);
   font-size: 14px;
-  line-height: 1.8;
+  font-weight: 600;
+}
+.pipe-count,
+.pipe-action {
+  align-self: end;
+  color: var(--action-primary);
+  font-size: 18px;
 }
 .pipe-hint {
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.6;
-}
-.asset-panel {
   grid-column: 1 / -1;
+  color: var(--foreground-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 .asset-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 .asset {
+  display: flex;
+  flex-direction: column-reverse;
   min-width: 0;
+  gap: 6px;
   padding: 16px 20px;
-  color: var(--text-primary, var(--text));
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  color: var(--foreground-primary);
   text-decoration: none;
-  border-right: 1px solid var(--border);
-}
-.asset:last-child {
-  border-right: 0;
 }
 .asset-value {
-  font-size: 22px;
+  font-size: 26px;
+  line-height: 1.2;
 }
 .card-label {
-  margin-top: 6px;
-  color: var(--text-secondary);
+  color: var(--foreground-muted);
   font-size: 12px;
+}
+.asset-secondary {
+  grid-row: 2;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--surface-muted);
+}
+.asset-secondary .asset-value {
+  font-size: 18px;
+}
+.pipe-step:hover,
+.asset:hover {
+  background: var(--surface-hover);
+}
+a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 .loading-state {
   min-height: 250px;
   display: grid;
   place-items: center;
 }
-@media (max-width: 1279px) {
+@media (max-width: 1100px) {
+  .console-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
   .pipeline {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .pipe-cell {
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-muted);
   }
   .pipe-cell:nth-child(3n) {
     border-right: 0;
@@ -489,48 +598,28 @@ const hasIssues = computed(
   .pipe-cell:nth-last-child(-n + 3) {
     border-bottom: 0;
   }
-  .asset-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-  .asset {
-    border-bottom: 1px solid var(--border);
-  }
 }
-@media (max-width: 767px) {
-  .console-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .pipeline-panel,
-  .asset-panel {
-    grid-column: auto;
-  }
+@media (max-width: 640px) {
   .asset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .asset-secondary {
+    grid-row: auto;
   }
   .pipeline {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .pipe-cell:nth-child(3n) {
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--border-muted);
   }
   .pipe-cell:nth-child(2n) {
     border-right: 0;
   }
   .pipe-cell:nth-last-child(3) {
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--border-muted);
   }
-  .panel-heading,
-  .continue-work {
-    padding: 16px;
-  }
-  .continue-work :deep(.ui-button) {
-    min-height: 44px;
-    max-width: 100%;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pipe-step {
-    transition: none;
+  .work-assets {
+    gap: 8px;
   }
 }
 </style>

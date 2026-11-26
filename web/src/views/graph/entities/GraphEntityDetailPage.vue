@@ -167,7 +167,6 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
   <section class="graph-page">
     <PageHeader
       :title="data ? entityName(data.detail.entity) : t('page.graphEntityDetail')"
-      :eyebrow="t('page.graphEntityDetail')"
       :identity="data?.detail.entity.iri"
     >
       <template #context
@@ -198,33 +197,6 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
     <p v-if="loading" role="status">{{ t('common.loading') }}</p>
     <template v-if="data">
       <div class="detail-workspace">
-        <aside class="entity-identity">
-          <h2>{{ t('studio.identity') }}</h2>
-          <dl>
-            <dt>{{ t('graph.type') }}</dt>
-            <dd>{{ data.detail.entity.type_iri }}</dd>
-            <dt>{{ t('graph.rowKey') }}</dt>
-            <dd>{{ data.detail.entity.row_key }}</dd>
-            <dt>{{ t('graph.revisionInput') }}</dt>
-            <dd>{{ `#${data.detail.entity.graph_revision_id}` }}</dd>
-          </dl>
-          <div class="relation-readouts">
-            <button type="button" @click="activeTab = 'out'">
-              <span>{{ t('graph.outgoing') }}</span
-              ><strong>{{ n(data.detail.out_edges.length) }}</strong>
-            </button>
-            <button type="button" @click="activeTab = 'in'">
-              <span>{{ t('graph.incoming') }}</span
-              ><strong>{{ n(data.detail.in_edges.length) }}</strong>
-            </button>
-            <button type="button" @click="activeTab = 'derived'">
-              <span>{{ t('graph.derived') }}</span
-              ><strong>{{ n(data.detail.derived_edges.length) }}</strong>
-            </button>
-          </div>
-          <UiButton secondary @click="activeTab = 'evidence'">{{ t('graph.trace') }}</UiButton>
-          <p>{{ t('graphUi.derivedEvidence') }}</p>
-        </aside>
         <div class="detail-content">
           <UiAlert v-if="frozenLabels.error.value" type="warning" role="alert">
             {{ frozenLabels.error.value }}
@@ -378,6 +350,37 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
             </UiTabPane>
           </UiTabs>
         </div>
+        <aside class="entity-identity">
+          <h2>{{ t('studio.identity') }}</h2>
+          <dl>
+            <dt>{{ t('graph.type') }}</dt>
+            <dd>{{ data.detail.entity.type_iri }}</dd>
+            <dt>{{ t('graph.rowKey') }}</dt>
+            <dd>{{ data.detail.entity.row_key }}</dd>
+            <dt>{{ t('graph.revisionInput') }}</dt>
+            <dd>{{ `#${data.detail.entity.graph_revision_id}` }}</dd>
+          </dl>
+          <div class="relation-readouts">
+            <button type="button" :aria-pressed="activeTab === 'out'" @click="activeTab = 'out'">
+              <span>{{ t('graph.outgoing') }}</span
+              ><strong>{{ n(data.detail.out_edges.length) }}</strong>
+            </button>
+            <button type="button" :aria-pressed="activeTab === 'in'" @click="activeTab = 'in'">
+              <span>{{ t('graph.incoming') }}</span
+              ><strong>{{ n(data.detail.in_edges.length) }}</strong>
+            </button>
+            <button
+              type="button"
+              :aria-pressed="activeTab === 'derived'"
+              @click="activeTab = 'derived'"
+            >
+              <span>{{ t('graph.derived') }}</span
+              ><strong>{{ n(data.detail.derived_edges.length) }}</strong>
+            </button>
+          </div>
+          <UiButton secondary @click="activeTab = 'evidence'">{{ t('graph.trace') }}</UiButton>
+          <p>{{ t('graphUi.derivedEvidence') }}</p>
+        </aside>
       </div>
     </template>
   </section>
@@ -390,8 +393,8 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
 }
 .detail-workspace {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
 }
 .entity-identity {
   padding: 16px;
@@ -399,9 +402,9 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
   flex-direction: column;
   gap: 16px;
   align-self: start;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
 }
 .entity-identity h2 {
   margin: 0;
@@ -436,11 +439,16 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
   gap: 12px;
   padding: 10px;
   border: 0;
-  background: var(--bg-inset);
-  color: var(--text-secondary);
+  background: var(--surface-muted);
+  color: var(--foreground-secondary);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+.relation-readouts button:hover,
+.relation-readouts button[aria-pressed='true'] {
+  color: var(--action-primary);
+  background: var(--surface-selected);
 }
 .relation-readouts strong {
   color: var(--text-primary);
@@ -449,9 +457,9 @@ const conflictRowKey = (row: { predicate: string }) => row.predicate
 .detail-content {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
 }
 .views-360 {
   padding-bottom: 16px;

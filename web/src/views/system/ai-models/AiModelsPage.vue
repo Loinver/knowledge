@@ -712,117 +712,127 @@ const columns = computed<DataTableColumns<AiModelConfig>>(() => [
     <template v-else>
       <UiAlert type="info" class="feedback">{{ t('aiModels.writeHint') }}</UiAlert>
       <UiAlert v-if="notice" type="success" class="feedback">{{ notice }}</UiAlert>
-      <UiAlert v-if="defaultsError" type="error" class="feedback">
-        {{ defaultsError }}
-        <UiButton size="small" :disabled="busy" @click="loadDefaults">{{ t('ui.retry') }}</UiButton>
-      </UiAlert>
-      <div v-else class="default-grid" :aria-busy="defaultsLoading">
-        <article
-          v-for="capability in capabilities"
-          :key="capability"
-          class="default-panel"
-          :data-testid="`ai-default-${capability}`"
-        >
-          <header class="default-heading">
-            <span>{{ capability }}</span>
-            <h2>{{ t('aiModels.defaultTitle', { capability: capabilityLabel(capability) }) }}</h2>
-          </header>
-          <div class="default-body">
-            <p v-if="defaultsLoading" role="status">{{ t('common.loading') }}</p>
-            <template v-else>
-              <p class="default-name">
-                {{ defaultModels[capability]?.name ?? t('aiModels.notConfigured') }}
-              </p>
-              <p v-if="defaultModels[capability]" class="default-model">
-                {{ defaultModels[capability]?.model }}
-              </p>
-              <p v-else class="default-model">{{ t('aiModels.noDefaultHint') }}</p>
-              <UiPopconfirm
-                v-if="defaultModels[capability]"
-                :disabled="actionsDisabled"
-                :positive-text="t('common.confirm')"
-                :negative-text="t('common.cancel')"
-                @positive-click="clearDefault(capability)"
-              >
-                <template #trigger>
-                  <UiButton size="small" :disabled="actionsDisabled">
-                    {{ t('aiModels.clearDefault') }}
-                  </UiButton>
+      <div class="ai-workspace">
+        <aside class="ai-defaults" :aria-label="t('operationsUi.configuration')">
+          <UiAlert v-if="defaultsError" type="error" class="feedback">
+            {{ defaultsError }}
+            <UiButton size="small" :disabled="busy" @click="loadDefaults">{{
+              t('ui.retry')
+            }}</UiButton>
+          </UiAlert>
+          <div v-else class="default-grid" :aria-busy="defaultsLoading">
+            <article
+              v-for="capability in capabilities"
+              :key="capability"
+              class="default-panel"
+              :data-testid="`ai-default-${capability}`"
+            >
+              <header class="default-heading">
+                <span>{{ capability }}</span>
+                <h2>
+                  {{ t('aiModels.defaultTitle', { capability: capabilityLabel(capability) }) }}
+                </h2>
+              </header>
+              <div class="default-body">
+                <p v-if="defaultsLoading" role="status">{{ t('common.loading') }}</p>
+                <template v-else>
+                  <p class="default-name">
+                    {{ defaultModels[capability]?.name ?? t('aiModels.notConfigured') }}
+                  </p>
+                  <p v-if="defaultModels[capability]" class="default-model">
+                    {{ defaultModels[capability]?.model }}
+                  </p>
+                  <p v-else class="default-model">{{ t('aiModels.noDefaultHint') }}</p>
+                  <UiPopconfirm
+                    v-if="defaultModels[capability]"
+                    :disabled="actionsDisabled"
+                    :positive-text="t('common.confirm')"
+                    :negative-text="t('common.cancel')"
+                    @positive-click="clearDefault(capability)"
+                  >
+                    <template #trigger>
+                      <UiButton size="small" :disabled="actionsDisabled">
+                        {{ t('aiModels.clearDefault') }}
+                      </UiButton>
+                    </template>
+                    {{
+                      t('aiModels.clearDefaultConfirm', { capability: capabilityLabel(capability) })
+                    }}
+                  </UiPopconfirm>
                 </template>
-                {{ t('aiModels.clearDefaultConfirm', { capability: capabilityLabel(capability) }) }}
-              </UiPopconfirm>
-            </template>
+              </div>
+            </article>
           </div>
-        </article>
-      </div>
-      <UiCard size="small" class="ledger-panel"
-        ><header class="ledger-heading">
-          <h2>{{ t('operationsUi.configuration') }}</h2>
-          <span v-if="!error && !loading">{{ t('assetAudit.total', { count: total }) }}</span>
-        </header>
+        </aside>
+        <UiCard size="small" class="ledger-panel"
+          ><header class="ledger-heading">
+            <h2>{{ t('operationsUi.configuration') }}</h2>
+            <span v-if="!error && !loading">{{ t('assetAudit.total', { count: total }) }}</span>
+          </header>
 
-        <SearchTable
-          v-model:page="page"
-          v-model:query="search"
-          mode="remote"
-          :total="total"
-          :page-size="pageSize"
-          :pagination="true"
-          :search-placeholder="t('aiModels.search')"
-          :error="error"
-          :disabled="busy"
-          size="small"
-          :columns="columns"
-          :rows="items"
-          :loading="loading"
-          :row-key="(configuration: AiModelConfig) => configuration.id"
-          :scroll-x="1470"
-          @submit="doSearch"
-          @clear="clearSearch"
-          @reset="resetSearch"
-          @retry="load"
-        >
-          <template #filter
-            ><div class="flex flex-wrap items-end gap-3">
-              <FormField :label="t('aiModels.capability')" :show-feedback="false">
-                <UiSelect
-                  v-model:value="capabilityFilter"
-                  :options="capabilityOptions"
-                  :aria-label="t('aiModels.capability')"
-                  :disabled="busy"
-                  clearable
-                  @update:value="page = 1"
-                />
-              </FormField>
-              <FormField :label="t('common.status')" :show-feedback="false">
-                <UiSelect
-                  v-model:value="enabledSelection"
-                  :options="enabledOptions"
-                  :aria-label="t('common.status')"
-                  :disabled="busy"
-                  clearable
-                  @update:value="page = 1"
-                />
-              </FormField>
-              <FormField :label="t('aiModels.sort')" :show-feedback="false">
-                <UiSelect
-                  v-model:value="sort"
-                  :options="sortOptions"
-                  :aria-label="t('aiModels.sort')"
-                  :disabled="busy"
-                  @update:value="page = 1"
-                />
-              </FormField>
-              <UiSpace class="filter-actions">
-                <UiButton :loading="loading || defaultsLoading" :disabled="busy" @click="refresh">
-                  {{ t('graph.refresh') }}
-                </UiButton>
-              </UiSpace>
-            </div></template
+          <SearchTable
+            v-model:page="page"
+            v-model:query="search"
+            mode="remote"
+            :total="total"
+            :page-size="pageSize"
+            :pagination="true"
+            :search-placeholder="t('aiModels.search')"
+            :error="error"
+            :disabled="busy"
+            size="small"
+            :columns="columns"
+            :rows="items"
+            :loading="loading"
+            :row-key="(configuration: AiModelConfig) => configuration.id"
+            :scroll-x="1470"
+            @submit="doSearch"
+            @clear="clearSearch"
+            @reset="resetSearch"
+            @retry="load"
           >
-          <template #empty><UiEmpty :description="t('aiModels.empty')" /></template>
-        </SearchTable>
-      </UiCard>
+            <template #filter
+              ><div class="flex flex-wrap items-end gap-3">
+                <FormField :label="t('aiModels.capability')" :show-feedback="false">
+                  <UiSelect
+                    v-model:value="capabilityFilter"
+                    :options="capabilityOptions"
+                    :aria-label="t('aiModels.capability')"
+                    :disabled="busy"
+                    clearable
+                    @update:value="page = 1"
+                  />
+                </FormField>
+                <FormField :label="t('common.status')" :show-feedback="false">
+                  <UiSelect
+                    v-model:value="enabledSelection"
+                    :options="enabledOptions"
+                    :aria-label="t('common.status')"
+                    :disabled="busy"
+                    clearable
+                    @update:value="page = 1"
+                  />
+                </FormField>
+                <FormField :label="t('aiModels.sort')" :show-feedback="false">
+                  <UiSelect
+                    v-model:value="sort"
+                    :options="sortOptions"
+                    :aria-label="t('aiModels.sort')"
+                    :disabled="busy"
+                    @update:value="page = 1"
+                  />
+                </FormField>
+                <UiSpace class="filter-actions">
+                  <UiButton :loading="loading || defaultsLoading" :disabled="busy" @click="refresh">
+                    {{ t('graph.refresh') }}
+                  </UiButton>
+                </UiSpace>
+              </div></template
+            >
+            <template #empty><UiEmpty :description="t('aiModels.empty')" /></template>
+          </SearchTable>
+        </UiCard>
+      </div>
     </template>
     <UiDrawer
       :show="editorVisible"
@@ -994,7 +1004,7 @@ const columns = computed<DataTableColumns<AiModelConfig>>(() => [
 .default-heading span {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--violet);
+  color: var(--action-primary);
 }
 .default-heading h2 {
   margin: 0;
@@ -1003,7 +1013,7 @@ const columns = computed<DataTableColumns<AiModelConfig>>(() => [
 }
 .default-body {
   padding: 20px;
-  background: var(--bg-inset);
+  background: var(--surface-panel);
 }
 .default-name {
   margin: 0;
@@ -1039,6 +1049,49 @@ const columns = computed<DataTableColumns<AiModelConfig>>(() => [
   justify-content: flex-end;
   margin-top: var(--space-4);
 }
+.ai-workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  min-width: 0;
+}
+.ai-defaults {
+  min-width: 0;
+}
+.ai-workspace .default-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  margin: 0;
+}
+.ai-workspace .default-panel {
+  border-color: var(--border-muted);
+  border-radius: var(--radius-panel);
+}
+.ai-workspace .default-heading {
+  display: grid;
+  gap: 6px;
+  padding: 20px 20px 16px;
+  background: var(--surface-muted);
+  border-color: var(--border-muted);
+}
+.ai-workspace .default-name {
+  font-size: 16px;
+}
+.ai-workspace .default-model {
+  font-family: var(--font-mono);
+  font-size: var(--font-caption);
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-muted);
+}
+@media (max-width: 1100px) {
+  .ai-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ai-workspace .default-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 1100px) {
   .filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1046,6 +1099,7 @@ const columns = computed<DataTableColumns<AiModelConfig>>(() => [
 }
 @media (max-width: 640px) {
   .default-grid,
+  .ai-workspace .default-grid,
   .filters {
     grid-template-columns: minmax(0, 1fr);
   }

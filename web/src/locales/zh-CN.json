@@ -703,7 +703,7 @@
     "resultSet": "结果集 #{id}",
     "quarantineCount": "{count} 个隔离记录",
     "draftResources": "{count} 个未发布资源",
-    "unpublishedHint": "草稿态资源未发布，无法参与本体装配与抽取",
+    "unpublishedHint": "草稿可参与工作装配；发布本体前需先发布引用资源。",
     "quarantineHint": "隔离记录表示抽取时存在问题行，需核查字段与转换链",
     "noCurrentGraph": "当前未选择结果集",
     "retry": "重试",
@@ -1648,6 +1648,11 @@
       "next": "下一页",
       "rowRange": "第 {start}–{end} 行",
       "nullValue": "空"
+    },
+    "redesign": {
+      "pageFilter": "筛选当前页记录",
+      "allStatuses": "全部状态",
+      "fetchSamples": "点击预览，读取当前源表的最多 5 行实时样本。"
     }
   },
   "ai": {
@@ -2401,13 +2406,16 @@
     "cancelSearch": "取消检索",
     "searchCancelled": "已取消本次检索。可调整输入后重新检索。",
     "excerptContext": "显示片段及相邻原文；可前往知识库查看完整证据。",
-    "exploreGraph": "在图谱画布中探索"
+    "exploreGraph": "在图谱画布中探索",
+    "presentation": "集合展示方式",
+    "collectionView": "集合视图",
+    "tableView": "表格视图"
   },
   "navigation": {
     "validationReport": "校验报告",
     "knowledgeTrace": "知识追溯",
     "documentIdentity": "文档 {id}",
-    "workspace": "企业观测台",
+    "workspace": "企业知识空间",
     "workspaceHint": "语义资产 · 版本 · 证据",
     "searchHint": "搜索页面与工具",
     "shortcut": "⌘ / Ctrl K",
@@ -2455,12 +2463,35 @@
     "validationLedger": "校验账本 / 已执行检查",
     "validationPending": "尚未执行资产层校验；这不表示通过。",
     "validationScope": "按资产或实例运行校验，保留 PASS / VIOLATION / NA / NOT_RUN 的真实含义。",
-    "validationScopeLabel": "校验范围"
+    "validationScopeLabel": "校验范围",
+    "nav": {
+      "dashboard": "工作台",
+      "assets": "语义资产",
+      "modeling": "本体建模",
+      "integration": "数据接入",
+      "graph": "图谱探索",
+      "governance": "标准治理",
+      "knowledge": "知识库",
+      "system": "系统管理"
+    },
+    "moduleNavigation": "模块内导航"
   },
   "assetLedger": {
     "resultCount": "当前 {count} 项"
   },
   "governanceLedger": {
     "resultCount": "当前 {count} 条"
+  },
+  "graphStudio": {
+    "focus": "焦点模式",
+    "exitFocus": "退出焦点模式",
+    "loadedInstances": "已加载实例"
+  },
+  "assetStudio": {
+    "validationDetails": "查看详情中的实际校验结果",
+    "draftScope": "包含实体类型、关系类型、业务域与本体的草稿。",
+    "publishPrerequisite": "草稿可参与工作装配；发布本体前需先发布引用资源。",
+    "publishedVersion": "此资产已发布。列表展示最新发布版本，具体引用版本由使用方固定。",
+    "currentWork": "当前工作入口"
   }
 }

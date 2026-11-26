@@ -4,7 +4,9 @@ import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import AppIcon from '@/components/AppIcon.vue'
 import StarMark from '@/components/StarMark.vue'
+import { menuLeaves, type MenuNode, menuTrail } from '@/layout/navigation/menuConfig'
 import { useNavigation } from '@/layout/navigation/useNavigation'
 import { useUiStore } from '@/stores/ui'
 
@@ -12,7 +14,24 @@ import NavigationBranch from './NavigationBranch.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
-const { menuOptions, activeKey, expandedKeys, selectMenu, expandMenuPath } = useNavigation()
+const { tree, menuOptions, activeKey, expandedKeys, selectMenu, expandMenuPath } = useNavigation()
+function openModule(node: MenuNode) {
+  const destination = menuLeaves([node])[0]
+  if (destination) selectMenu(node.defaultRoute ?? destination.key)
+}
+function moduleActive(node: MenuNode) {
+  return menuTrail(activeKey.value, [node]).length > 0
+}
+const railLabels: Record<string, string> = {
+  dashboard: 'studio.nav.dashboard',
+  'group:semantic-assets': 'studio.nav.assets',
+  'group:ontology': 'studio.nav.modeling',
+  'group:data-integration': 'studio.nav.integration',
+  'group:graph': 'studio.nav.graph',
+  'group:governance': 'studio.nav.governance',
+  'knowledge-bases': 'studio.nav.knowledge',
+  'group:system': 'studio.nav.system',
+}
 const navigation = ref<HTMLElement | null>(null)
 function toggle(key: string) {
   expandedKeys.value = expandMenuPath(
@@ -55,13 +74,13 @@ watch(
         :aria-label="t('app.title')"
         :title="ui.collapsed ? t('app.title') : undefined"
       >
-        <StarMark :size="22" /><span v-show="!ui.collapsed" class="brand-text"
+        <StarMark :size="26" /><span v-if="ui.narrow" class="brand-text"
           ><strong>{{ t('app.title') }}</strong
           ><small>{{ t('navigation.workspace') }}</small></span
         >
       </RouterLink>
       <nav ref="navigation" class="sider-scroll" :aria-label="t('ds.primaryNavigation')">
-        <ul class="navigation">
+        <ul v-if="ui.narrow" class="navigation">
           <NavigationBranch
             v-for="option in menuOptions"
             :key="String(option.key)"
@@ -74,8 +93,31 @@ watch(
             @expand="ui.toggleSider()"
           />
         </ul>
+        <ul v-else class="navigation module-rail">
+          <li
+            v-for="node in tree"
+            :key="node.key"
+            class="nav-branch"
+            :class="{ 'rail-system': node.adminOnly }"
+          >
+            <button
+              type="button"
+              class="rail-item"
+              :class="{ 'is-active': moduleActive(node) }"
+              :aria-label="t(node.labelKey)"
+              :aria-current="moduleActive(node) ? 'page' : undefined"
+              :title="t(node.labelKey)"
+              @click="openModule(node)"
+            >
+              <AppIcon v-if="node.icon" :name="node.icon" :size="21" />
+              <span v-if="!ui.collapsed">{{ t(railLabels[node.key] ?? node.labelKey) }}</span>
+            </button>
+          </li>
+        </ul>
       </nav>
-      <div v-if="!ui.collapsed" class="sider-foot">{{ t('navigation.workspaceHint') }}</div>
+      <div v-if="ui.narrow && !ui.collapsed" class="sider-foot">
+        {{ t('navigation.workspaceHint') }}
+      </div>
     </aside>
   </FocusScope>
 </template>
@@ -86,70 +128,136 @@ watch(
   min-width: 0;
   min-height: 0;
   height: 100%;
-  color: var(--foreground-secondary);
-  background: var(--surface-panel);
-  border-right: 1px solid var(--border-muted);
+  color: var(--rail-foreground);
+  background: var(--rail-background);
 }
 .brand {
   display: flex;
   flex: none;
-  gap: var(--space-2);
+  justify-content: center;
   align-items: center;
   height: var(--header-height);
-  padding: 0 var(--space-4);
-  overflow: hidden;
-  color: var(--foreground-primary);
+  color: var(--rail-selected);
   text-decoration: none;
-  white-space: nowrap;
-  border-bottom: 1px solid var(--border-muted);
+}
+.brand :deep(svg) {
+  color: var(--rail-foreground);
 }
 .brand-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow: hidden;
 }
 .brand-text strong {
-  font-size: var(--font-body);
+  font-size: 14px;
   font-weight: 600;
 }
 .brand-text small {
   margin-top: 2px;
-  color: var(--foreground-muted);
   font-size: 11px;
+  color: var(--rail-foreground);
 }
 .sider-scroll {
   flex: 1;
   min-height: 0;
-  padding: var(--space-2);
-  overflow: auto;
+  overflow-y: auto;
+  padding: 14px 8px;
 }
 .navigation {
   padding: 0;
   margin: 0;
   list-style: none;
 }
+.module-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 100%;
+}
+.rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 60px;
+  padding: 9px 2px;
+  color: var(--rail-foreground);
+  background: none;
+  border: 0;
+  border-radius: 7px;
+}
+.rail-item span {
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.rail-item:hover {
+  background: var(--rail-active);
+  color: var(--rail-selected);
+}
+.rail-item.is-active {
+  background: var(--rail-active);
+  color: var(--rail-selected);
+  position: relative;
+}
+.rail-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  width: 3px;
+  height: 24px;
+  background: var(--rail-indicator);
+  border-radius: 0 3px 3px 0;
+}
+.rail-item:focus-visible {
+  outline-color: var(--rail-selected);
+  outline-offset: 2px;
+}
+.rail-system {
+  margin-top: auto;
+  padding-top: 24px;
+}
 .sider-foot {
-  flex: none;
-  padding: var(--space-4);
-  font-size: var(--font-caption);
-  color: var(--foreground-muted);
-  border-top: 1px solid var(--border-muted);
+  padding: 16px;
+  font-size: 11px;
+  line-height: 1.6;
 }
 @media (max-width: 1023px) {
   .app-sider {
     position: fixed;
     z-index: var(--z-navigation);
-    inset: 0 auto 0 0;
-    width: var(--sider-width);
-    max-width: calc(100vw - 32px);
-    height: 100dvh;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(288px, calc(100vw - 48px));
+    transition: transform var(--duration-normal);
     box-shadow: var(--shadow-overlay);
-    transform: translateX(0);
-    transition: transform var(--duration-normal) var(--ease-out);
   }
   .app-sider.is-collapsed {
-    transform: translateX(-100%);
+    transform: translateX(-105%);
+    pointer-events: none;
+  }
+  .brand {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 20px;
+  }
+  .sider-scroll {
+    padding: 12px;
+  }
+  .app-sider :deep(.nav-item) {
+    color: var(--rail-foreground);
+  }
+  .app-sider :deep(.nav-item:hover),
+  .app-sider :deep(.nav-item.is-active) {
+    color: var(--rail-selected);
+    background: var(--rail-active);
+  }
+  .app-sider :deep(.nav-item:focus-visible) {
+    outline-color: var(--rail-selected);
   }
 }
 </style>

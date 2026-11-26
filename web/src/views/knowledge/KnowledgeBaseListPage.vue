@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { knowledgeApi, type KnowledgeBase } from '@/api/knowledge'
+import AppIcon from '@/components/AppIcon.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import type { DataTableColumns } from '@/components/ui'
 import {
@@ -16,7 +17,9 @@ import {
   UiAlert,
   UiButton,
   UiEmpty,
+  UiPagination,
   UiSelect,
+  UiSpin,
   UiTag,
 } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -30,6 +33,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 const showCreate = ref(false)
+const view = ref<'cards' | 'table'>('cards')
 const q = ref('')
 watch(
   () => route.query.q,
@@ -143,10 +147,33 @@ const columns = computed<DataTableColumns<KnowledgeBase>>(() => [
         }}</UiButton></template
       >
     </PageHeader>
-    <UiAlert type="info"
-      >{{ t('kb.globalAccess') }} <span v-if="!canWrite">{{ t('ui.readonly') }}</span></UiAlert
-    >
+    <div class="kb-access-note">
+      <AppIcon name="book" :size="16" />
+      <span>{{ t('kb.globalAccess') }}</span>
+      <UiTag v-if="!canWrite" size="small">{{ t('ui.readonly') }}</UiTag>
+    </div>
     <section class="kb-panel kb-stack kb-base-ledger">
+      <header class="kb-collection-heading">
+        <TableToolbar :label="t('kb.title')" :total="current?.total" :loading="loading" />
+        <div class="kb-view-switch" role="group" :aria-label="t('kb.presentation')">
+          <UiButton
+            size="small"
+            :secondary="view === 'cards'"
+            :aria-pressed="view === 'cards'"
+            @click="view = 'cards'"
+          >
+            <AppIcon name="dashboard" :size="15" />{{ t('kb.collectionView') }}
+          </UiButton>
+          <UiButton
+            size="small"
+            :secondary="view === 'table'"
+            :aria-pressed="view === 'table'"
+            @click="view = 'table'"
+          >
+            <AppIcon name="datasource" :size="15" />{{ t('kb.tableView') }}
+          </UiButton>
+        </div>
+      </header>
       <SearchPanel
         v-model:query="q"
         :placeholder="t('kb.filterPlaceholder')"
@@ -171,7 +198,73 @@ const columns = computed<DataTableColumns<KnowledgeBase>>(() => [
           />
         </template>
       </SearchPanel>
+      <div v-if="view === 'cards'" class="kb-collections" :aria-busy="loading">
+        <UiAlert v-if="error" type="error" role="alert">
+          {{ error }} <UiButton @click="reload">{{ t('kb.retry') }}</UiButton>
+        </UiAlert>
+        <UiSpin :show="loading">
+          <p v-if="loading" role="status" class="kb-muted">{{ t('kb.loading') }}</p>
+          <div v-if="current?.items.length" class="kb-collection-grid">
+            <article v-for="base in current.items" :key="base.id" class="kb-collection-card">
+              <div class="kb-collection-top">
+                <AppIcon name="book" :size="24" />
+                <span class="kb-collection-count"
+                  ><strong>{{ number(base.document_count) }}</strong
+                  >{{ t('kb.documents') }}</span
+                >
+              </div>
+              <h2>
+                <RouterLink :to="{ name: 'knowledge-base-detail', params: { id: base.id } }">{{
+                  base.name
+                }}</RouterLink>
+              </h2>
+              <p class="kb-collection-description kb-wrap">
+                {{ base.description || t('common.noneValue') }}
+              </p>
+              <div class="kb-collection-status">
+                <UiTag size="small">{{ t(base.archived ? 'kb.archived' : 'kb.active') }}</UiTag>
+                <span>{{ t('kb.indexRevision') }} · {{ base.index_revision }}</span>
+              </div>
+              <dl class="kb-collection-facts">
+                <div>
+                  <dt>{{ t('kb.searchable') }}</dt>
+                  <dd>{{ number(base.searchable_count) }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('kb.processing') }}</dt>
+                  <dd>{{ number(base.processing_count) }}</dd>
+                </div>
+                <div>
+                  <dt>{{ t('kb.failedPartial') }}</dt>
+                  <dd>{{ number(base.failed_count) }} / {{ number(base.partial_count) }}</dd>
+                </div>
+              </dl>
+              <footer class="kb-collection-footer">
+                <span>{{ t('kb.updatedAt') }} · {{ date(base.updated_at) }}</span>
+                <RouterLink :to="{ name: 'knowledge-base-search', params: { id: base.id } }"
+                  >{{ t('kb.search') }}<AppIcon name="chevron" :size="14"
+                /></RouterLink>
+              </footer>
+            </article>
+          </div>
+          <UiEmpty
+            v-else-if="!loading && !error && current"
+            :description="
+              t(filters.q || filters.status !== 'active' ? 'kb.noMatch' : 'kb.emptyBases')
+            "
+          />
+        </UiSpin>
+        <div v-if="current && current.total > 20" class="kb-pagination">
+          <UiPagination
+            :page="filters.page"
+            :page-size="20"
+            :item-count="current.total"
+            @update:page="filter('page', $event)"
+          />
+        </div>
+      </div>
       <SearchTable
+        v-else
         :rows="current?.items ?? []"
         :columns="columns"
         :total="current?.total"
@@ -187,9 +280,7 @@ const columns = computed<DataTableColumns<KnowledgeBase>>(() => [
         @update:page="filter('page', $event)"
         @retry="reload"
       >
-        <template #toolbar="{ total }"
-          ><TableToolbar :label="t('kb.title')" :total="total" :loading="loading"
-        /></template>
+        <template #toolbar><span /></template>
         <template #empty
           ><UiEmpty
             :description="

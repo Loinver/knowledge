@@ -21,12 +21,11 @@ defineProps<{ title: string; description?: string; eyebrow?: string; identity?: 
 .page-header {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
-  align-items: flex-start;
+  gap: var(--space-3);
+  align-items: center;
   justify-content: space-between;
-  padding: 0 0 var(--space-4);
-  margin-bottom: var(--space-4);
-  border-bottom: 1px solid var(--border);
+  padding: 0;
+  margin-bottom: var(--space-5);
 }
 .titles {
   flex: 1 1 240px;
@@ -35,7 +34,8 @@ defineProps<{ title: string; description?: string; eyebrow?: string; identity?: 
 .titles h1 {
   margin: 0;
   font-size: var(--font-h1);
-  font-weight: 600;
+  font-weight: 650;
+  letter-spacing: -0.02em;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -53,8 +53,8 @@ defineProps<{ title: string; description?: string; eyebrow?: string; identity?: 
   overflow-wrap: anywhere;
 }
 .titles p {
-  max-width: 74ch;
-  margin: var(--space-1) 0 0;
+  max-width: 90ch;
+  margin: var(--space-2) 0 0;
   color: var(--text-secondary);
   font-size: var(--font-small);
   overflow-wrap: anywhere;

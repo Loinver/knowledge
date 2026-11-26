@@ -1,8 +1,9 @@
 .error-workspace {
   display: grid;
   place-items: center;
-  min-height: 65dvh;
-  padding: 32px 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 48px 24px;
   box-sizing: border-box;
   background: var(--bg-base);
 }
@@ -11,9 +12,9 @@
   max-width: 800px;
   min-width: 0;
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-panel);
   overflow: hidden;
   background: var(--bg-panel, var(--bg-surface));
 }
@@ -24,15 +25,14 @@
   gap: 12px;
   flex-direction: column;
   padding: 32px 20px;
-  background: var(--bg-inset);
-  border-right: 1px solid var(--border);
-  color: var(--text-secondary);
+  background: var(--rail-background);
+  color: var(--rail-foreground);
 }
 .error-code strong {
   font-family: var(--font-mono);
-  font-size: 40px;
+  font-size: 56px;
   font-weight: 500;
-  color: var(--accent);
+  color: var(--rail-selected);
 }
 .error-code span {
   font-size: 12px;
@@ -40,7 +40,7 @@
 }
 .error-content {
   min-width: 0;
-  padding: 32px;
+  padding: 40px;
 }
 .error-content .eyebrow {
   font-size: 11px;
@@ -60,9 +60,9 @@
 .error-identity {
   margin: 0 0 24px;
   padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg-inset);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
 }
 .error-identity > div + div {
   margin-top: 12px;
@@ -86,7 +86,6 @@
 }
 @media (max-width: 600px) {
   .error-workspace {
-    min-height: 80dvh;
     padding: 24px 12px;
   }
   .error-panel {

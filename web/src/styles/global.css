@@ -64,6 +64,7 @@
     line-height: var(--line-height);
     color: var(--foreground-primary);
     background: var(--surface-background);
+    -webkit-font-smoothing: antialiased;
   }
   button,
   input,
@@ -116,15 +117,15 @@
   .iri {
     display: inline-block;
     max-width: 100%;
-    padding: 1px 6px;
+    padding: 1px 0;
     overflow: hidden;
     font-family: var(--font-mono);
     font-size: var(--font-caption);
-    color: var(--action-primary);
+    color: var(--foreground-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-    background: var(--surface-inset);
-    border: 1px solid var(--border-muted);
+    background: transparent;
+    border: 0;
     border-radius: var(--radius-small);
   }
   .kg-grid {

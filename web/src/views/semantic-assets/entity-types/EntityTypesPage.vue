@@ -24,7 +24,6 @@ import {
   UiSelect,
   UiSpace,
   UiSpin,
-  UiTag,
 } from '@/components/ui'
 import { SearchPanel, SearchTable } from '@/components/ui'
 import { useApiError } from '@/composables/useApiError'
@@ -32,6 +31,8 @@ import { useDraftGuard } from '@/composables/useDraftGuard'
 import { useOwnedMutation } from '@/composables/useOwnedMutation'
 import { useAuthStore } from '@/stores/auth'
 
+import AssetDomainFilter from '../components/AssetDomainFilter.vue'
+import AssetInspector from '../components/AssetInspector.vue'
 import NamespaceCreateModal from '../components/NamespaceCreateModal.vue'
 
 const { t, locale } = useI18n()
@@ -49,6 +50,8 @@ const appliedQuery = ref(searchQuery.value)
 const showCreate = ref(false)
 const namespaces = ref<Namespace[]>([])
 const domains = ref<DomainBrief[]>([])
+const domainsError = ref('')
+const domainsLoading = ref(false)
 const stats = ref<EntityTypeStats | null>(null)
 const removingId = ref<number | null>(null)
 const notice = ref('')
@@ -64,7 +67,9 @@ const violationOnly = ref(route.query.violation === '1')
 const domainFilter = ref<number | null>(Number(route.query.domain) || null)
 const view = ref<'table' | 'card'>(route.query.view === 'card' ? 'card' : 'table')
 const page = ref(Math.max(1, Number(route.query.page) || 1))
-const selected = computed(() => items.value.find((item) => item.id === Number(route.query.preview)))
+const selected = computed(() =>
+  filtered.value.find((item) => item.id === Number(route.query.preview)),
+)
 const showPreview = computed({
   get: () => Boolean(selected.value),
   set: (open: boolean) => {
@@ -135,13 +140,6 @@ const filtered = computed(() =>
   }),
 )
 
-const domainOptions = computed(() =>
-  domains.value.map((domain) => ({
-    label: domain.label_i18n?.[locale.value]?.trim() || t('enumDictionaries.untranslated'),
-    value: domain.id,
-  })),
-)
-
 /** 列表只到分钟；跨天数据看的是「最近改过没有」，不需要秒。 */
 function formatUpdated(value: string | null | undefined): string {
   if (!value) return '—'
@@ -173,7 +171,7 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
     title: t('common.iri'),
     key: 'iri',
-    minWidth: 300,
+    minWidth: 200,
     render: (row) => h('span', { class: 'iri', title: row.iri }, row.iri),
   },
   {
@@ -191,7 +189,7 @@ const columns = computed<DataTableColumns<EntityTypeBrief>>(() => [
   {
     title: t('common.status'),
     key: 'status',
-    width: 150,
+    width: 130,
     render: (row) =>
       h('div', { class: 'status-cell' }, [
         renderStatus(row.status),
@@ -371,10 +369,14 @@ async function remove(row: EntityTypeBrief) {
 }
 
 async function loadDomains() {
+  domainsLoading.value = true
+  domainsError.value = ''
   try {
     domains.value = await domainsApi.list()
-  } catch {
-    domains.value = []
+  } catch (error) {
+    domainsError.value = toMessage(error)
+  } finally {
+    domainsLoading.value = false
   }
 }
 
@@ -455,7 +457,7 @@ const createVisible = useDraftGuard(showCreate, () => formData.value)
 </script>
 
 <template>
-  <section class="page asset-page">
+  <section class="page asset-page asset-catalog">
     <PageHeader :title="t('page.entityTypes')" :description="t('entityType.description')">
       <template #actions>
         <UiButton type="primary" :disabled="!canWrite" @click="showCreate = true">{{
@@ -468,53 +470,60 @@ const createVisible = useDraftGuard(showCreate, () => formData.value)
     <UiAlert v-if="notice" type="success" role="status">{{ notice }}</UiAlert>
 
     <!-- 统计条：本身就是筛选入口，点击即过滤。数值取库级统计，不受分页影响 -->
-    <div class="ledger-workspace">
-      <div class="stats">
-        <button
-          type="button"
-          class="stat"
-          :class="{ active: statusFilter === '' && !violationOnly }"
-          @click="selectAllStatuses"
-        >
-          <span class="stat-value mono">{{ stats?.total ?? '—' }}</span>
-          <span class="stat-label">{{ t('entityType.total') }}</span>
-        </button>
-        <button
-          v-for="s in ['PUBLISHED', 'DRAFT'] as ResourceStatus[]"
-          :key="s"
-          type="button"
-          class="stat"
-          :class="{ active: statusFilter === s && !violationOnly }"
-          @click="selectStatus(s)"
-        >
-          <span
-            class="stat-value mono"
-            :style="{ color: statusFilter === s ? STATUS_VAR[s] : undefined }"
-          >
-            {{ s === 'PUBLISHED' ? (stats?.published ?? '—') : (stats?.draft ?? '—') }}
-          </span>
-          <span class="stat-label">
-            {{ s === 'DRAFT' ? t('entityType.draftUnpublished') : t(`resourceStatus.${s}`) }}
-          </span>
-        </button>
-        <!-- 第四项按设计稿是「校验违反」：取最近一次资产层校验报告的结果 -->
-        <button
-          type="button"
-          class="stat"
-          :class="{ active: violationOnly }"
-          @click="toggleViolationOnly"
-        >
-          <span
-            class="stat-value mono"
-            :style="{ color: stats?.violation ? 'var(--s-violation)' : undefined }"
-          >
-            {{ stats?.violation ?? '—' }}
-          </span>
-          <span class="stat-label">{{ t('entityType.violation') }}</span>
-        </button>
-      </div>
-
+    <div class="ledger-workspace" :class="{ 'has-selection': selected }">
+      <AssetDomainFilter
+        v-model:value="domainFilter"
+        :domains="domains"
+        :loading="domainsLoading"
+        :error="domainsError"
+        @retry="loadDomains"
+      />
       <div class="ledger-main">
+        <div class="stats" role="group" :aria-label="t('common.status')">
+          <button
+            type="button"
+            class="stat"
+            :class="{ active: statusFilter === '' && !violationOnly }"
+            @click="selectAllStatuses"
+          >
+            <span class="stat-value mono">{{ stats?.total ?? '—' }}</span>
+            <span class="stat-label">{{ t('entityType.total') }}</span>
+          </button>
+          <button
+            v-for="s in ['PUBLISHED', 'DRAFT'] as ResourceStatus[]"
+            :key="s"
+            type="button"
+            class="stat"
+            :class="{ active: statusFilter === s && !violationOnly }"
+            @click="selectStatus(s)"
+          >
+            <span
+              class="stat-value mono"
+              :style="{ color: statusFilter === s ? STATUS_VAR[s] : undefined }"
+            >
+              {{ s === 'PUBLISHED' ? (stats?.published ?? '—') : (stats?.draft ?? '—') }}
+            </span>
+            <span class="stat-label">
+              {{ s === 'DRAFT' ? t('entityType.draftUnpublished') : t(`resourceStatus.${s}`) }}
+            </span>
+          </button>
+          <!-- 第四项按设计稿是「校验违反」：取最近一次资产层校验报告的结果 -->
+          <button
+            type="button"
+            class="stat"
+            :class="{ active: violationOnly }"
+            @click="toggleViolationOnly"
+          >
+            <span
+              class="stat-value mono"
+              :style="{ color: stats?.violation ? 'var(--s-violation)' : undefined }"
+            >
+              {{ stats?.violation ?? '—' }}
+            </span>
+            <span class="stat-label">{{ t('entityType.violation') }}</span>
+          </button>
+        </div>
+
         <SearchPanel
           v-model:query="searchQuery"
           class="toolbar"
@@ -523,17 +532,6 @@ const createVisible = useDraftGuard(showCreate, () => formData.value)
           @clear="clearSearch"
           @reset="clearFilters"
         >
-          <template #filters>
-            <FormField :label="t('page.domains')" :show-feedback="false">
-              <UiSelect
-                v-model:value="domainFilter"
-                :options="domainOptions"
-                clearable
-                :placeholder="t('entityType.allDomains')"
-                class="domain-filter"
-              />
-            </FormField>
-          </template>
           <template #actions>
             <UiButton attr-type="submit">{{ t('common.search') }}</UiButton>
             <UiButton quaternary @click="clearFilters">{{ t('ui.clearFilters') }}</UiButton>
@@ -572,10 +570,11 @@ const createVisible = useDraftGuard(showCreate, () => formData.value)
               :loading="loading"
               :bordered="false"
               size="small"
-              :max-height="600"
               :pagination="{ page, pageSize: 20, onChange: (value: number) => (page = value) }"
-              :scroll-x="1150"
+              :scroll-x="960"
+              :selection="selected ? [selected.id] : []"
               :row-key="(row: EntityTypeBrief) => row.id"
+              @row-click="(row: EntityTypeBrief) => preview(row.id)"
             >
               <template #toolbar />
               <template #empty>
@@ -601,6 +600,7 @@ const createVisible = useDraftGuard(showCreate, () => formData.value)
               :key="row.id"
               type="button"
               class="type-card"
+              :class="{ selected: selected?.id === row.id }"
               @click="preview(row.id)"
             >
               <span class="type-head">
@@ -623,45 +623,36 @@ const createVisible = useDraftGuard(showCreate, () => formData.value)
           </div>
         </UiSpin>
       </div>
-    </div>
-
-    <UiDrawer
-      v-model:show="showPreview"
-      width="min(360px, 100vw)"
-      :show-mask="false"
-      :block-scroll="false"
-      :trap-focus="false"
-    >
-      <UiDrawerContent
+      <AssetInspector
         v-if="selected"
-        class="asset-editor"
-        :title="displayLabel(selected)"
-        closable
+        :label="displayLabel(selected)"
+        :name="selected.name"
+        :iri="selected.iri"
+        :status="selected.status"
+        :revision="selected.current_revision"
+        @close="showPreview = false"
+        @open="goToDetail(selected.id)"
       >
-        <div class="object-context">
-          <UiTag>{{ t(`resourceStatus.${selected.status}`) }}</UiTag>
-          <span class="mono">{{ `v${selected.current_revision}` }}</span>
-        </div>
-        <UiAlert type="info">{{
-          t(selected.status === 'PUBLISHED' ? 'ui.frozen' : 'ui.working')
-        }}</UiAlert>
         <dl class="preview-meta">
-          <dt>{{ t('common.name') }}</dt>
-          <dd>{{ selected.name }}</dd>
-          <dt>{{ t('common.iri') }}</dt>
-          <dd class="mono">{{ selected.iri }}</dd>
           <dt>{{ t('entityType.propCount') }}</dt>
           <dd>{{ selected.data_prop_count ?? '—' }}</dd>
           <dt>{{ t('entityType.relationCount') }}</dt>
           <dd>{{ selected.relation_count ?? '—' }}</dd>
+          <dt>{{ t('entityType.updatedAt') }}</dt>
+          <dd>{{ formatUpdated(selected.updated_at) }}</dd>
+          <dt>{{ t('entityType.validationState') }}</dt>
+          <dd>
+            {{
+              t(
+                selected.has_violation
+                  ? 'report.states.VIOLATION'
+                  : 'assetStudio.validationDetails',
+              )
+            }}
+          </dd>
         </dl>
-        <template #footer
-          ><UiButton type="primary" @click="goToDetail(selected.id)">{{
-            t('ui.view')
-          }}</UiButton></template
-        >
-      </UiDrawerContent>
-    </UiDrawer>
+      </AssetInspector>
+    </div>
 
     <UiDrawer
       v-model:show="createVisible"

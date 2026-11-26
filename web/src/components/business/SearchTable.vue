@@ -81,7 +81,7 @@ function clicked(row: T, index: number, event: MouseEvent | KeyboardEvent) {
 </script>
 
 <template>
-  <section class="search-table min-w-0 space-y-3">
+  <section class="search-table min-w-0">
     <slot
       name="search"
       :query="query ?? ''"
@@ -127,17 +127,17 @@ function clicked(row: T, index: number, event: MouseEvent | KeyboardEvent) {
       @row-click="clicked"
     >
       <template #toolbar="context">
-        <slot name="toolbar" v-bind="context">
-          <TableToolbar
-            :total="context.total"
-            :selection="context.selection"
-            :loading="loading"
-            :label="label"
-          >
-            <template #actions><slot name="toolbar-actions" /></template>
-            <template #filters><slot name="toolbar-filters" /></template>
-          </TableToolbar>
-        </slot>
+        <slot v-if="$slots.toolbar" name="toolbar" v-bind="context" />
+        <TableToolbar
+          v-else
+          :total="context.total"
+          :selection="context.selection"
+          :loading="loading"
+          :label="label"
+        >
+          <template #actions><slot name="toolbar-actions" /></template>
+          <template #filters><slot name="toolbar-filters" /></template>
+        </TableToolbar>
       </template>
       <template v-if="$slots.cell" #cell="context"><slot name="cell" v-bind="context" /></template>
       <template v-if="$slots.actions" #actions="context"
@@ -159,3 +159,29 @@ function clicked(row: T, index: number, event: MouseEvent | KeyboardEvent) {
     </UiDataTable>
   </section>
 </template>
+
+<style scoped>
+.search-table {
+  min-width: 0;
+  background: var(--surface-panel);
+}
+.search-table :deep(.table-toolbar) {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--border-muted);
+}
+.search-table :deep([data-slot='table-container']) {
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-control);
+}
+.search-table :deep([data-slot='table-head']) {
+  height: 38px;
+  color: var(--foreground-muted);
+  background: var(--surface-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.search-table :deep([data-slot='table-cell']) {
+  font-size: var(--font-small);
+}
+</style>

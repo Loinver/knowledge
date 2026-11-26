@@ -27,6 +27,8 @@ import { useApiError } from '@/composables/useApiError'
 import { usePageIdentity } from '@/layout/navigation/usePageIdentity'
 import { useAuthStore } from '@/stores/auth'
 
+import CatalogSamples from './components/CatalogSamples.vue'
+
 const auth = useAuthStore()
 const canWrite = computed(() => ['ADMIN', 'EDITOR'].includes(auth.user?.role ?? ''))
 
@@ -922,6 +924,13 @@ usePageIdentity(() =>
           </section>
         </main>
         <aside class="catalog-inspector" :aria-label="t('dataAccess.catalog.references.title')">
+          <CatalogSamples
+            v-if="datasourceId !== null && activeTable && activeTable.diff !== 'removed'"
+            :datasource-id="datasourceId"
+            :schema="selectedSchema"
+            :table="activeTable.name"
+            :snapshot-id="snapshotId"
+          />
           <section class="card integration-inspector-facts">
             <h2>{{ t('dataAccess.catalog.selectors.snapshot') }}</h2>
             <dl class="integration-facts">

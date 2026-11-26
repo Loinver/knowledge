@@ -29,9 +29,7 @@ const workflow = [
           fill="none"
           aria-hidden="true"
         >
-          <rect x="2" y="2" width="22" height="22" rx="3" stroke="currentColor" />
-          <path d="M7 13h12M13 7v12" stroke="currentColor" />
-          <circle cx="13" cy="13" r="3" fill="currentColor" />
+          <path d="M3 3h8v8H3zM15 3h8v8h-8zM3 15h8v8H3zM15 15h8v8h-8z" fill="currentColor" />
         </svg>
         <b>{{ t('app.title') }}</b>
       </div>
@@ -40,6 +38,9 @@ const workflow = [
         <span class="brand-kicker">{{ t('operationsUi.entry') }}</span>
         <p class="brand-tagline">{{ t('layout.authTagline') }}</p>
         <p class="brand-desc">{{ t('app.subtitle') }}</p>
+      </div>
+
+      <div class="brand-foot">
         <ol class="brand-workflow">
           <li v-for="(step, index) in workflow" :key="step.title">
             <span class="stage-no mono">{{ String(index + 1).padStart(2, '0') }}</span
@@ -49,9 +50,8 @@ const workflow = [
             </svg>
           </li>
         </ol>
+        <p>{{ t('layout.authFooter') }}</p>
       </div>
-
-      <div class="brand-foot">{{ t('layout.authFooter') }}</div>
     </aside>
 
     <!-- 右：表单区。工具栏浮在右上角，不占表单的视觉动线 -->
@@ -75,7 +75,6 @@ const workflow = [
         </UiButton>
       </div>
       <div class="auth-form">
-        <div class="entry-label">{{ t('operationsUi.authScope') }}</div>
         <RouterView />
       </div>
     </main>
@@ -85,9 +84,9 @@ const workflow = [
 <style scoped>
 .auth-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.6fr);
   min-height: 100dvh;
-  background: var(--bg-base);
+  background: var(--surface-panel);
   color: var(--text-primary, var(--text));
 }
 .auth-brand {
@@ -95,8 +94,8 @@ const workflow = [
   flex-direction: column;
   min-width: 0;
   padding: 40px clamp(24px, 4vw, 64px);
-  background: var(--bg-inset);
-  border-right: 1px solid var(--border);
+  background: var(--rail-background);
+  color: var(--rail-selected);
 }
 .brand-head {
   display: flex;
@@ -108,7 +107,7 @@ const workflow = [
   font-weight: 600;
 }
 .observatory-mark {
-  color: var(--accent);
+  color: var(--rail-selected);
   flex-shrink: 0;
 }
 .brand-body {
@@ -116,13 +115,13 @@ const workflow = [
   padding: 64px 0;
 }
 .brand-kicker {
-  color: var(--text-secondary);
+  color: var(--rail-foreground);
   font-size: 12px;
   letter-spacing: 0.06em;
 }
 .brand-tagline {
   max-width: 360px;
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 600;
   line-height: 1.5;
   margin: 16px 0 0;
@@ -132,13 +131,13 @@ const workflow = [
   margin: 16px 0 32px;
   font-size: 13px;
   line-height: 1.8;
-  color: var(--text-secondary);
+  color: var(--rail-foreground);
 }
 .brand-workflow {
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid color-mix(in srgb, var(--rail-foreground) 25%, transparent);
 }
 .brand-workflow li {
   display: grid;
@@ -146,16 +145,16 @@ const workflow = [
   align-items: center;
   gap: 16px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--rail-foreground) 25%, transparent);
   font-size: 13px;
 }
 .stage-no {
   font-size: 11px;
-  color: var(--accent);
+  color: var(--rail-foreground);
 }
 .brand-foot {
-  color: var(--text-secondary);
-  font-size: 11px;
+  color: var(--rail-foreground);
+  font-size: 12px;
   line-height: 1.7;
 }
 .auth-main {
@@ -177,12 +176,10 @@ const workflow = [
 }
 .auth-form {
   width: 100%;
-  max-width: 440px;
-  padding: 28px 32px 32px;
+  max-width: 400px;
+  padding: 0;
   box-sizing: border-box;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-panel, var(--bg-surface));
+  background: var(--surface-panel);
 }
 .entry-label {
   font-size: 11px;
@@ -219,7 +216,7 @@ const workflow = [
     padding: 72px 16px 32px;
   }
   .auth-form {
-    padding: 24px 20px;
+    padding: 0;
   }
   .auth-toolbar {
     right: 16px;

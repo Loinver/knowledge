@@ -303,6 +303,10 @@ const columns = computed<DataTableColumns<KnowledgeDocument>>(() => [
         </section>
         <div class="kb-detail-workspace">
           <section class="kb-panel kb-stack kb-document-ledger">
+            <header class="kb-panel-heading">
+              <h2>{{ t('kb.documents') }}</h2>
+              <span class="kb-muted">{{ t('kb.indexAndTask') }}</span>
+            </header>
             <SearchPanel
               v-model:query="q"
               :placeholder="t('kb.documentFilter')"
