@@ -68,6 +68,6 @@ UiDatePicker 使用本地日历时间与 epoch milliseconds 转换。range 未�
 
 契约来源为上述组件、[inputTypes.ts](../../web/src/components/ui/inputTypes.ts)、[selectionTypes.ts](../../web/src/components/ui/selectionTypes.ts) 与 [useControlField.ts](../../web/src/components/ui/useControlField.ts)。现有 [controls.test.mjs](../../web/src/components/ui/__tests__/controls.test.mjs) 覆盖值类型、零/空值、禁用/只读、远程选项、树身份与展开、日期范围、字段标签、Tabs 和 SFC 编译；[controls-harness.mjs](../../web/src/components/ui/__tests__/controls-harness.mjs) 的处理函数与 SSR 检查不等于真实 Reka 键盘、焦点或浏览器布局。
 
-先前阶段记录的 13/13 和临时 TS 配置通过只对应当时文件快照；当前测试源已有后续修改，本页不把旧次数作为当前结果。本轮只检查源码、消费与文档，不重跑组件测试、TS、浏览器或 E2E。主会话据完成日志更新 [verification.md](./verification.md)。
+先前阶段记录的 13/13 和临时 TS 配置通过只对应当时文件快照；当前测试源已有后续修改，本页不把旧次数作为当前结果。本轮只检查源码、消费与文档，不重跑组件测试、TS、浏览器或 E2E。当前验证记录见[核验记录](../maintenance/verification-2026-11-26.md)。
 
 交付重点仍是 Select 键盘/IME/远程搜索/多选清空、字段错误焦点、密码与 textarea、Tree 键盘/勾选、Tabs 动态双语与 show 状态、日期范围/本地时区、明暗主题及禁用/只读；日期范围验收同时核对两端输入的可读标签。

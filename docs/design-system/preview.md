@@ -19,7 +19,7 @@
 
 before来自HEAD `13b5a3a`，after来自最终迁移工作区。两阶段使用同一专用隔离数据库，after逐项验证代表性API响应与before相同。数据SHA256为 `b0aac39cb127a9c0721fb3a8ede141018bc647f2811f2b1bbaeb9f81dec6800b`。
 
-视口1440×900、1280×720、768×1024、390×844；DPR1、浏览器scale1、CSS zoom1。`before/manifest.json` 与 `after/manifest.json` 记录URL、主题、尺寸、品牌/顶栏几何与页面宽度；`pair-verification.json`记录配对结果，`SHA256SUMS`记录96图像指纹。截图不是像素自动回归基线；功能、四态、冻结、权限与失败保护请同时查看 [verification.md](./verification.md)。
+视口1440×900、1280×720、768×1024、390×844；DPR1、浏览器scale1、CSS zoom1。`before/manifest.json` 与 `after/manifest.json` 记录URL、主题、尺寸、品牌/顶栏几何与页面宽度；`pair-verification.json`记录配对结果，`SHA256SUMS`记录96图像指纹。截图不是像素自动回归基线；功能、四态、冻结、权限与失败保护的当前验证见[核验记录](../maintenance/verification-2026-11-26.md)。
 
 ## 当前访问与重新准备
 

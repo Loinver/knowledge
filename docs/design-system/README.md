@@ -108,5 +108,4 @@ Tailwind 使用显式层级；全站迁移期间不引入会重置旧页面的�
 after 必须断言代表性 API 数据完全相同；截图清单记录 URL、主题、视口、DPR、缩放和数据 SHA256。
 视觉文件输出到指定证据目录；它们是可检查证据，不是自动接受的像素基线。
 最终报告分别给出已验证、局部验证、未验证及剩余问题；性能没有测量不作结论。
-源码迁移状态见 [migration.json](./migration.json)，验证记录见 [verification.md](./verification.md)。
-完整改动路径见 [changes.md](./changes.md)，包含新增原语、文档与测试；需求验收映射见 [acceptance.md](./acceptance.md)，本机预览见 [preview.md](./preview.md)。
+2026-11-23 迁移任务的源码迁移状态（`migration.json`）、验证记录（`verification.md`）、改动清单（`changes.md`/`changes.json`）、需求验收映射（`acceptance.md`）与各批次交接记录已于 2026-11-27 从文档树删除；取回方法见[文档盘点](../maintenance/document-inventory.md)。本机预览见 [preview.md](./preview.md)。

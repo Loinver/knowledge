@@ -126,4 +126,4 @@ loading、error 或 initialized=false 时，toolbar/footer 的 total 为 undefin
 
 [TableConsumer.vue](../../web/src/components/business/__tests__/TableConsumer.vue) 是 EntityTypeBrief / KnowledgeBase DTO、列 render、rowProps 与泛型 cell slot 的类型夹具。Chief 已同步该夹具；交付前读取确认使用 rows、v-model:selection 和 v-model:sort，旧 data / checked-row-keys 绑定已移除。此处是源码核对，不替代夹具的实际 TS 检查。
 
-旧阶段的 19 项组件测试、临时 TS 通过和并行门面类型错误均属于当时快照，不作为本页当前结果。固定列、滚动、键盘、焦点、真实请求与整页交互由 Chief 根据完成的浏览器日志维护 [verification.md](./verification.md)。
+旧阶段的 19 项组件测试、临时 TS 通过和并行门面类型错误均属于当时快照，不作为本页当前结果。固定列、滚动、键盘、焦点、真实请求与整页交互的当前验证见[核验记录](../maintenance/verification-2026-11-26.md)。

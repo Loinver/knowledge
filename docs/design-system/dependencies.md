@@ -115,7 +115,7 @@ MPL 例外的名称集合来自 lightningcss@1.33.0 的 optionalDependencies，�
 | 早期 5 项原语测试、许可续接 6 项测试通过及 scoped 构建/类型通过                    | 只证明当时范围；不替代当前整站 build、suite 或浏览器验收                         |
 | Pinia devtools peer 检查失败                                                       | 安装前已有；当前安装 peer 仍不满足范围，独立于许可问题保留                       |
 
-旧证据目录为 `/private/tmp/knowledge-ui-phase-b/` 和其 `license-recovery/`：原始 registry manifest、安装前快照、历史 web/workspace stdout JSON 与 evaluation、LICENSE 及构建日志。当前许可结论取自 `/private/tmp/knowledge-final-licenses.log` 的最终成功输出。主会话负责在 [verification.md](./verification.md) 维护后续构建与浏览器的完成证据；本文不转述“测试已启动”为通过。
+旧证据目录为 `/private/tmp/knowledge-ui-phase-b/` 和其 `license-recovery/`：原始 registry manifest、安装前快照、历史 web/workspace stdout JSON 与 evaluation、LICENSE 及构建日志。当前许可结论取自 `/private/tmp/knowledge-final-licenses.log` 的最终成功输出。后续构建与浏览器的完成证据见[核验记录](../maintenance/verification-2026-11-26.md)；本文不转述“测试已启动”为通过。
 
 ## 升级方式
 
