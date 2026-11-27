@@ -15,6 +15,7 @@ docs/*
 !docs/operations/
 !docs/development/
 !docs/maintenance/
+!docs/adr/
 .gitkeep
 !.gitkeep
 !docs/knowledge-information-architecture-2026-11-21.zh-CN.md

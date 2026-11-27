@@ -6,15 +6,15 @@
 
 ## 按你的任务开始
 
-| 读者与任务           | 阅读路径                                                                                                                       | 读完可以做什么                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
-| 产品负责人、采购评估 | [产品介绍](product/overview.md) → [功能台账](product/feature-catalog.md) → [能力限制](product/limitations.md)                  | 确定适用场景，区分当前能力与交付缺口         |
-| 第一次使用           | [安装与部署](operations/deployment.md) → [快速入门](user-guide/quickstart.md) → [工作台与导航](user-guide/workbench.md)        | 初始化自己的管理员，从样例数据走到图谱与证据 |
-| 业务建模与治理       | [建模与治理指南](user-guide/modeling-governance.md)                                                                            | 维护语义资产、组装本体、发布与治理           |
-| 数据工程与分析       | [数据到图谱指南](user-guide/data-graph.md)                                                                                     | 配置连接、映射和抽取，定位失败与事实来源     |
-| 知识运营与管理员     | [知识库与系统指南](user-guide/knowledge-system.md) → [角色权限](user-guide/roles-permissions.md)                               | 管理文档、模型、用户及审计                   |
-| 实施与运维           | [部署](operations/deployment.md) → [配置](operations/configuration.md) → [故障排查](operations/troubleshooting.md)             | 分清环境、迁移、备份与运行边界               |
-| 开发与维护           | [架构](development/architecture.md) → [贡献指南](../CONTRIBUTING.md) → [文档同步规范](../.agents/conventions/documentation.md) | 修改功能时识别并同步受影响文档               |
+| 读者与任务           | 阅读路径                                                                                                                                                                                       | 读完可以做什么                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| 产品负责人、采购评估 | [产品介绍](product/overview.md) → [功能台账](product/feature-catalog.md) → [能力限制](product/limitations.md)                                                                                  | 确定适用场景，区分当前能力与交付缺口           |
+| 第一次使用           | [安装与部署](operations/deployment.md) → [快速入门](user-guide/quickstart.md) → [工作台与导航](user-guide/workbench.md)                                                                        | 初始化自己的管理员，从样例数据走到图谱与证据   |
+| 业务建模与治理       | [建模与治理指南](user-guide/modeling-governance.md)                                                                                                                                            | 维护语义资产、组装本体、发布与治理             |
+| 数据工程与分析       | [数据到图谱指南](user-guide/data-graph.md)                                                                                                                                                     | 配置连接、映射和抽取，定位失败与事实来源       |
+| 知识运营与管理员     | [知识库与系统指南](user-guide/knowledge-system.md) → [角色权限](user-guide/roles-permissions.md)                                                                                               | 管理文档、模型、用户及审计                     |
+| 实施与运维           | [部署](operations/deployment.md) → [配置](operations/configuration.md) → [故障排查](operations/troubleshooting.md)                                                                             | 分清环境、迁移、备份与运行边界                 |
+| 开发与维护           | [架构](development/architecture.md) → [GB/T 48000.3 映射](development/ontology-standard-mapping.md) → [贡献指南](../CONTRIBUTING.md) → [文档同步规范](../.agents/conventions/documentation.md) | 修改功能时识别并同步受影响文档；评估标准符合性 |
 
 ## 业务主线
 

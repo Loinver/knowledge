@@ -34,7 +34,9 @@ flowchart LR
 | `server/app/connectors/`              | 只读外部数据访问                 | 驱动、只读边界、限时及资源释放                               |
 | `server/app/semantics/`               | RDF/SHACL/推理实现               | 能执行的范围及NOT_RUN                                        |
 | `server/app/api/knowledge_runtime.py` | 应用生命周期与持久化任务处理     | 启停、取消、失败保留旧索引                                   |
-| `docs/`                               | 产品、使用、运维、开发及历史决策 | 本轮持续维护入口见[文档中心](../README.md)                   |
+| `docs/`                               | 产品、使用、运维、开发及历史决策 | 持续维护入口见[文档中心](../README.md)                       |
+
+标准符合性按[GB/T 48000.3—2026 能力映射](ontology-standard-mapping.md)核对；该页说明哪些条款直接实现、哪些只有通用机制，两者不能当作认证结论。
 
 ## 接口与契约
 

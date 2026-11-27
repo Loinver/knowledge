@@ -11,7 +11,7 @@
 | 运维       | `docs/operations/`                     | 部署、配置与故障排查                                   |
 | 开发       | `docs/development/`                    | 架构、契约、开发与验证入口                             |
 | 设计系统   | `docs/design-system/`                  | token、组件、表格、控件与依赖许可；迁移批次记录已归档  |
-| 决策记录   | `docs/adr/`                            | 架构与发布治理决策；ADR 0001–0004 已入库，0005 待放行  |
+| 决策记录   | `docs/adr/`                            | 架构、发布治理与建模候选协议决策（ADR 0001–0005）      |
 | 结构校验   | `scripts/check-docs.mjs`               | 链接、锚点、功能编号与路由/API 模块覆盖                |
 | 同步规范   | `.agents/conventions/documentation.md` | 功能文档同步、证据与提交前检查的唯一规则来源           |
 
@@ -35,7 +35,6 @@
 
 以下内容受 `.gitignore` 忽略，只在本机存在，不属于交付文档：
 
-- `docs/adr/0005-ontology-modeling-proposals.md`：本体工作稿校验与 AI 候选协议，对应实现见 `server/tests/test_ontology_modeling_*.py`。建议在 `.gitignore` 放行 `docs/adr/` 后入库。
 - `web/prototypes/knowledge-studio/`：隔离交互原型，不进入正式路由与构建；其截图与构建产物写入 `docs/ui-redesign-2026-11-26/`，可随时重新生成。
 - `demo/`、`.workbuddy/`、`.venv/`、`node_modules/`：本地素材与依赖目录，不提交。
 
