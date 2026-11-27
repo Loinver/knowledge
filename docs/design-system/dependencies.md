@@ -96,26 +96,11 @@ MPL 例外的名称集合来自 lightningcss@1.33.0 的 optionalDependencies，�
 
 `--include-dev` 将 web 的生产与开发闭包一并送入 development 评估；不带此参数使用 production 评估。脚本对报告结构、非空版本组和未知许可保持失败关闭；读取 pnpm JSON 成功本身不等于准入成功。
 
-## 外层 workspace 与历史记录
+## 外层 workspace 边界
 
-外层 workspace 既存 dev 依赖不在本次 web 扫描通过的结论内。上一次完整 workspace 报告记录下列未被此次精确例外覆盖的组；本轮未重新扫描，因此不把历史计数当作当前计数，也不宣称这些缺口已解决。
+web 的 172 项通过只覆盖 `web/package.json` 的精确依赖闭包，不代表整个 workspace 已准入。外层 workspace 原有 dev 闭包（如 jackspeak、minimatch、path-scurry 的 BlueOak-1.0.0，JSONStream 的 OR 表达式，以及混合版本 type-fest）仍按各自门禁单独评估，未因本次 web 例外获得通用放行。Pinia devtools peer 不匹配独立于此许可结论保留。重新核验外层 workspace 时执行完整扫描并记录新结果，不沿用旧计数。
 
-| 历史包/版本组                                                                                       | 当时许可            | 与当前 web 通过的关系                        |
-| --------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------- |
-| jackspeak@3.4.3、minimatch@10.2.6、minipass@7.1.3、package-json-from-dist@1.0.1、path-scurry@1.11.1 | BlueOak-1.0.0       | 外层 workspace 原有 dev 闭包，未获新通用例外 |
-| JSONStream@1.3.5                                                                                    | (MIT OR Apache-2.0) | 通用门禁不自动放行未单独核验的 OR 表达式     |
-| type-fest@0.21.3,4.41.0                                                                             | (MIT OR CC0-1.0)    | 混合版本组不满足只含 4.41.0 的精确条件       |
-
-| 历史阶段记录                                                                       | 当前解释                                                                         |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 首次 prod 扫描因 tslib/0BSD 失败；例外后 prod 122 项通过                           | 属于批准前后两次历史快照，122 不是当前含 dev 扫描数量                            |
-| 旧 web 完整闭包 192 条记录、2 项 MPL 未准入                                        | 发生于 MPL 例外批准前及 Naive 移除前；当前已由真实 web 含 dev 172 项成功日志取代 |
-| 旧 workspace 完整闭包 482 条记录、9 组失败                                         | 包含当时 MPL 拒绝与上述外层既存问题；不是当前复扫结果                            |
-| 初期 UiDataTable 泛型/排序类型错误、缺语言键、断点 CSS 警告、临时 harness 构建失败 | 均为并行落地阶段的历史验证记录，不列为当前阻塞，也不据本轮静态检查宣称修复验收   |
-| 早期 5 项原语测试、许可续接 6 项测试通过及 scoped 构建/类型通过                    | 只证明当时范围；不替代当前整站 build、suite 或浏览器验收                         |
-| Pinia devtools peer 检查失败                                                       | 安装前已有；当前安装 peer 仍不满足范围，独立于许可问题保留                       |
-
-旧证据目录为 `/private/tmp/knowledge-ui-phase-b/` 和其 `license-recovery/`：原始 registry manifest、安装前快照、历史 web/workspace stdout JSON 与 evaluation、LICENSE 及构建日志。当前许可结论取自 `/private/tmp/knowledge-final-licenses.log` 的最终成功输出。后续构建与浏览器的完成证据见[核验记录](../maintenance/verification-2026-11-26.md)；本文不转述“测试已启动”为通过。
+许可脚本、`THIRD_PARTY_LICENSES.md` 与锁文件是当前结论的可复现依据；构建、组件测试、TS 与浏览器验收分别记录在[核验记录](../maintenance/verification-2026-11-26.md)，许可通过不替代这些验证。
 
 ## 升级方式
 
@@ -129,6 +114,4 @@ pnpm dlx shadcn-vue@2.9.0 diff button --cwd web
 
 取得新 registry 原始快照后，以旧 upstream.registry、新快照和当前本地源码做三方比较，保留项目导入、i18n、Reka data-state、Portal 层级、尺寸/圆角、主题与交互适配；同步 URL/hash、版权和消费示例。库升级使用精确版本 pnpm add -E（dev 用 -DE）与 --ignore-scripts，同步锁文件，再核验对应许可边界及消费者。许可例外不自动延伸到升级版本。
 
-本轮文档核对范围为包清单/安装 peer、许可脚本与声明、完成日志、Naive 入口移除、24 份快照 hash 与文档链接/格式。没有运行安装、build、组件测试、TS、浏览器或独立产品验收；许可闭包通过与这些验证结论分别记录。
-
-最终依赖与Vite接线由独立执行者Laplace复核，限定PASS：`/private/tmp/knowledge-final-build-review.md`；锁文件与精确pins/安装版本一致，build8实际产物可检查，许可边界独立4/4。原有Pinia peer差异和未验证干净安装/远程CI保持上述限制。
+升级后至少核对包清单与安装 peer、许可门禁输出、消费组件回归和构建结果；干净安装与远程 CI 未验证时明确保留限制。

@@ -31,7 +31,6 @@ const entryDocs = [
   'docs/design-system/table.md',
   'docs/design-system/controls.md',
   'docs/design-system/dependencies.md',
-  'docs/design-system/preview.md',
 ]
 
 export function routePaths(text) {
